@@ -1481,7 +1481,7 @@ function mount(c) {
     const c = conflicts[0];
     c.av.say(pick(['저 먼저 출발했어요~ 😅', '어… 저 지금 하는 중인데요?', '새치기 멈춰!']), 2600);
     setTimeout(() => Manner.add(-1, '새치기 노노! 선출발자 우선'), 900);
-    setTimeout(() => staffSay(pick(STAFF_LINES.cutin), 2200), 1800);
+    if (staffMayNag(0.2)) setTimeout(() => staffSay(pick(STAFF_LINES.cutin), 2200), 1800);
   } else if (ety.waitedFor && Date.now() - ety.waitedAt < 30000) {
     const w = ety.waitedFor; ety.waitedFor = null;
     w.av.say('기다려줘서 고마워요 🙏', 2400);
@@ -1592,7 +1592,7 @@ function sendProblem(p) {
   }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
   const firstSend = Store.data.sends[p.id] === 1;
-  if ((firstSend || p.level >= 4) && westCanShoot()) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
+  if ((firstSend ? westCanShoot() : p.level >= 4 && westCanShoot(0.5))) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
   else { pl.topHoldMax = 3; westPraise('top', 600); }
   checkFestival();
 }
@@ -1836,7 +1836,7 @@ function npcUpdate(n, dt, now) {
         n.av.say(pick(LINES.npcTop), 1800);
         npcs.forEach((o) => { if (o !== n && o.state === 'idle' && Math.random() < 0.7) setTimeout(() => o.av.say(pick(LINES.cheer)), 400 + Math.random() * 600); });
         n.holdT = -3.5; n.topPose = true;
-        if (westCanShoot(0.15)) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
+        if (westCanShoot(0.05)) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
         else westPraise('top', 500);
       } else if (n.topPose) {
         n.topPose = false;
@@ -1885,6 +1885,9 @@ const STAFF_LINES = {
   calm: ['그래요 천천히~ 🐯', '이제 좀 낫네요', '걸어 다니니까 얼마나 좋아요'],
 };
 const todayStr = () => new Date().toLocaleDateString('ko-KR');
+const STAFF_NAG_COOLDOWN = 45000; // 잔소리 한 번 하면 45초는 조용
+let staffLastNag = -1e9;
+function staffMayNag(chance = 1) { if (performance.now() - staffLastNag < STAFF_NAG_COOLDOWN || Math.random() >= chance) return false; staffLastNag = performance.now(); return true; }
 const paidToday = () => Store.data.paidDate === todayStr();
 function staffSay(text, ms = 2800) {
   if (!staff.av) return;
@@ -1964,10 +1967,10 @@ function staffCatch() {
 }
 function onChalkUsed() {
   const now = Date.now();
-  watch.chalks = watch.chalks.filter((t) => now - t < 15000);
+  watch.chalks = watch.chalks.filter((t) => now - t < 30000);
   watch.chalks.push(now);
   if (watch.chalks.length === 1 && Math.random() < 0.4) westPraise('chalk', 1800);
-  if (watch.chalks.length >= 3 && paidToday() && (staff.state === 'patrol' || staff.state === 'thanks')) {
+  if (watch.chalks.length >= 5 && paidToday() && (staff.state === 'patrol' || staff.state === 'thanks') && staffMayNag(1)) {
     staff.state = 'scold'; staff.replan = 0; staff.scoldT = 0;
     staffSay(STAFF_LINES.chalk[Math.min(watch.chalkNag++, STAFF_LINES.chalk.length - 1)], 3000);
     westPraise('console', 3400);
@@ -1996,7 +1999,11 @@ function updateStaff(dt, now) {
   switch (staff.state) {
     case 'patrol':
       if (!staff.path.length && now > staff.next) { staffGo(pick(STAFF_PATROL), 1.8); staff.next = now + 5000 + Math.random() * 6000; }
-      if (paidToday() && watch.runT > 1.0 && pl.mode === 'walk') {
+      // 4초 넘게 계속 뛰면 4초마다 20% 확률로 눈치챔
+      if (watch.runT < 0.1) watch.runRoll = 4;
+      let spotted = false;
+      if (watch.runT > (watch.runRoll || 4)) { watch.runRoll = watch.runT + 4; spotted = Math.random() < 0.2 && staffMayNag(1); }
+      if (paidToday() && spotted && pl.mode === 'walk') {
         staff.state = 'chase'; staff.replan = 0; staff.nagT = 0;
         staffSay(STAFF_LINES.run[Math.min(watch.chaseNag++, 1)], 2200);
       }
@@ -2013,7 +2020,7 @@ function updateStaff(dt, now) {
       break;
     case 'chase':
       if ((staff.replan -= dt) <= 0) { staff.replan = 0.6; staffGo([me.group.position.x, me.group.position.z], 5.2); }
-      if ((staff.nagT += dt) > 2.4) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
+      if ((staff.nagT += dt) > 3.5) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
       if (toMe < 1.0 && pl.isRunningNow) staffCatch();
       else if (watch.calmT > 2.5 || pl.mode !== 'walk') {
         staffSay(pl.mode !== 'walk' ? '내려오면 얘기 좀 해요 😾' : pick(STAFF_LINES.calm), 2200);
@@ -2034,7 +2041,7 @@ function updateStaff(dt, now) {
 // 🤠 웨스트 — 무호K와 정반대. 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
 // =================================================================
 const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [], lastPhoto: -1e9 };
-const WEST_COOLDOWN = 90000; // 사진은 90초에 한 번만
+const WEST_COOLDOWN = 180000; // 사진은 3분에 한 번만
 function westCanShoot(chance = 1) { return west.av && west.state !== 'photo' && performance.now() - west.lastPhoto > WEST_COOLDOWN && Math.random() < chance; }
 const WEST_LINES = {
   photo: ['찰칵! 📸 인생샷 건졌다 🤠', '이 각도 미쳤다 📸', '프로필 사진 각이에요!', '완등 기념샷 찰칵~ 🤠'],
@@ -2055,7 +2062,7 @@ function westSay(text, ms = 2600, important = false) {
   west.av.say(text, ms);
   if (important && me && west.av.group.position.distanceTo(me.group.position) > 9) toast(`🤠 웨스트: ${text}`, 2200);
 }
-function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo') setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600, kind === 'console'), delay); }
+function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo' && (kind === 'console' || kind === 'top' || Math.random() < 0.6)) setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600, kind === 'console'), delay); }
 function westGo(pt, speed) { const g = west.av.group; west.path = planPath([g.position.x, g.position.z], pt); west.speed = speed; }
 function makeWest() {
   west.av = new Avatar('웨스트', '#3d7bd9', { cowboy: true });
@@ -2094,7 +2101,7 @@ function updateWest(dt, now) {
     if (!west.path.length && now > west.next) { westGo(pick(STAFF_PATROL), 1.5); west.next = now + 6000 + Math.random() * 7000; }
     // 벽에 붙은 플레이어 응원
     if ((pl.mode === 'climb') && (west.cheerT -= dt) <= 0) {
-      west.cheerT = 6 + Math.random() * 4;
+      west.cheerT = 15 + Math.random() * 10;
       if (g.position.distanceTo(me.group.position) < 9) westSay(pick(WEST_LINES.climb), 2200);
     }
   } else if (west.state === 'photo') {
@@ -2184,7 +2191,7 @@ function crash(c) {
     letGo('crash');
     c.av.say(pick(['아이고 괜찮아요?!', '어어어 조심!!', '제가 먼저 출발했어요 😵']), 2600);
     setTimeout(() => Manner.add(-1.5, '선출발자 우선! 붙기 전에 동선 확인'), 1600);
-    setTimeout(() => staffSay(pick(STAFF_LINES.crash), 2600), 2400);
+    if (staffMayNag(0.2)) setTimeout(() => staffSay(pick(STAFF_LINES.crash), 2600), 2400);
     setTimeout(() => toast("💬 '죄송합니다' 한마디면 매너 온도가 회복돼요", 3000), 4600);
     ety.faultAt = Date.now(); ety.faultWith = c;
     if (c.kind === 'peer') Net.event('bump', { to: c.id });
@@ -2457,7 +2464,7 @@ const Net = {
       fireConfetti(p.av.group.position.clone().add(new V3(0, 1.4, 0)), 22);
       addFeed(p.name, prob, false);
       toast(`🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 2200);
-      if (westCanShoot(0.35)) westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
+      if (westCanShoot(0.2)) westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
       else westPraise('top', 900);
       npcs.forEach((n, k) => { if (n.state === 'idle' && Math.random() < 0.6) setTimeout(() => n.av.say(pick(LINES.cheer)), 400 + k * 400); });
     }
