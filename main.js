@@ -40,13 +40,13 @@ function segProject(px, pz, a, b) {
 // =================================================================
 // 평면도 → 월드 좌표 (도면 px × 0.025 = m)
 // =================================================================
-const S = 0.036; // 1.45배 넓게 (벽 높이·캐릭터 크기는 그대로)
+const S = 0.044; // 처음보다 1.75배 넓게 (캐릭터 크기는 그대로)
 const m = ([x, z]) => [(x - 100) * S, (z - 100) * S];
 const toPx = (x, z) => [x / S + 100, z / S + 100];
 
 const FLOOR_PX = [[118, 118], [835, 118], [835, 885], [580, 885], [580, 1110], [290, 1110], [290, 592], [285, 568], [215, 570], [118, 535]];
 const FLOOR = FLOOR_PX.map(m);
-const WALL_H = 6;
+const WALL_H = 7.2;
 
 const HOLD_COLORS = {
   yellow: '#f6c915', green: '#3fae5a', blue: '#2f6fd6', red: '#e3262b', purple: '#7b3fb8',
@@ -55,20 +55,20 @@ const HOLD_COLORS = {
 const COLOR_NAMES = { yellow: '노랑', green: '초록', blue: '파랑', red: '빨강', purple: '보라', black: '검정', pink: '핑크', white: '흰색', orange: '주황' };
 
 const SECTORS = [
-  { id: 's1', label: '1', name: '1번 섹터', color: '#d4a73a', H: 4.3, lean: 0.6, angle: 20,
+  { id: 's1', label: '1', name: '1번 섹터', color: '#d4a73a', H: 5.0, lean: 0.6, angle: 20,
     foot: [[270, 118], [605, 118], [605, 262], [525, 283], [470, 250], [440, 215], [345, 205], [335, 400], [270, 400]],
     front: [[270, 400], [335, 400], [345, 205], [440, 215], [470, 250], [525, 283], [605, 262]] },
-  { id: 's2', label: '2', name: '2번 섹터', color: '#c0282d', H: 4.3, lean: 1.0, angle: 35,
+  { id: 's2', label: '2', name: '2번 섹터', color: '#c0282d', H: 5.0, lean: 1.0, angle: 35,
     foot: [[605, 118], [835, 118], [835, 378], [810, 325], [800, 212], [720, 152], [655, 142], [630, 250], [605, 262]],
     front: [[605, 262], [630, 250], [655, 142], [720, 152], [800, 212], [810, 325], [835, 378]] },
-  { id: 's3', label: '3', name: '3번 섹터', color: '#4caf43', H: 4.3, lean: 0.3, angle: 8,
+  { id: 's3', label: '3', name: '3번 섹터', color: '#4caf43', H: 5.0, lean: 0.3, angle: 8,
     foot: [[835, 378], [835, 852], [815, 835], [820, 760], [805, 665], [812, 580], [725, 495], [790, 405]],
     front: [[835, 378], [790, 405], [725, 495], [812, 580], [805, 665], [820, 760], [815, 835], [835, 852]] },
-  { id: 's4', label: '4', name: '4번 섹터', color: '#2563b8', H: 3.6, lean: 0.45, angle: 25, closed: true,
+  { id: 's4', label: '4', name: '4번 섹터', color: '#2563b8', H: 4.2, lean: 0.45, angle: 25, closed: true,
     foot: [[490, 568], [578, 556], [615, 585], [628, 715], [598, 740], [483, 718]] },
-  { id: 'spray', label: '스프레이월', name: '스프레이월', color: '#3a3540', H: 3.8, lean: 1.3, angle: 40, dark: true,
+  { id: 'spray', label: '스프레이월', name: '스프레이월', color: '#3a3540', H: 4.4, lean: 1.3, angle: 40, dark: true,
     foot: [[235, 118], [270, 118], [270, 375], [235, 375]], front: [[235, 375], [235, 118]] },
-  { id: 'trial', label: '체험벽', name: '체험벽', color: '#f2f2f2', H: 3.0, lean: 0, angle: -6,
+  { id: 'trial', label: '체험벽', name: '체험벽', color: '#f2f2f2', H: 3.4, lean: 0, angle: -6,
     foot: null, front: [[118, 535], [215, 570], [285, 568]] },
 ];
 SECTORS.forEach((s) => { s.footM = s.foot ? s.foot.map(m) : null; });
@@ -558,7 +558,7 @@ function buildWorld() {
   [[200, 300, 0.3], [450, 250, -0.2], [700, 300, 0.25], [450, 500, 0.1], [700, 600, -0.3], [430, 800, 0.15], [700, 760, 0.2], [430, 1000, 0]].forEach(([x, z, r]) => {
     const [wx, wz] = m([x, z]);
     const b = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.06, 0.18), lightMat);
-    b.position.set(wx, 5.6, wz); b.rotation.y = r;
+    b.position.set(wx, 6.7, wz); b.rotation.y = r;
     scene.add(b);
   });
 
@@ -691,7 +691,7 @@ function buildHolds(rand) {
       // 더블다이노: 시작 → (터치 홀드, 못 잡음) → TOP. 한 번에는 절대 못 닿는 거리
       const uu = wrapU(st, u);
       p.holds.push({ u: uu, v: 1.0, start: true, type: HT.jug });
-      p.holds.push({ u: wrapU(st, u + 0.05), v: 2.5, tap: true, type: HT.sloper });
+      p.holds.push({ u: wrapU(st, u + 0.05), v: topV - 1.6, tap: true, type: HT.sloper });
       p.holds.push({ u: wrapU(st, u + 0.1), v: topV, top: true, dynoTarget: true, type: HT.jug });
       p.holds.forEach((h) => { h.strip = st; h.problem = p; h.hex = p.hex; h.q = h.type.q; h.size = h.top ? 0.13 : h.tap ? 0.12 : 0.1; st.holds.push(h); allHolds.push(h); });
       p.start = p.holds[0]; p.top = p.holds[p.holds.length - 1];
@@ -2652,7 +2652,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2691,6 +2691,11 @@ const Net = {
     p.mode = d.m === 'c' ? 'c' : 'w';
     p.st = Number.isFinite(+d.st) ? +d.st : 0;
     p.av.setClimbing(p.mode === 'c');
+    if (p.mode === 'c' && Array.isArray(d.g) && d.g.length === 12 && d.g.every((n) => Number.isFinite(n) && Math.abs(n) < 100)) {
+      p.gripT = p.gripT || [new V3(), new V3(), new V3(), new V3()];
+      for (let i = 0; i < 4; i++) p.gripT[i].set(d.g[i * 3], d.g[i * 3 + 1], d.g[i * 3 + 2]);
+      if (!p.av.grips) p.av.grips = p.gripT.map((v) => v.clone());
+    } else { p.gripT = null; p.av.grips = null; }
     p.av.sitting = d.a === 's'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
     p.av.tech = d.a === 'tf' ? 'flag' : d.a === 'ti' ? 'inside' : d.a === 'to' ? 'outside' : null;
   },
@@ -2719,6 +2724,7 @@ const Net = {
     this.peers.forEach((p) => {
       p.av.group.position.lerp(p.target, damp(10, dt));
       p.av.group.rotation.y = lerpAngle(p.av.group.rotation.y, p.r, damp(10, dt));
+      if (p.gripT && p.av.grips) p.av.grips.forEach((g, i) => g.lerp(p.gripT[i], damp(12, dt)));
       p.av.update(dt);
     });
   },
@@ -2823,7 +2829,7 @@ function enterInstance(p, st) {
   instAutoFoot('lf'); instAutoFoot('rf');
   instConstrainHip();
   inst.hipIn = false; inst.done = false; inst.doneT = 0; inst.bdT = 0; inst.noHandT = 0; inst.gauge = null;
-  inst.camX = s.x; inst.drags.clear(); inst.fx = []; inst.swing = 0; inst.msgT = 0;
+  inst.t = 0; inst.camX = s.x; inst.camY = -0.3; inst.drags.clear(); inst.fx = []; inst.swing = 0; inst.msgT = 0;
   inst.stats = { eff: 1, foot: 0, imb: 0, straight: 1 };
   pl.mode = 'inst'; pl.strip = st; pl.problem = p; pl.topped = false; pl.pump = 0;
   me.setClimbing(true); me.sitting = false;
@@ -2880,13 +2886,15 @@ function resizeInst() {
   cv.style.width = instV.w + 'px'; cv.style.height = instV.h + 'px';
   cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   const top = 96, bottom = 70;
-  instV.s = Math.min((instV.h - top - bottom) / ((inst.H || 4.3) + 0.4), instV.w / 3.4);
+  const span = Math.min((inst.H || 4.3) + 0.4, 3.9); // 한 화면에 보이는 높이 (벽이 높으면 몸을 따라 스크롤)
+  instV.s = Math.min((instV.h - top - bottom) / span, instV.w / 3.4);
+  instV.vh = (instV.h - top - bottom) / instV.s;
   instV.y0 = instV.h - bottom;
   instV.cx = instV.w / 2;
   instV.k = clamp((inst.angle || 0) / 90, -0.3, 0.6) * 0.9; // 오버행일수록 위가 넓어 보임
 }
-function w2s(x, y) { const sc = instV.s * (1 + instV.k * (y / inst.H)); return [instV.cx + (x - inst.camX) * sc, instV.y0 - y * instV.s]; }
-function s2w(px, py) { const y = (instV.y0 - py) / instV.s; const sc = instV.s * (1 + instV.k * (y / inst.H)); return { x: inst.camX + (px - instV.cx) / sc, y }; }
+function w2s(x, y) { const sc = instV.s * (1 + instV.k * (y / inst.H)); return [instV.cx + (x - inst.camX) * sc, instV.y0 - (y - inst.camY) * instV.s]; }
+function s2w(px, py) { const y = (instV.y0 - py) / instV.s + inst.camY; const sc = instV.s * (1 + instV.k * (y / inst.H)); return { x: inst.camX + (px - instV.cx) / sc, y }; }
 
 // ---------- 입력 ----------
 function instPointerDown(e) {
@@ -3098,6 +3106,8 @@ function updateInstance(dt) {
   inst.stats = { eff: clamp(1 - arm * 0.62, 0, 1), foot, imb, straight, feet: feet.length, barn, flag };
   pl.pump = Math.max(L.lh.pump, L.rh.pump);
   inst.camX = lerp(inst.camX, hip.x, damp(3, dt));
+  const camYT = clamp(hip.y + 0.55 - instV.vh / 2, -0.3, Math.max(-0.3, inst.H + 0.25 - instV.vh));
+  inst.camY = lerp(inst.camY, camYT, damp(3, dt));
   instSync();
   renderInst(dt);
   updateInstHud();
