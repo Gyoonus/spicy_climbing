@@ -310,10 +310,11 @@
   // 클라이머
   // ---------------------------------------------------------------
   class Climber {
-    constructor({ name, color, isPlayer = false }) {
-      this.name = name; this.color = color; this.isPlayer = isPlayer;
+    constructor({ name, color, isPlayer = false, visitor = false }) {
+      this.name = name; this.color = color; this.isPlayer = isPlayer; this.visitor = visitor;
       this.onWall = false; this.x = 600; this.y = GROUND;
-      this.g = el('g', { class: 'climber' + (isPlayer ? ' me' : '') }, layers.climbers);
+      this.g = el('g', { class: 'climber' + (isPlayer ? ' me' : visitor ? ' visitor' : '') }, layers.climbers);
+      if (visitor && me) layers.climbers.insertBefore(this.g, me.g);
       this.inner = el('g', { class: 'body' }, this.g);
       const arms = el('g', { class: 'arms' }, this.inner);
       [[-13, -10, -4, -HANG], [13, -10, 4, -HANG]].forEach(([x1, y1, x2, y2]) => {
@@ -328,8 +329,8 @@
       // 이름표
       const tag = el('g', { class: 'tag' }, this.g);
       const tw = Math.max(36, name.length * 13 + 14);
-      el('rect', { x: -tw / 2, y: 30, width: tw, height: 19, rx: 9.5, fill: isPlayer ? '#e3262b' : 'rgba(20,20,22,.78)' }, tag);
-      const tt = el('text', { x: 0, y: 44, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#fff', 'font-family': 'Noto Sans KR, sans-serif' }, tag);
+      el('rect', { x: -tw / 2, y: 30, width: tw, height: 19, rx: 9.5, fill: isPlayer ? '#e3262b' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.78)' }, tag);
+      const tt = el('text', { x: 0, y: 44, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: visitor ? '#151515' : '#fff', 'font-family': 'Noto Sans KR, sans-serif' }, tag);
       tt.textContent = name;
       this.place(this.x, this.y, 0);
     }
@@ -337,6 +338,7 @@
       this.g.style.transition = dur ? `transform ${dur}ms ${ease}` : 'none';
       this.g.style.transform = `translate(${x}px, ${y}px)`;
       this.x = x; this.y = y;
+      if (this.isPlayer) Net.sync();
       return wait(dur);
     }
     walkTo(x) {
@@ -365,6 +367,7 @@
       setTimeout(() => this.g.classList.remove('squash'), 520);
     }
     sit() { this.g.classList.add('sitting'); }
+    setHanging(v) { this.onWall = v; this.g.classList.toggle('hanging', v); if (v) this.g.classList.remove('sitting'); }
     say(text, ms = 2600) {
       if (this.bubble) this.bubble.remove();
       clearTimeout(this.bubbleT);
@@ -458,6 +461,7 @@
       b.addEventListener('click', () => selectProblem(p));
       ui.problems.appendChild(b);
     });
+    renderFestival();
   }
 
   function renderCurrent() {
@@ -564,7 +568,9 @@
   async function playerFall() {
     state.busy = true;
     Sound.fall();
-    me.say(pick(LINES.playerFall), 1800);
+    const line = pick(LINES.playerFall);
+    me.say(line, 1800);
+    Net.event('fall', { text: line });
     await me.drop('fall');
     chalkPuff(me.x, GROUND + 20, 18);
     state.step = -1;
@@ -580,9 +586,13 @@
     const p = state.problem;
     Sound.top();
     fireConfetti(me.x, me.y - 40, 34);
-    me.say(pick(LINES.playerTop), 2200);
+    const line = pick(LINES.playerTop);
+    me.say(line, 2200);
     Store.addSend(p);
+    Net.event('top', { pid: p.id, text: line });
+    addFeed(Store.data.name, p, true);
     renderChips();
+    checkFestival();
     toast(`🔥 ${p.name} ${p.grade} 완등! (총 ${Store.data.sends[p.id]}번째)`, 2800);
     npcs.forEach((n, k) => { if (!n.busy) setTimeout(() => n.say(pick(LINES.cheer)), 300 + k * 450); });
     await wait(1700);
@@ -743,6 +753,13 @@
     setTimeout(() => npcs[1].say('어서 와요~ 신발 벗고 들어와요', 2600), 1500);
     toast('어서 오세요, 스파이시 클라이밍입니다 🔥', 2600);
 
+    Net.start(name, color);
+    $('#btn-music').addEventListener('click', (e) => {
+      const on = Music.toggle();
+      e.currentTarget.setAttribute('aria-pressed', on ? 'true' : 'false');
+      toast(on ? '🎵 암장 BGM 재생 중' : '음악을 껐어요', 1400);
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
     ui.chalk.addEventListener('click', useChalk);
     ui.down.addEventListener('click', downClimb);
     $('#chat-form').addEventListener('submit', (e) => {
@@ -751,6 +768,7 @@
       const v = inp.value.trim();
       if (!v) return;
       me.say(v, 3200);
+      Net.event('say', { text: v });
       inp.value = '';
       if (/나이스|가자|화이팅|파이팅|안녕/.test(v)) {
         const idle = npcs.filter((x) => !x.busy);
@@ -767,7 +785,7 @@
     $('#btn-records').addEventListener('click', openRecords);
     $('#btn-reset').addEventListener('click', () => {
       if (!confirm('완등 기록을 모두 지울까요?')) return;
-      Store.data.sends = {}; Store.data.recent = []; Store.save();
+      Store.data.sends = {}; Store.data.recent = []; Store.data.festival = 0; Store.save();
       renderChips(); openRecords();
     });
     document.addEventListener('keydown', (e) => {
@@ -798,6 +816,290 @@
     const dlg = $('#records');
     if (!dlg.open) dlg.showModal();
   }
+
+  // ---------------------------------------------------------------
+  // 오픈 페스티벌 (스탬프 투어) + 완등 피드
+  // ---------------------------------------------------------------
+  const feed = [];
+  function addFeed(name, p, mine) {
+    feed.unshift({ name, p, mine, t: Date.now() });
+    if (feed.length > 30) feed.length = 30;
+    renderFeed();
+  }
+  function renderFeed() {
+    const ul = $('#feed');
+    if (!feed.length) return;
+    ul.innerHTML = '';
+    feed.forEach((f) => {
+      const li = document.createElement('li');
+      if (f.mine) li.className = 'mine';
+      const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = f.p.color;
+      const txt = document.createElement('span');
+      txt.textContent = f.p.festival ? `${f.name}님 페스티벌 완주! 🏆` : `${f.name}님 — ${f.p.name} ${f.p.grade} 완등`;
+      const tm = document.createElement('time');
+      tm.textContent = new Date(f.t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      li.append(dot, txt, tm);
+      ul.appendChild(li);
+    });
+  }
+  function renderFestival() {
+    const box = $('#stamps');
+    if (!box) return;
+    box.innerHTML = '';
+    const sorted = [...PROBLEMS].sort((a, b) => a.level - b.level);
+    sorted.forEach((p) => {
+      const d = document.createElement('div');
+      const on = !!Store.data.sends[p.id];
+      d.className = 'stamp' + (on ? ' on' : '');
+      d.style.setProperty('--c', p.color === '#232325' ? '#9a9aa2' : p.color);
+      d.innerHTML = `${p.name}<br>${p.grade}`;
+      box.appendChild(d);
+    });
+    const n = sorted.filter((p) => Store.data.sends[p.id]).length;
+    const st = $('#fest-status');
+    if (Store.data.festival) {
+      st.textContent = `🏆 페스티벌 완주! (${new Date(Store.data.festival).toLocaleDateString('ko-KR')})`;
+      st.className = 'fest-status done';
+    } else {
+      st.textContent = `스탬프 ${n} / ${PROBLEMS.length}` + (n ? ' — 조금만 더!' : ' — 노랑부터 시작해봐요');
+      st.className = 'fest-status';
+    }
+  }
+  function checkFestival() {
+    if (Store.data.festival) return;
+    if (!PROBLEMS.every((p) => Store.data.sends[p.id])) return;
+    Store.data.festival = Date.now();
+    Store.save();
+    renderFestival();
+    setTimeout(() => {
+      toast('🏆 오픈 페스티벌 완주! 진짜 매운맛 클라이머 인정', 3600);
+      for (let i = 0; i < 4; i++) setTimeout(() => fireConfetti(200 + Math.random() * 800, 300, 30), i * 350);
+      Sound.top();
+      npcs.forEach((n, k) => setTimeout(() => n.say(pick(['완주 미쳤다!!', '전설의 탄생', '🏆🏆🏆', '사인해주세요'])), 400 + k * 400));
+      Net.event('festival');
+      addFeed(Store.data.name, { festival: true, color: '#ffcf4a' }, true);
+    }, 2400);
+  }
+
+  // ---------------------------------------------------------------
+  // 실시간 접속 (공개 MQTT 브로커 · 서버 없이 동작)
+  // ---------------------------------------------------------------
+  const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+  const Net = {
+    id: Math.random().toString(36).slice(2, 10),
+    client: null, connected: false, peers: new Map(), base: '', lastSync: 0, pending: false, startedAt: 0,
+    start(name, color) {
+      this.name = name; this.color = color; this.startedAt = Date.now();
+      const q = new URLSearchParams(location.search);
+      const room = (q.get('room') || 'main').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main';
+      this.base = `spicy-climbing/v1/${room}`;
+      if (!window.mqtt) { this.setStatus('off'); return; }
+      const list = q.get('broker') ? [q.get('broker')] : BROKERS;
+      this.connect(list, 0);
+      setInterval(() => this.sync(true), 2500);
+      setInterval(() => this.prune(), 3000);
+      window.addEventListener('pagehide', () => this.publish('p/' + this.id, { bye: 1 }));
+    },
+    connect(list, i) {
+      if (i >= list.length) { this.setStatus('off'); return; }
+      this.setStatus('connecting');
+      let ok = false;
+      const c = window.mqtt.connect(list[i], {
+        clientId: 'spicy_' + this.id, keepalive: 30, reconnectPeriod: 4000, connectTimeout: 8000, clean: true,
+        will: { topic: `${this.base}/p/${this.id}`, payload: '{"bye":1}', qos: 0, retain: false },
+      });
+      const fail = setTimeout(() => { if (!ok) { c.end(true); this.connect(list, i + 1); } }, 10000);
+      c.on('connect', () => {
+        ok = true; clearTimeout(fail);
+        this.client = c; this.connected = true; this.setStatus('on');
+        c.subscribe(`${this.base}/#`);
+        this.sync(true);
+      });
+      c.on('close', () => { if (ok) { this.connected = false; this.setStatus('connecting'); } });
+      c.on('message', (t, m) => this.onMessage(t, m));
+    },
+    publish(sub, obj) {
+      if (!this.connected || !this.client) return;
+      try { this.client.publish(`${this.base}/${sub}`, JSON.stringify(obj)); } catch (e) { /* 무시 */ }
+    },
+    sync(force) {
+      if (!me || !this.connected) return;
+      const now = Date.now();
+      if (!force && now - this.lastSync < 150) {
+        if (!this.pending) { this.pending = true; setTimeout(() => { this.pending = false; this.sync(true); }, 160); }
+        return;
+      }
+      this.lastSync = now;
+      this.publish('p/' + this.id, {
+        n: this.name, c: this.color, x: Math.round(me.x), y: Math.round(me.y), w: me.onWall ? 1 : 0,
+        pid: state.problem ? state.problem.id : '', s: Object.values(Store.data.sends).reduce((a, b) => a + b, 0),
+      });
+    },
+    event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
+    onMessage(topic, msg) {
+      const [kind, id] = topic.slice(this.base.length + 1).split('/');
+      if (!id || id === this.id || !/^[a-z0-9]{1,16}$/.test(id)) return;
+      let d;
+      try { d = JSON.parse(msg.toString()); } catch (e) { return; }
+      if (!d || typeof d !== 'object') return;
+      if (kind === 'p') { if (d.bye) this.remove(id); else this.upsert(id, d); }
+      else if (kind === 'e') this.onEvent(this.peers.get(id), d);
+    },
+    upsert(id, d) {
+      let p = this.peers.get(id);
+      const x = clamp(Number(d.x) || 600, 20, W - 20);
+      const y = clamp(Number(d.y) || GROUND, 60, GROUND);
+      if (!p) {
+        if (this.peers.size >= 30) return;
+        const name = String(d.n || '손님').slice(0, 8);
+        const color = /^#[0-9a-f]{6}$/i.test(d.c) ? d.c : '#9a9aa2';
+        const c = new Climber({ name, color, visitor: true });
+        c.place(x, y, 0);
+        p = { c, name };
+        this.peers.set(id, p);
+        this.updateCount();
+        if (Date.now() - this.startedAt > 4000) {
+          toast(`${name}님이 암장에 들어왔어요 👋`, 2000);
+          const idle = npcs.filter((n) => !n.busy);
+          if (idle.length) setTimeout(() => pick(idle).say(`${name}님 어서 와요~`), 700);
+        }
+      }
+      p.last = Date.now();
+      const wall = !!d.w;
+      if (wall !== p.c.onWall) p.c.setHanging(wall);
+      if (Math.abs(p.c.x - x) > 1 || Math.abs(p.c.y - y) > 1) {
+        const falling = !wall && y === GROUND && p.c.y < GROUND - 40;
+        p.c.place(x, y, clamp(Math.hypot(x - p.c.x, y - p.c.y) * 2.6, 220, 900), falling ? 'cubic-bezier(.55,0,1,.45)' : 'cubic-bezier(.3,.7,.3,1)');
+      }
+    },
+    onEvent(p, d) {
+      if (!p) return;
+      const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
+      if (d.type === 'say' && text) p.c.say(text, 3200);
+      if (d.type === 'fall') { if (text) p.c.say(text, 1600); setTimeout(() => chalkPuff(p.c.x, GROUND + 20, 10), 600); }
+      if (d.type === 'top') {
+        const prob = PROBLEMS.find((x) => x.id === d.pid);
+        if (!prob) return;
+        if (text) p.c.say(text, 2000);
+        fireConfetti(p.c.x, p.c.y - 40, 20);
+        addFeed(p.name, prob, false);
+        toast(`🔥 ${p.name}님 ${prob.name} ${prob.grade} 완등!`, 2200);
+        npcs.forEach((n, k) => { if (!n.busy && Math.random() < 0.6) setTimeout(() => n.say(pick(LINES.cheer)), 400 + k * 400); });
+      }
+      if (d.type === 'festival') {
+        addFeed(p.name, { festival: true, color: '#ffcf4a' }, false);
+        toast(`🏆 ${p.name}님이 오픈 페스티벌을 완주했어요!`, 3000);
+      }
+    },
+    remove(id) {
+      const p = this.peers.get(id);
+      if (!p) return;
+      p.c.g.remove();
+      this.peers.delete(id);
+      this.updateCount();
+    },
+    prune() {
+      const now = Date.now();
+      this.peers.forEach((p, id) => { if (now - p.last > 20000) this.remove(id); });
+    },
+    setStatus(s) { this.status = s; this.updateCount(); },
+    updateCount() {
+      const elx = $('#online');
+      if (!elx) return;
+      elx.dataset.state = this.status || 'connecting';
+      elx.textContent = this.status === 'on' ? `${this.peers.size + 1}명 접속 중`
+        : this.status === 'off' ? '혼자 모드' : '연결 중…';
+      elx.title = this.status === 'off' ? '실시간 서버에 연결하지 못해 혼자 운동 중이에요' : '';
+    },
+  };
+
+  // ---------------------------------------------------------------
+  // 배경음악 — WebAudio로 즉석에서 만드는 로파이 루프 (저작권 걱정 없음)
+  // ---------------------------------------------------------------
+  const Music = {
+    on: false, timer: null, nextT: 0, step: 0, bpm: 84,
+    chords: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]], // Fmaj7 Em7 Dm7 Cmaj7
+    mtof: (m) => 440 * Math.pow(2, (m - 69) / 12),
+    init() {
+      const ctx = Sound.ensure();
+      if (this.out) return;
+      this.out = ctx.createGain(); this.out.gain.value = 0.0001;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+      this.out.connect(lp).connect(ctx.destination);
+      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+      this.noise = buf;
+    },
+    toggle() { if (this.on) this.stop(); else this.start(); return this.on; },
+    start() {
+      this.init();
+      const ctx = Sound.ctx;
+      if (ctx.resume) ctx.resume();
+      this.on = true;
+      this.out.gain.cancelScheduledValues(ctx.currentTime);
+      this.out.gain.setTargetAtTime(0.55, ctx.currentTime, 0.8);
+      this.nextT = ctx.currentTime + 0.1; this.step = 0;
+      clearInterval(this.timer);
+      this.timer = setInterval(() => this.schedule(), 50);
+    },
+    stop() {
+      this.on = false;
+      clearInterval(this.timer);
+      if (Sound.ctx) this.out.gain.setTargetAtTime(0.0001, Sound.ctx.currentTime, 0.3);
+    },
+    schedule() {
+      const ctx = Sound.ctx, sp = 60 / this.bpm / 4;
+      if (this.nextT < ctx.currentTime - 0.5) this.nextT = ctx.currentTime + 0.05; // 탭 복귀 시 따라잡기 방지
+      while (this.nextT < ctx.currentTime + 0.3) {
+        const swing = this.step % 2 ? sp * 0.12 : 0;
+        this.play(this.step, this.nextT + swing, sp);
+        this.nextT += sp;
+        this.step = (this.step + 1) % 64;
+      }
+    },
+    play(s, t, sp) {
+      const b = s % 16, chord = this.chords[Math.floor(s / 16)];
+      if (b === 0) { chord.forEach((m, i) => this.pad(this.mtof(m), t, sp * 15, i)); this.bass(this.mtof(chord[0] - 12), t, sp * 6); }
+      if (b === 8) this.bass(this.mtof(chord[0] - 12 + (Math.random() < 0.5 ? 7 : 0)), t, sp * 5);
+      if (b === 0 || b === 10) this.kick(t);
+      if (b === 4 || b === 12) this.snare(t);
+      if (b % 2 === 0) this.hat(t, b % 4 === 2 ? 0.05 : 0.025);
+      if (b % 2 === 0 && Math.random() < 0.3) {
+        const sc = [0, 2, 4, 7, 9];
+        this.pluck(this.mtof(72 + sc[Math.floor(Math.random() * 5)] - (Math.random() < 0.3 ? 12 : 0)), t);
+      }
+    },
+    env(g, t, a, peak, rel) {
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + a);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + a + rel);
+    },
+    osc(type, f, t, dur, peak, a = 0.01) {
+      const ctx = Sound.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = f;
+      this.env(g, t, a, peak, dur);
+      o.connect(g).connect(this.out); o.start(t); o.stop(t + a + dur + 0.05);
+      return o;
+    },
+    pad(f, t, dur, i) { this.osc('triangle', f, t, dur, 0.03, 0.6).detune.value = i % 2 ? 7 : -7; },
+    bass(f, t, dur) { this.osc('sine', f, t, dur, 0.18, 0.02); },
+    pluck(f, t) { this.osc('sine', f, t, 0.6, 0.05, 0.005); this.osc('triangle', f * 2, t, 0.18, 0.012, 0.005); },
+    kick(t) {
+      const ctx = Sound.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+      this.env(g, t, 0.004, 0.4, 0.26);
+      o.connect(g).connect(this.out); o.start(t); o.stop(t + 0.35);
+    },
+    noiseHit(t, dur, peak, type, freq) {
+      const ctx = Sound.ctx, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = this.noise; f.type = type; f.frequency.value = freq;
+      this.env(g, t, 0.002, peak, dur);
+      src.connect(f).connect(g).connect(this.out); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
+    },
+    snare(t) { this.noiseHit(t, 0.16, 0.1, 'bandpass', 1800); },
+    hat(t, v) { this.noiseHit(t, 0.035, v, 'highpass', 7000); },
+  };
 
   // 시작
   drawWall();

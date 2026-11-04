@@ -50,6 +50,8 @@
         <span class="brand-sub">온라인 암장</span>
       </div>
       <div class="top-actions">
+        <span id="online" class="online" data-state="connecting">연결 중…</span>
+        <button id="btn-music" class="icon-btn" type="button" aria-label="배경음악 켜기/끄기">🎵 <span class="hide-sm">음악</span></button>
         <button id="btn-sound" class="icon-btn" type="button" aria-label="소리 켜기/끄기">🔈</button>
         <button id="btn-records" class="icon-btn" type="button">📋 <span class="hide-sm">내 기록</span></button>
       </div>
@@ -78,7 +80,31 @@
           <button class="btn btn-primary" type="submit">말하기</button>
         </form>
       </div>
-      <p class="tip">반짝이는 홀드를 순서대로 눌러 오르세요. 펌핑이 100%가 되면 떨어져요 — 초크로 숨 돌리고, 매트에서 쉬면 회복돼요.</p>
+      <p class="tip" id="tip">반짝이는 홀드를 순서대로 눌러 오르세요. 펌핑이 100%가 되면 떨어져요 — 초크로 숨 돌리고, 매트에서 쉬면 회복돼요.</p>
+    </section>
+
+    <section class="festival" id="festival">
+      <div class="fest-main">
+        <div class="fest-poster">
+          <svg viewBox="0 0 100 100" class="fest-flame" aria-hidden="true">
+            <use href="#flame-shape" fill="#e3262b" />
+            <circle cx="38" cy="60" r="4.2" fill="#1a0a06" /><circle cx="62" cy="60" r="4.2" fill="#1a0a06" />
+            <path d="M42 72 q4 -4 8 0 q4 4 8 0" fill="none" stroke="#1a0a06" stroke-width="2.6" stroke-linecap="round" />
+          </svg>
+          <div>
+            <p class="fest-kicker">SPICY</p>
+            <h2 class="fest-title">OPEN FESTIVAL</h2>
+            <p class="fest-sub">온라인 오픈 페스티벌 · 스탬프 투어</p>
+          </div>
+        </div>
+        <p class="fest-desc">6개 문제를 모두 완등해서 스탬프를 모으면 페스티벌 완주 배지를 드려요.</p>
+        <div class="stamps" id="stamps"></div>
+        <p class="fest-status" id="fest-status"></p>
+      </div>
+      <div class="feed">
+        <h3>실시간 완등 피드</h3>
+        <ul id="feed"><li class="empty">아직 완등 소식이 없어요. 첫 테이프를 끊어보세요!</li></ul>
+      </div>
     </section>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -105,6 +131,7 @@
     </defs>
   </svg>
 
+  <script src="vendor/mqtt.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
