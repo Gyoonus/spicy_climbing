@@ -100,6 +100,40 @@ function pickHoldType(level, rand) {
   for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return HOLD_TYPES[i]; }
   return HOLD_TYPES[0];
 }
+// =================================================================
+// 💰 경제 / 장비 — 완등하면 벌고, 암벽화·팬츠를 사면 등반이 쉬워짐
+// =================================================================
+const SHOES = [
+  { id: 'rental', n: '대여화', price: 0, f: 0.3, e: 0.2, h: 0.1, c: '#7a7f87', d: '카운터에서 빌려주는 그 신발. 냄새는 묻지 마세요' },
+  { id: 'madrock', n: '매드롹 드론', price: 59000, f: 0.5, e: 0.4, h: 0.35, c: '#2f6fd6', d: '입문 국민 암벽화. 하루 종일 신어도 편해요' },
+  { id: 'lemona', n: '레몬아', price: 79000, f: 0.55, e: 0.5, h: 0.4, c: '#f6c915', d: '상큼한 노랑. 발볼 넓은 분께 추천' },
+  { id: 'unpar', n: '언페럴 플립', price: 129000, f: 0.65, e: 0.6, h: 0.55, c: '#2a2a2e', d: '고무가 쫀득쫀득한 중급자 픽' },
+  { id: 'solution', n: '솔루숀 콤프', price: 189000, f: 0.75, e: 0.65, h: 0.8, c: '#e9c400', d: '오버행 장인. 힐훅이 착 붙어요' },
+  { id: 'vrs', n: '인싸팅트 VRS', price: 219000, f: 0.8, e: 0.85, h: 0.7, c: '#ff7a00', d: '엣지가 미친 정밀함. 인싸들의 신발' },
+  { id: 'dragoon', n: '드라군', price: 239000, f: 0.9, e: 0.75, h: 0.85, c: '#c8f03c', d: '말랑말랑 스미어 끝판왕' },
+  { id: 'him', n: '힘 에디션', price: 349000, f: 1, e: 1, h: 1, c: '#e3262b', d: '이 암장 최강 암벽화. 모든 능력치 MAX 🔥', ad: true, url: 'https://thegearshop.co.kr/products/view/687687' },
+];
+const PANTS = [
+  { id: 'bite', n: '바이트 클라이밍 팬츠', price: 89000, c: '#5b6b4c', d: '다리가 쭉쭉 — 발 닿는 거리 +8cm, 펌핑 −5%', ad: true, url: 'https://m.smartstore.naver.com/biteclimbing/products/12881990606' },
+];
+const ADS = [
+  { title: '🔥 힘 에디션', copy: '스파이시 최강 암벽화. 마찰·엣지·오버행 전부 MAX — 이거 신으면 V6도 V3 느낌', url: SHOES.find((x) => x.id === 'him').url, item: 'him' },
+  { title: '👖 바이트 클라이밍 팬츠', copy: '하이스텝 할 때 안 끼는 팬츠. 다리가 쭉쭉 올라가요', url: PANTS[0].url, item: 'bite' },
+];
+const REWARD = [3000, 5000, 8000, 12000, 18000, 25000, 35000];
+const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
+function gear() {
+  const sh = SHOES.find((x) => x.id === Store.data.equip.shoe) || SHOES[0];
+  const pa = PANTS.find((x) => x.id === Store.data.equip.pants);
+  return { shoe: sh, pants: pa, f: sh.f, e: sh.e, h: sh.h, leg: pa ? 0.08 : 0, pumpMul: (pa ? 0.95 : 1) };
+}
+function addMoney(n, why) {
+  Store.data.wallet = (Store.data.wallet || 0) + n; Store.save();
+  updateWallet();
+  if (why) toast(`💰 ${n > 0 ? '+' : ''}${won(n)} · ${why}`, 2400);
+}
+function updateWallet() { const el = $('#wallet'); if (el) { el.textContent = won(Store.data.wallet || 0); el.classList.toggle('neg', (Store.data.wallet || 0) < 0); } }
+
 const TECHS = { flag: { n: '플래깅', icon: '🦵' }, inside: { n: '인사이드 스텝', icon: '↩️' }, outside: { n: '아웃사이드 스텝', icon: '↪️' } };
 const CATCH = 0.34;   // 다이노 캐치 반경
 const BODY_DROP = 0.98; // 손 → 발바닥 높이 (2등신)
@@ -239,7 +273,7 @@ const Music = {
 // =================================================================
 const Store = {
   key: 'spicy-climbing-3d-v1',
-  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5 },
+  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5, wallet: 100000, owned: { rental: true }, equip: { shoe: 'rental', pants: '' } },
   load() {
     try {
       const raw = localStorage.getItem(this.key);
@@ -662,6 +696,7 @@ function buildWorld() {
   scene.add(mm);
 
   buildHolds(rand);
+  buildBillboards();
 }
 
 function makeHoldGeo(seed) {
@@ -925,6 +960,7 @@ class Avatar {
     const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.78), roughness: 0.6 });
     const skin = new THREE.MeshStandardMaterial({ color: '#ffe3cc', roughness: 0.7 });
     const shoe = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.6 });
+    this.shoeMat = shoe; this.legMat = dark.clone(); this.legBase = dark.color.clone();
     // 몸통 (작은 티셔츠)
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 6, 12), dark);
     torso.position.y = 0.45; this.rig.add(torso);
@@ -968,7 +1004,7 @@ class Avatar {
     // 팔다리
     const mk = (kind, x, y, z) => {
       const pivot = new THREE.Group(); pivot.position.set(x, y, z);
-      const seg = new THREE.Mesh(limbGeo[kind], kind === 'arm' ? dark : dark);
+      const seg = new THREE.Mesh(limbGeo[kind], kind === 'arm' ? dark : this.legMat);
       const end = new THREE.Mesh(kind === 'arm' ? handGeo : footGeo, kind === 'arm' ? skin : shoe);
       end.position.y = -LIMB[kind];
       if (kind === 'leg') end.position.z = 0.04;
@@ -991,6 +1027,11 @@ class Avatar {
     this.prev = new V3(); this.speed = 0;
   }
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
+  setOutfit(shoeId, pantsId) {
+    const sh = SHOES.find((x) => x.id === shoeId), pa = PANTS.find((x) => x.id === pantsId);
+    this.shoeMat.color.set(sh && sh.id !== 'rental' ? sh.c : '#2a2a2e');
+    if (pa) this.legMat.color.set(pa.c); else this.legMat.color.copy(this.legBase);
+  }
   squash() { this.squashT = 0.45; }
   chalk() { this.chalkDur = this.climbing ? 1.0 : 1.5; this.chalkT = this.chalkDur; this.puffed = false; this.clapIdx = 0; this.chalkyT = 25; }
   // 자동 말풍선: 금방 사라짐 (아래 칸)
@@ -1334,6 +1375,15 @@ function setupInput() {
       camCtl.pinch = d;
     }
   });
+  const ray = new THREE.Raycaster();
+  el.addEventListener('pointerdown', (e) => { camCtl.downAt = [e.clientX, e.clientY]; });
+  el.addEventListener('click', (e) => {
+    if (!camCtl.downAt || Math.hypot(e.clientX - camCtl.downAt[0], e.clientY - camCtl.downAt[1]) > 6) return;
+    const r = el.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+    const hit = ray.intersectObjects(billboards)[0];
+    if (hit && hit.distance < 14) openShop();
+  });
   const end = (e) => { camCtl.pointers.delete(e.pointerId); camCtl.pinch = 0; };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   el.addEventListener('wheel', (e) => { e.preventDefault(); camCtl.dist = clamp(camCtl.dist * (1 + Math.sign(e.deltaY) * 0.1), 2.5, 14); }, { passive: false });
@@ -1370,6 +1420,8 @@ function setupInput() {
   icv.addEventListener('pointerup', instPointerUp);
   icv.addEventListener('pointercancel', instPointerUp);
   $('#inst-hip').addEventListener('click', instToggleHip);
+  $('#inst-flag').addEventListener('click', instFlag);
+  $('#inst-auto').addEventListener('click', instToggleAuto);
   $('#inst-down').addEventListener('click', () => { if (pl.mode === 'inst') letGo('down'); });
   window.addEventListener('resize', () => { if (inst.on) resizeInst(); });
   $('#chatlog').addEventListener('click', () => { if (document.body.classList.contains('touch')) openChat(); });
@@ -1772,6 +1824,10 @@ function sendProblem(p) {
   me.say(line, 2400);
   fireConfetti(surf(p.strip, p.top.u, p.top.v), 36);
   Store.addSend(p);
+  const first = Store.data.sends[p.id] === 1;
+  const reward = (REWARD[p.level] || 3000) * (first ? 2 : 1);
+  setTimeout(() => addMoney(reward, first ? '첫 완등 보너스 ×2' : '완등 보상'), 1200);
+  if (first && Math.random() < 0.6) setTimeout(() => showAd(Math.random() < 0.7 ? 0 : 1, '완등 축하! '), 9000);
   Net.event('top', { pid: p.id, text: line });
   addFeed(Store.data.name, p, true);
   logChat('', '', `🔥 ${Store.data.name}님 ${problemLabel(p)} 완등!`, 'sys');
@@ -1851,7 +1907,7 @@ function updatePlayer(dt) {
     const hq = currentHoldQ();
     const techMul = pl.tech === 'flag' ? 0.6 : pl.tech ? 0.9 : 1;
     if (pl.hanging) pl.pump += dt * (0.8 + (1 - hq) * 0.8);
-    else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0) + (1 - hq) * 1.6) * (campus ? 2 : 1) * techMul;
+    else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0) + (1 - hq) * 1.6) * (campus ? 2 : 1) * techMul * (1.2 - 0.35 * (gear().f + gear().e + gear().h) / 3) * gear().pumpMul;
     pl.holdName = (nearestGrab(st, pl.u, pl.v, pl.problem) || {}).h?.type?.n || '';
     // 닿을 듯 말 듯한 홀드 힌트
     if (iy > 0.5 && moving && !canHold(pl.u, nv) && (pl.stuckT = (pl.stuckT || 0) + dt) > 0.8) {
@@ -2165,6 +2221,8 @@ function openPay() {
   if (!d.open) d.showModal();
 }
 function payDone(method) {
+  Store.data.wallet = (Store.data.wallet || 0) - 20000; Store.save(); updateWallet();
+  if (Store.data.wallet < 0) setTimeout(() => staffSay('…외상 달아둘게요. 이번만이에요 🐯', 2800), 1400);
   logChat('', '', '🐯 무호K: 고마워요~ 즐클해요! (일일이용권 결제)', 'sys');
   Store.data.paidDate = todayStr();
   Store.data.spent = (Store.data.spent || 0) + 20000;
@@ -2293,6 +2351,7 @@ const WEST_LINES = {
   yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
   campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
   hang: ['버티기 장인 🤠', '악력 실화예요?'],
+  gear: ['그 신발 뭐예요?! 부럽다 🤠', '새 장비 개시! 오늘 날아다니겠는데요?', '장비빨도 실력이에요 😎'],
   tech: ['기술 깔끔하다 🤠', '오 그 무브 교과서다!', '발 쓰는 거 보소 👍'],
   sit: ['쉬는 것도 훈련이에요~ 🤠', '천천히 쉬어요, 벽은 안 도망가요'],
   enter: ['어서와요~ 무호 무섭죠? ㅎㅎ 🤠', '입장 축하해요! 오늘 재밌게 놀아요'],
@@ -2557,7 +2616,7 @@ function renderRecords() {
   });
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회 · 더블다이노 ${d.doubles || 0}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회 · 더블다이노 ${d.doubles || 0}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 지갑 ${won(d.wallet || 0)} · 신발 ${gear().shoe.n} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
 }
 
 // =================================================================
@@ -2652,7 +2711,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2697,6 +2756,7 @@ const Net = {
       if (!p.av.grips) p.av.grips = p.gripT.map((v) => v.clone());
     } else { p.gripT = null; p.av.grips = null; }
     p.av.sitting = d.a === 's'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
+    if (typeof d.o === 'string' && d.o !== p.outfit) { p.outfit = d.o; const [so, pa] = d.o.split('|'); p.av.setOutfit(so, pa); }
     p.av.tech = d.a === 'tf' ? 'flag' : d.a === 'ti' ? 'inside' : d.a === 'to' ? 'outside' : null;
   },
   onEvent(p, d) {
@@ -2800,6 +2860,84 @@ function updateHud(dt) {
 }
 
 // =================================================================
+// 🛒 무호K 프로샵 + 📢 광고
+// =================================================================
+function statBar(label, v) { return `<div class="stat"><span>${label}</span><i><b style="width:${Math.round(v * 100)}%"></b></i></div>`; }
+function renderShop() {
+  $('#shop-wallet').textContent = won(Store.data.wallet || 0);
+  const card = (it, kind) => {
+    const owned = !!Store.data.owned[it.id] || it.price === 0;
+    const equipped = kind === 'shoe' ? Store.data.equip.shoe === it.id : Store.data.equip.pants === it.id;
+    const el = document.createElement('div');
+    el.className = 'item' + (it.id === 'him' ? ' best' : '') + (equipped ? ' on' : '');
+    el.innerHTML = `<div class="item-head"><span class="swatch-dot" style="background:${it.c}"></span><b>${it.n}</b>${it.ad ? '<span class="ad-tag">AD</span>' : ''}${it.id === 'him' ? '<span class="tag best-tag">최강</span>' : ''}<span class="price">${it.price ? won(it.price) : '무료'}</span></div>
+      <p>${it.d}</p>${kind === 'shoe' ? statBar('마찰', it.f) + statBar('엣지', it.e) + statBar('오버행', it.h) : ''}`;
+    const act = document.createElement('div'); act.className = 'item-act';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (owned ? '' : ' btn-primary');
+    b.textContent = equipped ? '장착 중' : owned ? '장착하기' : `${won(it.price)}에 사기`;
+    b.disabled = equipped;
+    b.addEventListener('click', () => buyOrEquip(it, kind));
+    act.appendChild(b);
+    if (it.url) { const a = document.createElement('a'); a.className = 'btn ad-link'; a.href = it.url; a.target = '_blank'; a.rel = 'noopener sponsored'; a.textContent = '실제 제품 보기 ↗'; act.appendChild(a); }
+    el.appendChild(act);
+    return el;
+  };
+  const ss = $('#shop-shoes'); ss.innerHTML = ''; SHOES.forEach((it) => ss.appendChild(card(it, 'shoe')));
+  const pp = $('#shop-pants'); pp.innerHTML = ''; PANTS.forEach((it) => pp.appendChild(card(it, 'pants')));
+}
+function buyOrEquip(it, kind) {
+  const owned = !!Store.data.owned[it.id] || it.price === 0;
+  if (!owned) {
+    if ((Store.data.wallet || 0) < it.price) { toast(`돈이 ${won(it.price - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2400); return; }
+    addMoney(-it.price, `${it.n} 구매`);
+    Store.data.owned[it.id] = true;
+    Sound.top();
+    setTimeout(() => staffSay(it.id === 'him' ? '힘 에디션…? 잘 어울리네요. 진짜로요 🐯' : '…잘 샀어요. 오래 신어요 🐯', 2800), 600);
+    westPraise('gear', 1600);
+  }
+  if (kind === 'shoe') Store.data.equip.shoe = it.id; else Store.data.equip.pants = Store.data.equip.pants === it.id && owned ? '' : it.id;
+  Store.save();
+  me.setOutfit(Store.data.equip.shoe, Store.data.equip.pants);
+  Net.sync(true);
+  renderShop();
+  logChat('', '', `👟 ${Store.data.name}님이 ${it.n} ${kind === 'shoe' ? '신었어요' : '입었어요'}`, 'sys');
+}
+function openShop() { renderShop(); const d = $('#shop'); if (!d.open) d.showModal(); }
+let adIdx = 0, adTimer;
+function showAd(i = adIdx++ % ADS.length, prefix = '') {
+  if (pl.mode === 'inst' || document.querySelector('dialog[open]')) return;
+  const ad = ADS[i % ADS.length];
+  $('#ad-title').textContent = prefix + ad.title;
+  $('#ad-copy').textContent = ad.copy;
+  const a = $('#ad-link'); a.href = ad.url;
+  $('#ad-shop').onclick = () => { $('#adcard').hidden = true; openShop(); };
+  const el = $('#adcard'); el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(adTimer); adTimer = setTimeout(() => { if (!el.matches(':hover')) el.hidden = true; }, 14000);
+}
+function scheduleAds() { setTimeout(function tick() { if (pl.mode === 'walk') showAd(); setTimeout(tick, 240000 + Math.random() * 120000); }, 60000); }
+// 3D 광고판
+const billboards = [];
+function buildBillboards() {
+  const poster = (lines, bg, fg, accent) => canvasTex(512, 720, (g) => {
+    g.fillStyle = bg; g.fillRect(0, 0, 512, 720);
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(24, 24, 70, 34); g.fillStyle = '#111'; g.font = '900 24px "Noto Sans KR"'; g.fillText('AD', 40, 50);
+    g.textAlign = 'center';
+    g.fillStyle = accent; g.font = '110px "Sedgwick Ave Display", cursive'; g.fillText(lines[0], 256, 230);
+    g.fillStyle = fg; g.font = '900 64px "Black Han Sans", sans-serif'; g.fillText(lines[1], 256, 340);
+    g.font = '700 34px "Noto Sans KR"'; lines.slice(2).forEach((t, i) => g.fillText(t, 256, 440 + i * 56));
+    g.fillStyle = accent; g.fillRect(96, 610, 320, 70); g.fillStyle = bg; g.font = '900 34px "Noto Sans KR"'; g.fillText('🛒 프로샵에서 보기', 256, 657);
+  });
+  const add = (px, pz, rotY, tex, item) => {
+    const [x, z] = m([px, pz]);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.25), new THREE.MeshBasicMaterial({ map: tex }));
+    mesh.position.set(x, 2.2, z); mesh.rotation.y = rotY; mesh.userData.item = item;
+    scene.add(mesh); billboards.push(mesh);
+  };
+  add(291, 975, Math.PI / 2, poster(['HIM', '힘 에디션', '스파이시 최강 암벽화', '마찰·엣지·오버행 MAX'], '#111111', '#ffffff', '#e3262b'), 'him');
+  add(579, 1000, -Math.PI / 2, poster(['BITE', '클라이밍 팬츠', '하이스텝도 쭉쭉', '발 닿는 거리 +8cm'], '#28331f', '#f3f0e4', '#c8f03c'), 'bite');
+}
+
+// =================================================================
 // 🧗 등반 인던 (2D) — 사지와 엉덩이 포지셔닝으로 무게중심·효율 → 펌핑
 // =================================================================
 const ARM = 0.78, LEG = 0.95, TORSO = 0.55, SH_W = 0.2, HIP_W = 0.11;
@@ -2808,7 +2946,7 @@ const LIMB_NAME = { lh: '왼손', rh: '오른손', lf: '왼발', rf: '오른발'
 const inst = { on: false, drags: new Map(), fx: [] };
 const isHand = (k) => k[1] === 'h';
 const sideOf = (k) => (k[0] === 'l' ? -1 : 1);
-const limbMax = (k) => (isHand(k) ? ARM : LEG);
+const limbMax = (k) => (isHand(k) ? ARM : LEG + gear().leg);
 function jointOf(k, hip = inst.hip) {
   return isHand(k) ? { x: hip.x + sideOf(k) * SH_W, y: hip.y + TORSO } : { x: hip.x + sideOf(k) * HIP_W, y: hip.y };
 }
@@ -2828,6 +2966,8 @@ function enterInstance(p, st) {
   instAttach('lh', s); instAttach('rh', s);
   instAutoFoot('lf'); instAutoFoot('rf');
   instConstrainHip();
+  inst.auto = Store.data.autoPose !== false; inst.hipR = { ...inst.hip }; inst.boing = 0;
+  LIMB_KEYS.forEach((k) => { const l = inst.limbs[k]; l.flag = null; l.r = null; });
   inst.hipIn = false; inst.done = false; inst.doneT = 0; inst.bdT = 0; inst.noHandT = 0; inst.gauge = null;
   inst.t = 0; inst.camX = s.x; inst.camY = -0.3; inst.drags.clear(); inst.fx = []; inst.swing = 0; inst.msgT = 0;
   inst.stats = { eff: 1, foot: 0, imb: 0, straight: 1 };
@@ -2836,6 +2976,7 @@ function enterInstance(p, st) {
   document.body.classList.add('inst');
   $('#inst').hidden = false;
   $('#inst-title').innerHTML = `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span> <small>${st.sec.name} · ${inst.angle > 0 ? `오버행 ${inst.angle}°` : inst.angle < 0 ? `슬랩 ${-inst.angle}°` : '수직'}</small>`;
+  $('#inst-auto').setAttribute('aria-pressed', inst.auto ? 'true' : 'false');
   resizeInst();
   instSync();
 }
@@ -2872,6 +3013,8 @@ function instConstrainHip() {
 }
 function instFreePos(k) {
   const j = jointOf(k), sd = sideOf(k);
+  const fl = inst.limbs[k].flag;
+  if (fl) return { x: inst.hip.x + fl.dx, y: Math.max(0.05, inst.hip.y + fl.dy) };
   return isHand(k) ? { x: j.x + sd * 0.18, y: j.y - 0.5 } : { x: j.x + sd * 0.06 + Math.sin(inst.t * 3 + sd) * 0.04, y: Math.max(0.05, j.y - 0.82) };
 }
 function instBagPos() { return { x: inst.hip.x, y: inst.hip.y + 0.05 }; }
@@ -2905,15 +3048,15 @@ function instPointerDown(e) {
   let best = null, bd = Infinity;
   LIMB_KEYS.forEach((k) => {
     const l = inst.limbs[k];
-    const pos = l.hold ? l.hold : l.drag ? l : instFreePos(k);
+    const pos = l.r || (l.hold ? l.hold : instFreePos(k)); // 화면에 그려진 위치로 판정
     const [sx, sy] = w2s(pos.x, pos.y);
     const d = Math.hypot(sx - e.offsetX, sy - e.offsetY);
-    if (d < 34 && d < bd) { bd = d; best = k; }
+    if (d < 40 && d < bd) { bd = d; best = k; }
   });
   e.currentTarget.setPointerCapture(e.pointerId);
   if (best) {
     const l = inst.limbs[best];
-    l.hold = null; l.drag = true; l.x = w.x; l.y = w.y;
+    l.hold = null; l.flag = null; l.drag = true; l.x = w.x; l.y = w.y;
     inst.drags.set(e.pointerId, { k: best });
     Sound.tone(300, 0.04, 'triangle', 0.04);
   } else {
@@ -2938,8 +3081,6 @@ function instPointerUp(e) {
   const k = dr.k, l = inst.limbs[k];
   l.drag = false;
   const w = { x: l.x, y: l.y };
-  // 초크백으로 손을 가져가면 초크
-  if (isHand(k) && d2(w, instBagPos()) < 0.28) { instChalk(k); return; }
   let best = null, bd = Infinity;
   inst.holds.forEach((o) => {
     if (isHand(k) && !o.prob) return;
@@ -2947,19 +3088,67 @@ function instPointerUp(e) {
     const d = d2(w, o);
     if (d < 0.3 && d < bd) { bd = d; best = o; }
   });
+  // 홀드가 없고 초크백 근처면 초크
+  if (!best && isHand(k) && d2(w, instBagPos()) < 0.28) { instChalk(k); return; }
   if (!best) return;
   const j = jointOf(k);
-  if (d2(j, best) <= limbMax(k)) {
-    instAttach(k, best);
-    Sound.grab();
-    instFx(best.x, best.y, isHand(k) ? 'grab' : 'step');
-    return;
+  if (d2(j, best) <= limbMax(k)) { instGrab(k, best); return; }
+  // 자동 자세: 조금 멀면 몸을 끌어올려서 잡기 (다른 손이 안 놓치는 선에서)
+  if (isHand(k) && inst.auto && d2(j, best) <= ARM + 0.65) {
+    const other = k === 'lh' ? 'rh' : 'lh', oh = inst.limbs[other].hold;
+    const dd = d2(j, best), need = dd - ARM + 0.03;
+    const nh = { x: inst.hip.x + ((best.x - j.x) / dd) * need, y: inst.hip.y + ((best.y - j.y) / dd) * need };
+    if (!oh || d2(jointOf(other, nh), oh) <= ARM) { inst.hip.x = nh.x; inst.hip.y = nh.y; instGrab(k, best); return; }
   }
   if (isHand(k) && d2(j, best) <= ARM + 0.25) { instMsg('조금 멀어요 — 엉덩이를 올리거나 발을 높여봐요'); return; }
-  if (isHand(k) && d2(j, best) <= 2.6) { instStartDyno(k, best); return; }
-  instMsg(`${LIMB_NAME[k]}이 안 닿아요 — 엉덩이를 옮겨봐요`);
+  if (isHand(k) && d2(j, best) <= 3.1) { instStartDyno(k, best); return; }
+  instMsg(`${LIMB_NAME[k]}이 안 닿아요 — 두 손을 모으고(매칭) 엉덩이를 올려봐요`);
+}
+function instGrab(k, o) {
+  instAttach(k, o);
+  Sound.grab();
+  instFx(o.x, o.y, isHand(k) ? 'grab' : 'step');
+  inst.boing = 1;
+  if (isHand(k)) {
+    instFx(o.x, o.y + 0.25, 'text', pick(['영차!', '으쌰!', '잡았다!', '착!', '가즈아']));
+    if (inst.auto) instAutoBody();
+  }
+}
+// 손을 옮기면 엉덩이와 발이 알아서 편한 자리로 (팔 쭉, 발은 엉덩이 아래)
+function instAutoBody() {
+  const L = inst.limbs, hands = ['lh', 'rh'].filter((k) => L[k].hold);
+  if (!hands.length) return;
+  const hy = Math.min(...hands.map((k) => L[k].hold.y)), hx = hands.reduce((a, k) => a + L[k].hold.x, 0) / hands.length;
+  inst.hip.x = hx; inst.hip.y = hy - TORSO - ARM * 0.8;
+  ['lf', 'rf'].forEach((k) => { L[k].hold = null; L[k].flag = null; });
+  instConstrainHip();
+  ['lf', 'rf'].forEach((k) => instAutoFoot(k));
+  instConstrainHip();
+}
+// 🦵 플래깅: 지지점 반대편 발을 반대쪽으로 쭉 뻗어서 무게중심 되돌리기
+function instFlag() {
+  const L = inst.limbs, hip = inst.hip;
+  const sup = ['lh', 'rh', 'lf', 'rf'].filter((k) => L[k].hold);
+  if (!sup.length) return;
+  const sx = sup.reduce((a, k) => a + L[k].hold.x, 0) / sup.length;
+  const dir = Math.sign(sx - hip.x) || 1;
+  const k = dir > 0 ? 'lf' : 'rf';
+  L[k].hold = null; L[k].flag = { dx: dir * 0.78, dy: -0.32 };
+  const fp = instFreePos(k);
+  instFx(fp.x, fp.y + 0.15, 'text', '플래깅!');
+  instMsg('🦵 플래깅! 다리를 쭉 뻗어서 중심을 잡았어요');
+  Sound.tone(660, 0.06, 'triangle', 0.06);
+  inst.boing = 1;
+  if (Math.random() < 0.5) westPraise('tech', 700);
+}
+function instToggleAuto() {
+  inst.auto = !inst.auto; Store.data.autoPose = inst.auto; Store.save();
+  $('#inst-auto').setAttribute('aria-pressed', inst.auto ? 'true' : 'false');
+  instMsg(inst.auto ? '🤖 자동 자세 ON — 손만 옮기면 몸과 발이 따라와요' : '자동 자세 OFF — 손·발·엉덩이를 직접!');
 }
 function instKey(code) {
+  if (code === 'KeyF') { instFlag(); return true; }
+  if (code === 'KeyA' && !inst.drags.size) { instToggleAuto(); return true; }
   if (code === 'Space') { if (inst.gauge) instFireGauge(); return true; }
   if (code === 'KeyH') { instToggleHip(); return true; }
   if (code === 'KeyE') { letGo('down'); return true; }
@@ -2982,7 +3171,8 @@ function instChalk(k) {
   instMsg(`${LIMB_NAME[k]} 초크 충전 🤍`);
 }
 function instMsg(t) { const el = $('#inst-msg'); el.textContent = t; el.classList.add('show'); clearTimeout(inst.msgTimer); inst.msgTimer = setTimeout(() => el.classList.remove('show'), 2000); }
-function instFx(x, y, kind) {
+function instFx(x, y, kind, text) {
+  if (kind === 'text') { inst.fx.push({ x, y, vx: 0, vy: 0.5, life: 0, max: 0.9, text }); return; }
   const n = kind === 'chalk' ? 22 : kind === 'grab' ? 8 : 5;
   for (let i = 0; i < n; i++) inst.fx.push({ x, y, vx: (Math.random() - 0.5) * (kind === 'chalk' ? 1.6 : 0.8), vy: Math.random() * 0.8, life: 0, max: 0.5 + Math.random() * 0.6, r: kind === 'chalk' ? 4 + Math.random() * 6 : 2 + Math.random() * 3 });
 }
@@ -2993,7 +3183,7 @@ function instStartDyno(k, o) {
   const from = inst.limbs[k === 'lh' ? 'rh' : 'lh'].hold;
   const q = Math.min(from ? from.h.q : 0.7, o.h.q);
   const dist = d2(j, o);
-  inst.gauge = { k, o, t: 0, speed: 1.1 + (1 - q) * 0.8 + inst.p.level * 0.05, center: clamp(0.25 + (dist - ARM) / (2.6 - ARM) * 0.6, 0.12, 0.9), width: 0.08 + 0.26 * q };
+  inst.gauge = { k, o, t: 0, speed: 1.0 + (1 - q) * 0.7 + inst.p.level * 0.04, center: clamp(0.25 + (dist - ARM) / (3.1 - ARM) * 0.6, 0.12, 0.9), width: 0.1 + 0.26 * q };
   instMsg('다이노! 초록 칸에서 탭 / Space');
 }
 function instFireGauge() {
@@ -3022,8 +3212,9 @@ function instFireGauge() {
     if (next) { popText('더블!!', head, 0.36); setTimeout(() => { if (inst.on) instStartDyno(k, next); }, 120); pl.didDouble = true; return; }
   }
   if (pl.didDouble) { toast('🔥🔥 더블다이노 성공!!', 2200); Store.data.doubles = (Store.data.doubles || 0) + 1; Store.save(); pl.didDouble = false; }
-  else toast('🔥 다이노 성공! 발을 다시 올려요', 1800);
+  else toast('🔥 다이노 성공!', 1600);
   westPraise('dyno', 400);
+  setTimeout(() => { if (inst.on && inst.auto && !inst.gauge) { instAutoBody(); instFx(inst.hip.x, inst.hip.y - 0.3, 'text', '발 착!'); } }, 450);
 }
 
 // ---------- 물리: 무게중심, 효율, 펌핑 ----------
@@ -3044,10 +3235,11 @@ function updateInstance(dt) {
   // 발에 실리는 무게
   let foot = 0;
   if (feet.length) {
-    let base = clamp(0.72 - ang * 0.013, 0.08, 0.86);
+    const gr = gear();
+    let base = clamp(0.72 - ang * 0.013, 0.08, 0.86) * (0.82 + 0.3 * gr.f) * (ang > 12 ? 0.7 + 0.4 * gr.h : 1);
     if (inst.hipIn) base += ang > 5 ? ang * 0.007 : 0.06;
     const below = feet.filter((k) => L[k].hold.y < hip.y - 0.05).length / feet.length;
-    const fq = feet.reduce((a, k) => a + Math.sqrt(L[k].hold.h.q), 0) / feet.length;
+    const fq = feet.reduce((a, k) => a + Math.sqrt(Math.min(1, L[k].hold.h.q + 0.3 * gr.e)), 0) / feet.length;
     foot = clamp(base * (feet.length === 2 ? 1 : 0.6) * fq * (0.45 + 0.55 * below), 0, 0.9);
   }
   // 무게중심 (자유로운 발을 반대쪽으로 뻗으면 플래깅 → 중심이 돌아옴)
@@ -3069,8 +3261,9 @@ function updateInstance(dt) {
   const allLeft = sup.length && sup.every((x) => x < cogX - 0.06), allRight = sup.length && sup.every((x) => x > cogX + 0.06);
   const barn = (allLeft || allRight) && feet.length >= 1 && sup.length <= 3 && !inst.gauge;
   if (barn) inst.bdT += dt; else inst.bdT = Math.max(0, inst.bdT - dt * 2);
+  if (barn && inst.auto && inst.bdT > 0.7 && !L.lf.flag && !L.rf.flag) instFlag();
   inst.swing = lerp(inst.swing, barn ? (allLeft ? -1 : 1) * Math.min(1, inst.bdT) * 0.6 : 0, damp(4, dt));
-  if (inst.bdT > 2.0) { instMsg('🚪 바니도어! 몸이 돌아갔어요 — 반대 발로 플래깅!'); popText('바니도어!', me.group.position.clone().add(new V3(0, 1.6, 0)), 0.3); letGo('fall'); return; }
+  if (inst.bdT > 3.0) { instMsg('🚪 바니도어! 몸이 돌아갔어요 — 반대 발로 플래깅!'); popText('바니도어!', me.group.position.clone().add(new V3(0, 1.6, 0)), 0.3); letGo('fall'); return; }
   // 팔 펴기
   let straight = 1;
   if (hands.length) straight = hands.reduce((a, k) => a + clamp((d2(jointOf(k), L[k].hold) / ARM - 0.5) / 0.42, 0, 1), 0) / hands.length;
@@ -3084,9 +3277,9 @@ function updateInstance(dt) {
       const st1 = clamp((d2(jointOf(k), l.hold) / ARM - 0.5) / 0.42, 0, 1);
       const bent = 1.35 - 0.6 * st1;
       const share = arm / hands.length;
-      const rate = share * 2.6 / Math.pow(l.hold.h.q, 0.8) * bent * lvl * (l.chalky > 0 ? 0.85 : 1);
-      l.pump += (share < 0.12 ? -1 : rate) * dt;
-    } else if (!l.drag && hands.length) l.pump -= 7 * dt; // 털기
+      const rate = share * 1.5 / Math.pow(l.hold.h.q, 0.7) * bent * lvl * (l.chalky > 0 ? 0.85 : 1) * gear().pumpMul;
+      l.pump += (share < 0.15 ? -2 : rate) * dt;
+    } else if (!l.drag && hands.length) l.pump -= 10 * dt; // 털기
     l.pump = clamp(l.pump, 0, 100);
     if (l.hold && l.pump >= 100) { l.hold = null; instMsg(`💥 ${LIMB_NAME[k]} 펌핑 한계! 손이 풀렸어요`); popText('손 풀림!', me.group.position.clone().add(new V3(0, 1.5, 0)), 0.26); }
   });
@@ -3176,7 +3369,7 @@ function renderInst(dt) {
       const allowed = isHand(k) ? o.prob : !o.h.tap;
       if (allowed) {
         const reach = d2(jointOf(k), o) <= limbMax(k);
-        if (reach || (isHand(k) && d2(jointOf(k), o) > ARM + 0.25 && d2(jointOf(k), o) <= 2.6)) {
+        if (reach || (isHand(k) && d2(jointOf(k), o) > ARM + 0.25 && d2(jointOf(k), o) <= 3.1)) {
           g.strokeStyle = reach ? 'rgba(47,210,107,.95)' : 'rgba(255,207,74,.9)'; g.lineWidth = 3; g.setLineDash(reach ? [] : [5, 4]);
           g.beginPath(); g.arc(sx, sy, r * 1.4 + 8, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
         }
@@ -3199,6 +3392,13 @@ function renderInst(dt) {
     if (f.life > f.max) { inst.fx.splice(i, 1); continue; }
     f.x += f.vx * dt; f.y += f.vy * dt; f.vy -= 0.6 * dt;
     const [sx, sy] = w2s(f.x, f.y);
+    if (f.text) {
+      const a = 1 - f.life / f.max, sc = f.life < 0.12 ? 0.6 + f.life * 4 : 1.08;
+      g.save(); g.globalAlpha = a; g.translate(sx, sy); g.scale(sc, sc);
+      g.font = '900 22px "Black Han Sans", sans-serif'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = '#e3262b'; g.lineJoin = 'round';
+      g.strokeText(f.text, 0, 0); g.fillStyle = '#fff'; g.fillText(f.text, 0, 0); g.restore();
+      continue;
+    }
     g.fillStyle = `rgba(255,255,255,${(1 - f.life / f.max) * 0.85})`;
     g.beginPath(); g.arc(sx, sy, f.r * (1 + f.life), 0, Math.PI * 2); g.fill();
   }
@@ -3213,45 +3413,67 @@ function limbBend(a, b, len, outward) {
   return [mx + (nx / nl) * h * outward, my + (ny / nl) * h * outward];
 }
 function drawInstClimber(g) {
-  const hip = inst.hip, L = inst.limbs, s = instV.s;
-  const color = me.color, dark = new THREE.Color(color).multiplyScalar(0.72).getStyle();
-  const hipS = w2s(hip.x, hip.y), neckS = w2s(hip.x + inst.swing * 0.25, hip.y + TORSO + 0.05);
-  const pumpCol = (p) => `rgb(${255},${Math.round(230 - p * 1.9)},${Math.round(204 - p * 1.9)})`;
-  // 팔다리
+  const L = inst.limbs, s = instV.s, dt = 1 / 60;
+  // 부드럽게 따라가는 렌더 위치 (홀드 잡을 때 쓱 움직이는 느낌)
+  inst.hipR.x = lerp(inst.hipR.x, inst.hip.x, 0.18); inst.hipR.y = lerp(inst.hipR.y, inst.hip.y, 0.18);
   LIMB_KEYS.forEach((k) => {
     const l = L[k];
     const p = l.hold ? l.hold : l.drag ? l : instFreePos(k);
+    if (!l.r || l.drag) l.r = { x: p.x, y: p.y };
+    else { l.r.x = lerp(l.r.x, p.x, 0.28); l.r.y = lerp(l.r.y, p.y, 0.28); }
+  });
+  inst.boing = Math.max(0, inst.boing - dt * 3);
+  const hip = { x: inst.hipR.x + inst.swing * 0.1, y: inst.hipR.y + Math.sin(inst.t * 2.2) * 0.012 };
+  const color = me.color, dark = new THREE.Color(color).multiplyScalar(0.72).getStyle();
+  const g2 = gear();
+  const legCol = g2.pants ? g2.pants.c : dark, shoeCol = g2.shoe.id !== 'rental' ? g2.shoe.c : '#2a2a2e';
+  const hipS = w2s(hip.x, hip.y), neckS = w2s(hip.x + inst.swing * 0.25, hip.y + TORSO + 0.05);
+  const pumpCol = (p) => `rgb(255,${Math.round(230 - p * 1.9)},${Math.round(204 - p * 1.9)})`;
+  const limbs = ['lf', 'rf', 'lh', 'rh'];
+  limbs.forEach((k) => {
+    const l = L[k];
+    const p = l.r;
     const j = jointOf(k, { x: hip.x + (isHand(k) ? inst.swing * 0.25 : 0), y: hip.y });
     const a = w2s(j.x, j.y), b = w2s(p.x, p.y);
     const len = limbMax(k) * s;
-    const far = Math.hypot(b[0] - a[0], b[1] - a[1]) > len * 1.02;
-    const m = limbBend(a, b, len, isHand(k) ? -sideOf(k) : sideOf(k));
-    g.strokeStyle = far ? 'rgba(227,38,43,.85)' : dark; g.lineWidth = Math.max(6, s * (isHand(k) ? 0.09 : 0.11)); g.lineCap = 'round'; g.lineJoin = 'round';
+    const far = l.drag && Math.hypot(b[0] - a[0], b[1] - a[1]) > len * 1.02;
+    const flagged = !!l.flag;
+    const m = flagged ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] : limbBend(a, b, len, isHand(k) ? -sideOf(k) : sideOf(k));
+    g.strokeStyle = far ? 'rgba(227,38,43,.85)' : isHand(k) ? dark : legCol;
+    g.lineWidth = Math.max(7, s * (isHand(k) ? 0.1 : 0.12)); g.lineCap = 'round'; g.lineJoin = 'round';
     if (far) g.setLineDash([8, 6]);
     g.beginPath(); g.moveTo(a[0], a[1]);
     if (far) g.lineTo(b[0], b[1]); else { g.lineTo(m[0], m[1]); g.lineTo(b[0], b[1]); }
     g.stroke(); g.setLineDash([]);
-    // 손/발 끝
-    const rr = Math.max(9, s * (isHand(k) ? 0.075 : 0.085));
-    g.fillStyle = isHand(k) ? (l.chalky > 0 ? '#ffffff' : pumpCol(l.pump)) : '#2a2a2e';
-    g.strokeStyle = l.hold ? '#fff' : 'rgba(255,255,255,.5)'; g.lineWidth = 2.5;
-    g.beginPath();
-    if (isHand(k)) g.arc(b[0], b[1], rr, 0, Math.PI * 2); else g.ellipse(b[0], b[1], rr * 1.3, rr * 0.8, 0, 0, Math.PI * 2);
-    g.fill(); g.stroke();
-    if (l.drag) { g.strokeStyle = '#ffcf4a'; g.lineWidth = 3; g.beginPath(); g.arc(b[0], b[1], rr + 6, 0, Math.PI * 2); g.stroke(); }
+    const rr = Math.max(10, s * (isHand(k) ? 0.08 : 0.09));
+    if (isHand(k)) {
+      g.fillStyle = l.chalky > 0 ? '#ffffff' : pumpCol(l.pump);
+      g.strokeStyle = l.hold ? '#fff' : 'rgba(255,255,255,.5)'; g.lineWidth = 2.5;
+      g.beginPath(); g.arc(b[0], b[1], rr, 0, Math.PI * 2); g.fill(); g.stroke();
+      if (l.pump > 70 && l.hold) { g.fillStyle = '#7fd0ff'; g.beginPath(); g.arc(b[0] + rr, b[1] - rr, 3 + Math.sin(inst.t * 9) * 1.2, 0, Math.PI * 2); g.fill(); } // 땀방울
+    } else {
+      // 암벽화 (플래깅이면 발끝 쭉)
+      const ang = flagged ? Math.atan2(b[1] - m[1], b[0] - m[0]) : 0;
+      g.save(); g.translate(b[0], b[1]); g.rotate(ang);
+      g.fillStyle = shoeCol; g.strokeStyle = l.hold ? '#fff' : 'rgba(255,255,255,.5)'; g.lineWidth = 2.5;
+      g.beginPath(); g.ellipse(flagged ? rr * 0.4 : 0, 0, rr * 1.35, rr * 0.75, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.restore();
+    }
+    if (l.drag) { g.strokeStyle = '#ffcf4a'; g.lineWidth = 3; g.beginPath(); g.arc(b[0], b[1], rr + 7, 0, Math.PI * 2); g.stroke(); }
   });
-  // 몸통
-  g.strokeStyle = dark; g.lineWidth = Math.max(14, s * 0.26); g.lineCap = 'round';
+  // 몸통 + 엉덩이
+  g.strokeStyle = dark; g.lineWidth = Math.max(16, s * 0.28); g.lineCap = 'round';
   g.beginPath(); g.moveTo(hipS[0], hipS[1]); g.lineTo(neckS[0], neckS[1]); g.stroke();
+  g.fillStyle = legCol; g.beginPath(); g.ellipse(hipS[0], hipS[1] + s * 0.02, s * 0.17, s * 0.12, 0, 0, Math.PI * 2); g.fill();
   // 초크백
   const bag = w2s(instBagPos().x, instBagPos().y);
   g.fillStyle = '#f4f1ea'; g.strokeStyle = '#e3262b'; g.lineWidth = 3;
-  g.beginPath(); g.roundRect ? g.roundRect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15, 4) : g.rect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15); g.fill(); g.stroke();
-  // 엉덩이 붙이기 표시
-  if (inst.hipIn) { g.fillStyle = 'rgba(255,207,74,.9)'; g.font = `900 ${Math.max(11, s * 0.1)}px "Noto Sans KR"`; g.textAlign = 'center'; g.fillText('🍑', hipS[0], hipS[1] + s * 0.05); g.textAlign = 'left'; }
-  // 큰 불꽃 머리 (뒤통수)
-  const hw = s * 0.62;
-  g.save(); g.translate(neckS[0] - hw / 2, neckS[1] - hw * 0.95); g.scale(hw / 100, hw / 100);
+  g.beginPath(); if (g.roundRect) g.roundRect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15, 4); else g.rect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15); g.fill(); g.stroke();
+  if (inst.hipIn) { g.font = `${Math.max(12, s * 0.12)}px sans-serif`; g.textAlign = 'center'; g.fillText('🍑', hipS[0], hipS[1] + s * 0.05); g.textAlign = 'left'; }
+  // 큰 불꽃 머리 (영차 할 때 통통)
+  const bo = inst.boing, hw = s * 0.64 * (1 + bo * 0.12), hh = s * 0.64 * (1 - bo * 0.1);
+  g.save(); g.translate(neckS[0], neckS[1]); g.rotate(inst.swing * 0.3 + Math.sin(inst.t * 2.4) * 0.04);
+  g.translate(-hw / 2, -hh * 0.95); g.scale(hw / 100, hh / 100);
   g.fillStyle = color; g.strokeStyle = '#fff'; g.lineWidth = 6; const fp = new Path2D(FLAME_D); g.fill(fp); g.stroke(fp);
   g.restore();
 }
@@ -3403,6 +3625,11 @@ async function enterGym(name, color) {
   me.group.rotation.y = pl.yaw;
   makeStaff();
   makeWest();
+  me.setOutfit(Store.data.equip.shoe, Store.data.equip.pants);
+  updateWallet();
+  $('#btn-shop').addEventListener('click', openShop);
+  $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
+  scheduleAds();
   setupPay();
   $('#polaroid .pol-close').addEventListener('click', () => { $('#polaroid').hidden = true; });
   setTimeout(() => { toast('🐯 무호K가 누구보다 빠르게 입구로 달려오는 중…', 2200); staffRushToEntry(staffArrivedForPlayer); }, 900);

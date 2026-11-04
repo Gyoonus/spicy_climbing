@@ -300,6 +300,41 @@ body.touch .prompt { bottom: 175px; }
 .album-item img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
 @media (max-width: 640px) { .polaroid { width: 150px; top: 190px; left: 10px; } }
 
+/* 지갑 / 상점 / 광고 */
+.wallet-btn { font-variant-numeric: tabular-nums; }
+.wallet-btn .neg, #wallet.neg { color: #ff8a8a; }
+.shop .shop-wallet { margin: 8px 0 0; font-size: .95rem; }
+.shop .shop-wallet b { color: #ffcf4a; font-size: 1.1rem; }
+.shop .shop-wallet small { color: var(--muted); display: block; font-size: .76rem; }
+.shop-list { display: grid; gap: 8px; }
+.item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.item.on { border-color: #2fd26b; }
+.item.best { border-color: #e3262b; background: linear-gradient(135deg, rgba(227,38,43,.22), var(--panel-2) 60%); }
+.item-head { display: flex; align-items: center; gap: 8px; }
+.item-head .price { margin-left: auto; font-weight: 900; color: #ffcf4a; font-variant-numeric: tabular-nums; }
+.item p { margin: 4px 0 6px; color: #cfcac4; font-size: .82rem; }
+.swatch-dot { width: 14px; height: 14px; border-radius: 4px; flex: none; border: 1px solid rgba(255,255,255,.3); }
+.ad-tag { font-size: .62rem; font-weight: 900; background: #fff; color: #111; border-radius: 4px; padding: 1px 5px; }
+.best-tag { color: #fff !important; border-color: #e3262b !important; background: #e3262b; }
+.stat { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 6px; font-size: .72rem; color: var(--muted); margin: 2px 0; }
+.stat i { height: 6px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.stat b { display: block; height: 100%; background: linear-gradient(90deg, #ffcf4a, #e3262b); }
+.item-act { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.item-act .btn { padding: 7px 12px; font-size: .82rem; }
+.ad-link { text-decoration: none; background: #fff; color: #111; border-color: #fff; }
+.adcard {
+  position: absolute; left: 12px; top: 64px; width: min(300px, calc(100% - 150px)); background: #111; border: 1px solid #e3262b; border-radius: 14px;
+  padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.adcard.show { animation: drop .5s cubic-bezier(.2,1.4,.4,1); }
+.ad-top { display: flex; align-items: center; gap: 8px; }
+.ad-top .icon-btn { margin-left: auto; padding: 2px 8px; }
+.adcard p { margin: 6px 0 8px; font-size: .82rem; color: #d8d3cd; line-height: 1.5; }
+.ad-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ad-actions .btn { padding: 7px 12px; font-size: .8rem; text-decoration: none; }
+body.inst .adcard { display: none; }
+@media (max-width: 640px) { .adcard { top: 132px; width: calc(100% - 24px); } .inst-btns .btn { padding: 8px 12px; font-size: .82rem; } }
+
 /* 무호K 카운터 */
 .pay { border: 2px solid #f39a2b; border-radius: 22px; background: #141414; color: var(--text); padding: 0; width: min(380px, calc(100% - 24px)); }
 .pay::backdrop { background: rgba(0,0,0,.55); }

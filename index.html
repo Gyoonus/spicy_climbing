@@ -69,10 +69,12 @@
       <canvas id="inst-side" class="inst-side" width="240" height="300"></canvas>
       <div class="inst-msg" id="inst-msg"></div>
       <div class="inst-btns">
+        <button id="inst-auto" class="btn" type="button" aria-pressed="true">🤖 자동 자세 <kbd>A</kbd></button>
+        <button id="inst-flag" class="btn" type="button">🦵 플래깅 <kbd>F</kbd></button>
         <button id="inst-hip" class="btn" type="button" aria-pressed="false">🍑 엉덩이 붙이기 <kbd>H</kbd></button>
         <button id="inst-down" class="btn" type="button">⬇️ 내려오기 <kbd>E</kbd></button>
       </div>
-      <p class="inst-help">손·발·몸통을 끌어서 홀드에 올려요 · 손을 초크백으로 끌면 초크 · TOP을 두 손으로 매칭하면 완등</p>
+      <p class="inst-help">손을 다음 홀드로 끌면 몸·발이 따라와요 (자동 자세) · F 플래깅 · 손을 초크백으로 끌면 초크 · TOP 두 손 매칭 = 완등</p>
     </div>
 
     <header class="hud-top">
@@ -82,6 +84,7 @@
       </div>
       <div class="top-actions">
         <span id="online" class="online" data-state="connecting">연결 중…</span>
+        <button id="btn-shop" class="icon-btn wallet-btn" type="button" aria-label="지갑과 상점">💰 <span id="wallet">0원</span></button>
         <button id="btn-chat" class="icon-btn only-touch" type="button" aria-label="말하기">💬</button>
         <button id="btn-music" class="icon-btn" type="button" aria-label="배경음악">🎵</button>
         <button id="btn-sound" class="icon-btn" type="button" aria-label="효과음">🔈</button>
@@ -130,6 +133,11 @@
     </form>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <aside class="adcard" id="adcard" hidden>
+      <div class="ad-top"><span class="ad-tag">AD</span><b id="ad-title"></b><button class="icon-btn" id="ad-close" type="button" aria-label="광고 닫기">✕</button></div>
+      <p id="ad-copy"></p>
+      <div class="ad-actions"><a id="ad-link" class="btn btn-primary" target="_blank" rel="noopener sponsored">구매하러 가기 ↗</a><button class="btn" id="ad-shop" type="button">게임 상점에서 보기</button></div>
+    </aside>
     <div class="flash" id="flash" aria-hidden="true"></div>
     <figure class="polaroid" id="polaroid" hidden>
       <img alt="웨스트가 찍어준 완등 사진" />
@@ -184,6 +192,18 @@
         <button class="btn" type="button" id="btn-reset">기록 초기화</button>
         <button class="btn btn-primary" value="close">닫기</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="shop" class="records shop">
+    <form method="dialog" class="records-inner">
+      <div class="rec-head"><h2>🛒 무호K 프로샵</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
+      <p class="shop-wallet">💰 지갑 <b id="shop-wallet"></b> <small>게임 머니 · 완등하면 벌어요 (어려울수록, 첫 완등은 2배)</small></p>
+      <h3 class="rec-h">👟 암벽화 <small>마찰 = 발에 실리는 무게 · 엣지 = 작은 발홀드 · 오버행 = 가파른 벽에서 발</small></h3>
+      <div id="shop-shoes" class="shop-list"></div>
+      <h3 class="rec-h">👖 의류</h3>
+      <div id="shop-pants" class="shop-list"></div>
+      <p class="pay-note">게임 속 구매는 가상 머니예요. ‘실제 제품 보기 ↗’는 판매 페이지로 연결되는 광고 링크예요.</p>
     </form>
   </dialog>
 
