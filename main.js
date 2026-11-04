@@ -801,13 +801,51 @@ const shadowTex = canvasTex(64, 64, (g) => {
   g.fillStyle = r; g.fillRect(0, 0, 64, 64);
 });
 
+// 무호K의 호랑이 얼굴
+let tigerTexCache = null;
+function tigerTex() {
+  if (tigerTexCache) return tigerTexCache;
+  tigerTexCache = canvasTex(512, 256, (g) => {
+    g.fillStyle = '#f39a2b'; g.fillRect(0, 0, 512, 256);
+    g.fillStyle = '#fff1df'; g.beginPath(); g.ellipse(128, 200, 95, 60, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1d1410';
+    const stripe = (x, y, w, h, rot) => { g.save(); g.translate(x, y); g.rotate(rot); g.beginPath(); g.moveTo(-w / 2, 0); g.quadraticCurveTo(0, h * 0.2, 0, h); g.quadraticCurveTo(0, h * 0.2, w / 2, 0); g.closePath(); g.fill(); g.restore(); };
+    [[128, 14, 16, 58, 0], [104, 22, 12, 42, -0.15], [152, 22, 12, 42, 0.15]].forEach((a) => stripe(...a));
+    [-1, 1].forEach((sd) => {
+      [[40, 100], [60, 130], [52, 160]].forEach(([dx, y], i) => stripe(128 + sd * (130 + i * 6), y, 14, 40 - i * 4, sd * 1.4));
+      [[95, 70], [110, 92]].forEach(([dx, y]) => stripe(128 + sd * dx, y, 10, 30, sd * 0.9));
+    });
+    for (let x = 300; x < 512; x += 36) stripe(x, 10, 20, 70 + (x % 3) * 10, 0);
+  });
+  return tigerTexCache;
+}
+function buildTigerHead(head) {
+  const fur = new THREE.MeshStandardMaterial({ map: tigerTex(), roughness: 0.7 });
+  const plain = new THREE.MeshStandardMaterial({ color: '#f39a2b', roughness: 0.7 });
+  const white = new THREE.MeshStandardMaterial({ color: '#fff1df', roughness: 0.7 });
+  const pink = new THREE.MeshStandardMaterial({ color: '#ff9aa8', roughness: 0.7 });
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.4, 32, 20), fur);
+  skull.scale.set(1.08, 0.92, 0.95); skull.position.y = 0.38; head.add(skull);
+  [-1, 1].forEach((sd) => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), plain); ear.scale.set(1, 1, 0.5); ear.position.set(sd * 0.29, 0.7, 0); head.add(ear);
+    const inn = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 8), pink); inn.scale.set(1, 1, 0.4); inn.position.set(sd * 0.29, 0.69, 0.045); head.add(inn);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 8), blackMat); eye.scale.z = 0.5; eye.position.set(sd * 0.14, 0.44, 0.35); head.add(eye);
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff' })); hl.position.set(sd * 0.14 + 0.015, 0.46, 0.375); head.add(hl);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.022, 0.02), blackMat); brow.position.set(sd * 0.14, 0.53, 0.35); brow.rotation.z = -sd * 0.38; head.add(brow);
+  });
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 12), white); muzzle.scale.set(1.25, 0.78, 0.7); muzzle.position.set(0, 0.27, 0.3); head.add(muzzle);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), new THREE.MeshStandardMaterial({ color: '#3a2020' })); nose.scale.set(1.4, 0.9, 0.8); nose.position.set(0, 0.33, 0.42); head.add(nose);
+  const mL = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.009, 6, 12, Math.PI), blackMat); mL.rotation.z = Math.PI; mL.position.set(-0.032, 0.27, 0.415); head.add(mL);
+  const mR = mL.clone(); mR.position.x = 0.032; head.add(mR);
+}
+
 // 2등신 불꽃이: 큰 불꽃 머리 + 작은 몸 + 늘어나는 팔다리 (IK로 홀드를 잡음)
 const LIMB = { arm: 0.3, leg: 0.28 };
 const limbGeo = { arm: new THREE.CapsuleGeometry(0.048, LIMB.arm, 4, 8).translate(0, -LIMB.arm / 2, 0), leg: new THREE.CapsuleGeometry(0.06, LIMB.leg, 4, 8).translate(0, -LIMB.leg / 2, 0) };
 const handGeo = new THREE.SphereGeometry(0.07, 12, 8), footGeo = new THREE.SphereGeometry(0.08, 12, 8).scale(1, 0.7, 1.4);
 const DOWN = new V3(0, -1, 0);
 class Avatar {
-  constructor(name, color, { isPlayer = false, visitor = false } = {}) {
+  constructor(name, color, { isPlayer = false, visitor = false, tiger = false } = {}) {
     this.name = name; this.color = color;
     this.group = new THREE.Group();
     this.rig = new THREE.Group();
@@ -819,17 +857,22 @@ class Avatar {
     // 몸통 (작은 티셔츠)
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 6, 12), dark);
     torso.position.y = 0.45; this.rig.add(torso);
-    const tee = textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }); tee.position.set(0, 0.47, 0.16); this.rig.add(tee);
+    const tee = tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
+    tee.position.set(0, 0.47, 0.16); this.rig.add(tee);
+    if (tiger) skin.color.set('#f39a2b');
+    this.skinBase = tiger ? '#f39a2b' : '#ffe3cc';
     // 초크백 (허리 뒤)
     const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 14), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.9 }));
     bag.position.set(0, 0.34, -0.17); this.rig.add(bag);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.073, 0.014, 6, 16), new THREE.MeshStandardMaterial({ color: '#e3262b' }));
     rim.rotation.x = Math.PI / 2; rim.position.set(0, 0.41, -0.17); this.rig.add(rim);
     this.skin = skin;
-    // 머리 (큰 불꽃)
+    // 머리 (큰 불꽃 / 호랑이)
     this.head = new THREE.Group();
     this.head.position.y = 0.55;
     const hs = 0.86;
+    if (tiger) { buildTigerHead(this.head); bag.visible = false; rim.visible = false; }
+    else {
     const flame = new THREE.Mesh(getFlameGeo(), main); flame.scale.setScalar(hs); this.head.add(flame);
     [-0.12, 0.12].forEach((x) => {
       const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), blackMat);
@@ -842,6 +885,7 @@ class Avatar {
     const arcL = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.01, 6, 12, Math.PI), blackMat);
     arcL.position.set(-0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcL);
     const arcR = arcL.clone(); arcR.rotation.z = Math.PI; arcR.position.set(0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcR);
+    }
     this.rig.add(this.head);
     // 팔다리
     const mk = (kind, x, y, z) => {
@@ -855,7 +899,7 @@ class Avatar {
       return { pivot, seg, end, len: LIMB[kind], kind };
     };
     this.limbs = [mk('arm', -0.2, 0.55, 0), mk('arm', 0.2, 0.55, 0), mk('leg', -0.085, 0.3, 0), mk('leg', 0.085, 0.3, 0)];
-    this.tag = textSprite(name, { h: 0.17, bg: isPlayer ? '#e3262b' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor ? '#111' : '#fff' });
+    this.tag = textSprite(tiger ? `🐯 ${name}` : name, { h: 0.17, bg: isPlayer ? '#e3262b' : tiger ? '#f39a2b' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor || tiger ? '#111' : '#fff' });
     this.tag.position.y = 1.5;
     this.group.add(this.tag);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
@@ -907,7 +951,7 @@ class Avatar {
     if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
     const ck = this.chalkT > 0 ? this.chalkDur - this.chalkT : -1;
     if (this.chalkyT > 0) this.chalkyT -= dt;
-    this.skin.color.set('#ffe3cc').lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
+    this.skin.color.set(this.skinBase).lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
     if (this.climbing && this.grips) {
       this.group.updateMatrixWorld(true);
       this.limbTo(la, this.grips[0]);
@@ -1140,6 +1184,7 @@ function setupInput() {
   if (isTouch) document.body.classList.add('touch');
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') { if (e.key === 'Escape') e.target.blur(); return; }
+    if (document.querySelector('dialog[open]')) return;
     if (e.code === 'Enter') { e.preventDefault(); openChat(); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -1228,7 +1273,7 @@ function problemLabel(p) { return `${p.sector.label.length === 1 ? p.sector.labe
 // =================================================================
 // 플레이어
 // =================================================================
-const SPAWN = m([435, 925]);
+const SPAWN = m([435, 1040]);
 const pl = {
   av: null, mode: 'walk', pos: new V3(SPAWN[0], 0, SPAWN[1]), vel: new V3(), vy: 0, yaw: Math.PI,
   strip: null, u: 0, v: 0, du: 0, dv: 0, t: 0, launch: null, problem: null, topped: false, topT: 0,
@@ -1392,6 +1437,7 @@ function mount(c) {
     const c = conflicts[0];
     c.av.say(pick(['저 먼저 출발했어요~ 😅', '어… 저 지금 하는 중인데요?', '새치기 멈춰!']), 2600);
     setTimeout(() => Manner.add(-1, '새치기 노노! 선출발자 우선'), 900);
+    setTimeout(() => staffSay(pick(STAFF_LINES.cutin), 2200), 1800);
   } else if (ety.waitedFor && Date.now() - ety.waitedAt < 30000) {
     const w = ety.waitedFor; ety.waitedFor = null;
     w.av.say('기다려줘서 고마워요 🙏', 2400);
@@ -1467,6 +1513,7 @@ function useChalk() {
   Sound.chalk();
   me.chalk();
   Net.event('chalk');
+  onChalkUsed();
   pl.pump = Math.max(0, pl.pump - 18);
   if (pl.mode === 'climb') me.say(pick(['슥슥', '후~ 초크 충전']), 1000);
   else setTimeout(() => me.say(pick(['쫙쫙 팡팡!', '가루 날린다~ 💨', '초크 풀충전!']), 1400), 1150);
@@ -1506,7 +1553,9 @@ function updatePlayer(dt) {
     const rx = Math.cos(camCtl.yaw), rz = -Math.sin(camCtl.yaw);
     let mx = fx * iy + rx * ix, mz = fz * iy + rz * ix;
     if (pl.sitting) { if (Math.hypot(ix, iy) > 0.2) standUp(); else { mx = 0; mz = 0; } }
+    if (pl.stunT > 0) { pl.stunT -= dt; mx = 0; mz = 0; }
     const running = isRunning() && Math.hypot(mx, mz) > 0.1;
+    pl.isRunningNow = running;
     const spd = running ? 6.2 : 3.4;
     if (running && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01 && (pl.dustT -= dt) < 0) { pl.dustT = 0.16; chalkPuff(pl.pos.clone().add(new V3(0, 0.05, 0)), 2); }
     pl.vel.x = lerp(pl.vel.x, mx * spd, damp(12, dt));
@@ -1515,6 +1564,14 @@ function updatePlayer(dt) {
     if (walkable(nx, nz)) { pl.pos.x = nx; pl.pos.z = nz; }
     else if (walkable(nx, pl.pos.z)) pl.pos.x = nx;
     else if (walkable(pl.pos.x, nz)) pl.pos.z = nz;
+    if (!paidToday() && pl.pos.z < GATE_Z) {
+      pl.pos.z = GATE_Z + 0.02; pl.vel.z = Math.max(0, pl.vel.z);
+      if (performance.now() - watch.gateMsg > 2500) {
+        watch.gateMsg = performance.now();
+        toast('🐯 2만원 내야 입장 가능! 무호K를 기다려요');
+        if (staff.state === 'collect') { staffSay('2만원 먼저요~ 😾', 1800); setTimeout(openPay, 900); }
+      }
+    }
     if (Math.hypot(mx, mz) > 0.1) pl.yaw = lerpAngle(pl.yaw, Math.atan2(mx, mz), damp(10, dt));
     pl.vy -= 16 * dt;
     pl.pos.y += pl.vy * dt;
@@ -1757,6 +1814,163 @@ function npcUpdate(n, dt, now) {
 }
 
 // =================================================================
+// 🐯 무호K — 입장료 2만원 받고, 나쁜 짓 하면 잔소리
+// =================================================================
+const ENTRY = m([435, 1040]);
+const GATE_Z = (905 - 100) * S;
+const STAFF_PATROL = [[450, 460], [690, 470], [420, 820], [690, 800], [180, 440], [520, 300], [430, 950]].map(m);
+const staff = { av: null, state: 'patrol', path: [], speed: 2, next: 0, replan: 0, nagT: 0, dustT: 0, onArrive: null };
+const watch = { chalks: [], runT: 0, calmT: 0, chaseNag: 0, chalkNag: 0, gateMsg: 0 };
+const STAFF_LINES = {
+  run: ['거기 뛰지 마세요!!', '암장에서 뛰면 다쳐요! 😾', '불꽃 학생 멈춰!!', '매트에서 뛰지 말라고요~!', '내가 더 빠르다 🐯💨', '걸어 다니세요 걸어서!!'],
+  chalk: ['초크 그만 뿌려요!! 청소는 누가 해요 😾', '또 팡팡이에요?! 공기 안 좋아져요!', '초크값 따로 받습니다 💸', '진짜 마지막 경고예요 🐯', '바닥 하얘진 거 보여요?!'],
+  crash: ['거기! 선출발자 우선 몰라요?! 😾', '벽 위에서 교통사고 내지 마요~', '동선 확인하고 붙어요!!'],
+  cutin: ['새치기 금지~! 🐯', '먼저 붙은 사람 있잖아요!'],
+  calm: ['그래요 천천히~ 🐯', '이제 좀 낫네요', '걸어 다니니까 얼마나 좋아요'],
+};
+const todayStr = () => new Date().toLocaleDateString('ko-KR');
+const paidToday = () => Store.data.paidDate === todayStr();
+function staffSay(text, ms = 2800) {
+  if (!staff.av) return;
+  staff.av.say(text, ms);
+  if (me && staff.av.group.position.distanceTo(me.group.position) > 9) toast(`🐯 무호K: ${text}`, 2400);
+}
+function staffGo(pt, speed) { const g = staff.av.group; staff.path = planPath([g.position.x, g.position.z], pt); staff.speed = speed; }
+function makeStaff() {
+  staff.av = new Avatar('무호K', '#2b2b30', { tiger: true });
+  const st = m([690, 470]);
+  staff.av.group.position.set(st[0], groundY(st[0], st[1]), st[1]);
+}
+function staffRushToEntry(onArrive, line = '잠깐만요~!! 🐯💨') {
+  const tgt = [ENTRY[0] + 0.6, ENTRY[1] - 1.1];
+  staffGo(tgt, 9.5);
+  staff.state = 'rush'; staff.onArrive = onArrive;
+  staffSay(line, 1800);
+}
+function staffArrivedForPlayer() {
+  const g = staff.av.group;
+  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
+  if (paidToday()) {
+    staffSay('오늘 이미 결제하셨네요~ 들어가세요! 🔥', 2600);
+    staff.state = 'thanks'; staff.next = performance.now() + 2200;
+    return;
+  }
+  staffSay('어서오세요~ 일일이용 2만원입니다! 🐯', 3000);
+  staff.state = 'collect';
+  setTimeout(openPay, 700);
+}
+function openPay() {
+  if (paidToday()) return;
+  const d = $('#pay');
+  $('#pay-say').innerHTML = '"어서오세요~ 스파이시입니다! 일일이용 <b>2만원</b>이에요 🐯"';
+  d.querySelector('[data-pay="member"]').disabled = false;
+  if (!d.open) d.showModal();
+}
+function payDone(method) {
+  Store.data.paidDate = todayStr();
+  Store.data.spent = (Store.data.spent || 0) + 20000;
+  Store.save();
+  $('#pay').close();
+  Sound.tone(1800, 0.08, 'square', 0.06); Sound.tone(1800, 0.08, 'square', 0.06, 0.12);
+  toast(`🧾 일일이용권 20,000원 결제 완료 (${method}) — 입장!`, 2600);
+  staffSay(pick(['감사합니다~ 즐클하세요! 🔥', '오늘도 매운맛 등반 화이팅 🐯', '뛰지 말고, 초크는 적당히~']), 2600);
+  setTimeout(() => me.say('들어갑니다~!', 1600), 600);
+  staff.state = 'thanks'; staff.next = performance.now() + 2200;
+}
+function setupPay() {
+  const d = $('#pay');
+  d.addEventListener('cancel', (e) => e.preventDefault());
+  d.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.pay;
+    if (k === 'card') payDone('카드 삑!');
+    else if (k === 'cash') payDone('현금');
+    else if (k === 'member') {
+      b.disabled = true;
+      $('#pay-say').textContent = '"회원권이요? 조회해볼게요… 🔍"';
+      setTimeout(() => { $('#pay-say').innerHTML = '"명단에 없는데요? 😾 <b>2만원</b>이요."'; staffSay('명단에 없는데요? 😾', 2000); }, 1300);
+    } else if (k === 'sneak') {
+      d.close();
+      staffSay('어딜 가요~ 2만원!! 😾', 2200);
+      me.say('헉 들켰다', 1400);
+      setTimeout(openPay, 1800);
+    }
+  }));
+}
+function staffCatch() {
+  pl.vel.set(0, 0, 0); pl.runToggle = false; pl.stunT = 1.3;
+  staffSay('잡았다!! 🐯 천천히 걸어 다녀요~', 2600);
+  setTimeout(() => me.say('죄송합니다…', 1600), 700);
+  setTimeout(() => Manner.add(-0.3, '무호K한테 잡힘 🐯'), 1000);
+  staff.state = 'thanks'; staff.next = performance.now() + 2500;
+  watch.runT = 0;
+}
+function onChalkUsed() {
+  const now = Date.now();
+  watch.chalks = watch.chalks.filter((t) => now - t < 15000);
+  watch.chalks.push(now);
+  if (watch.chalks.length >= 3 && paidToday() && (staff.state === 'patrol' || staff.state === 'thanks')) {
+    staff.state = 'scold'; staff.replan = 0; staff.scoldT = 0;
+    staffSay(STAFF_LINES.chalk[Math.min(watch.chalkNag++, STAFF_LINES.chalk.length - 1)], 3000);
+    watch.chalks = [];
+  }
+}
+function updateStaff(dt, now) {
+  if (!staff.av) return;
+  const g = staff.av.group;
+  // 이동
+  if (staff.path.length) {
+    const tgt = staff.path[0];
+    const dx = tgt[0] - g.position.x, dz = tgt[1] - g.position.z, d = Math.hypot(dx, dz);
+    if (d < 0.12) staff.path.shift();
+    else {
+      const sp = Math.min(d, staff.speed * dt);
+      g.position.x += (dx / d) * sp; g.position.z += (dz / d) * sp;
+      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(dx, dz), damp(12, dt));
+      if (staff.speed > 6 && (staff.dustT -= dt) < 0) { staff.dustT = 0.08; chalkPuff(g.position.clone().add(new V3(0, 0.1, 0)), 2); }
+    }
+  }
+  g.position.y = lerp(g.position.y, groundY(g.position.x, g.position.z), damp(14, dt));
+  const toMe = me.group.position.distanceTo(g.position);
+  // 감시: 뛰기
+  if (pl.isRunningNow) { watch.runT += dt; watch.calmT = 0; } else { watch.runT = 0; watch.calmT += dt; }
+  switch (staff.state) {
+    case 'patrol':
+      if (!staff.path.length && now > staff.next) { staffGo(pick(STAFF_PATROL), 1.8); staff.next = now + 5000 + Math.random() * 6000; }
+      if (paidToday() && watch.runT > 1.0 && pl.mode === 'walk') {
+        staff.state = 'chase'; staff.replan = 0; staff.nagT = 0;
+        staffSay(STAFF_LINES.run[Math.min(watch.chaseNag++, 1)], 2200);
+      }
+      break;
+    case 'rush':
+      if (!staff.path.length) { const f = staff.onArrive; staff.onArrive = null; staff.state = 'wait'; if (f) f(); }
+      break;
+    case 'collect':
+      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z), damp(6, dt));
+      break;
+    case 'thanks':
+    case 'wait':
+      if (now > staff.next) { staff.state = 'patrol'; staff.next = now + 800; }
+      break;
+    case 'chase':
+      if ((staff.replan -= dt) <= 0) { staff.replan = 0.6; staffGo([me.group.position.x, me.group.position.z], 5.2); }
+      if ((staff.nagT += dt) > 2.4) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
+      if (toMe < 1.0 && pl.isRunningNow) staffCatch();
+      else if (watch.calmT > 2.5 || pl.mode !== 'walk') {
+        staffSay(pl.mode !== 'walk' ? '내려오면 얘기 좀 해요 😾' : pick(STAFF_LINES.calm), 2200);
+        staff.state = 'thanks'; staff.next = now + 1500; staff.path = [];
+      }
+      break;
+    case 'scold':
+      staff.scoldT += dt;
+      if ((staff.replan -= dt) <= 0 && toMe > 1.4) { staff.replan = 0.6; staffGo([me.group.position.x, me.group.position.z], 4.2); }
+      if (toMe <= 1.4) { staff.path = []; g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z), damp(8, dt)); }
+      if (staff.scoldT > 5) { staff.state = 'patrol'; staff.next = now + 1000; }
+      break;
+  }
+  staff.av.update(dt);
+}
+
+// =================================================================
 // 암장 매너 — 선출발자 우선, 벽 위 교통사고, 매너 온도
 // =================================================================
 const Manner = {
@@ -1787,6 +2001,7 @@ function crash(c) {
     letGo('crash');
     c.av.say(pick(['아이고 괜찮아요?!', '어어어 조심!!', '제가 먼저 출발했어요 😵']), 2600);
     setTimeout(() => Manner.add(-1.5, '선출발자 우선! 붙기 전에 동선 확인'), 1600);
+    setTimeout(() => staffSay(pick(STAFF_LINES.crash), 2600), 2400);
     setTimeout(() => toast("💬 '죄송합니다' 한마디면 매너 온도가 회복돼요", 3000), 4600);
     ety.faultAt = Date.now(); ety.faultWith = c;
     if (c.kind === 'peer') Net.event('bump', { to: c.id });
@@ -1903,7 +2118,7 @@ function renderRecords() {
   }
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''}`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
 }
 
 // =================================================================
@@ -1945,6 +2160,7 @@ function drawMinimap() {
   }
   npcs.forEach((n) => { const [x, y] = P(n.av.group.position.x, n.av.group.position.z); g.fillStyle = n.av.color; g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); });
   Net.peers.forEach((p) => { const [x, y] = P(p.av.group.position.x, p.av.group.position.z); g.fillStyle = p.av.color; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); });
+  if (staff.av) { const [sx, sy] = P(staff.av.group.position.x, staff.av.group.position.z); g.font = '26px sans-serif'; g.fillText('🐯', sx, sy); }
   const [x, y] = P(me.group.position.x, me.group.position.z);
   const a = me.group.rotation.y;
   g.save(); g.translate(x, y); g.rotate(-a + Math.PI);
@@ -2024,6 +2240,7 @@ const Net = {
       this.updateCount();
       if (Date.now() - this.startedAt > 4000) {
         toast(`${name}님이 암장에 들어왔어요 👋`, 2000);
+        if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name}님 일일이용 2만원이요~ 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
         const idle = npcs.filter((n) => n.state === 'idle');
         if (idle.length) setTimeout(() => pick(idle).av.say(`${name}님 어서 와요~`), 700);
       }
@@ -2142,6 +2359,7 @@ function loop() {
   Net.update(dt);
   updateEtiquette(dt);
   updateSitNag(dt);
+  updateStaff(dt, now);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
     if (idle.length) {
@@ -2200,6 +2418,9 @@ async function enterGym(name, color) {
   me = new Avatar(name, color, { isPlayer: true });
   me.group.position.copy(pl.pos);
   me.group.rotation.y = pl.yaw;
+  makeStaff();
+  setupPay();
+  setTimeout(() => { toast('🐯 무호K가 누구보다 빠르게 입구로 달려오는 중…', 2200); staffRushToEntry(staffArrivedForPlayer); }, 900);
   setupInput();
   drawMinimapStatic();
   $('#loading').hidden = true;
@@ -2207,7 +2428,7 @@ async function enterGym(name, color) {
   Net.start(name, color);
   setTimeout(() => me.say(`안녕하세요! ${name}예요`, 2400), 600);
   setTimeout(() => npcs[0].av.say('어서 와요~ 신발 벗고 들어와요', 2600), 1700);
-  toast('어서 오세요, 스파이시 클라이밍입니다 🔥', 2600);
+
 
   $('#chat-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -2245,7 +2466,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { get me() { return me; }, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { get me() { return me; }, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }

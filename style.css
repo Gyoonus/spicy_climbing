@@ -210,6 +210,21 @@ body.touch .prompt { bottom: 175px; }
 .records-summary { color: var(--muted); margin: 16px 0 0; font-size: .85rem; }
 .records-actions { display: flex; justify-content: space-between; margin-top: 14px; gap: 8px; }
 
+/* 무호K 카운터 */
+.pay { border: 2px solid #f39a2b; border-radius: 22px; background: #141414; color: var(--text); padding: 0; width: min(380px, calc(100% - 24px)); }
+.pay::backdrop { background: rgba(0,0,0,.55); }
+.pay-inner { padding: 22px; text-align: center; }
+.pay-tiger { font-size: 3.4rem; line-height: 1; animation: flicker 2s ease-in-out infinite; }
+.pay h2 { font-family: "Black Han Sans", sans-serif; font-weight: 400; margin: 6px 0 4px; font-size: 1.5rem; color: #f39a2b; }
+.pay h2 small { display: block; font-family: "Noto Sans KR"; font-size: .78rem; color: var(--muted); font-weight: 500; }
+.pay-say { margin: 10px 0 14px; font-weight: 700; line-height: 1.5; }
+.pay-ticket { display: flex; justify-content: space-between; align-items: center; background: #f39a2b; color: #111; border-radius: 12px; padding: 12px 16px; font-weight: 900; border: 2px dashed rgba(0,0,0,.35); }
+.pay-ticket b { font-size: 1.3rem; }
+.pay-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.pay-btns .btn { padding: 10px 8px; white-space: normal; font-size: .88rem; }
+.pay-btns .btn:disabled { opacity: .4; }
+.pay-note { color: var(--muted); font-size: .74rem; margin: 12px 0 0; }
+
 @media (max-width: 640px) {
   .hide-sm { display: none; }
   .logo { font-size: 4.2rem; }
