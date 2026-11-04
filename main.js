@@ -55,20 +55,20 @@ const HOLD_COLORS = {
 const COLOR_NAMES = { yellow: '노랑', green: '초록', blue: '파랑', red: '빨강', purple: '보라', black: '검정', pink: '핑크', white: '흰색', orange: '주황' };
 
 const SECTORS = [
-  { id: 's1', label: '1', name: '1번 섹터', color: '#d4a73a', H: 4.3, lean: 0.6,
+  { id: 's1', label: '1', name: '1번 섹터', color: '#d4a73a', H: 4.3, lean: 0.6, angle: 20,
     foot: [[270, 118], [605, 118], [605, 262], [525, 283], [470, 250], [440, 215], [345, 205], [335, 400], [270, 400]],
     front: [[270, 400], [335, 400], [345, 205], [440, 215], [470, 250], [525, 283], [605, 262]] },
-  { id: 's2', label: '2', name: '2번 섹터', color: '#c0282d', H: 4.3, lean: 1.0,
+  { id: 's2', label: '2', name: '2번 섹터', color: '#c0282d', H: 4.3, lean: 1.0, angle: 35,
     foot: [[605, 118], [835, 118], [835, 378], [810, 325], [800, 212], [720, 152], [655, 142], [630, 250], [605, 262]],
     front: [[605, 262], [630, 250], [655, 142], [720, 152], [800, 212], [810, 325], [835, 378]] },
-  { id: 's3', label: '3', name: '3번 섹터', color: '#4caf43', H: 4.3, lean: 0.3,
+  { id: 's3', label: '3', name: '3번 섹터', color: '#4caf43', H: 4.3, lean: 0.3, angle: 8,
     foot: [[835, 378], [835, 852], [815, 835], [820, 760], [805, 665], [812, 580], [725, 495], [790, 405]],
     front: [[835, 378], [790, 405], [725, 495], [812, 580], [805, 665], [820, 760], [815, 835], [835, 852]] },
-  { id: 's4', label: '4', name: '4번 섹터', color: '#2563b8', H: 3.6, lean: 0.45, closed: true,
+  { id: 's4', label: '4', name: '4번 섹터', color: '#2563b8', H: 3.6, lean: 0.45, angle: 25, closed: true,
     foot: [[490, 568], [578, 556], [615, 585], [628, 715], [598, 740], [483, 718]] },
-  { id: 'spray', label: '스프레이월', name: '스프레이월', color: '#3a3540', H: 3.8, lean: 1.3, dark: true,
+  { id: 'spray', label: '스프레이월', name: '스프레이월', color: '#3a3540', H: 3.8, lean: 1.3, angle: 40, dark: true,
     foot: [[235, 118], [270, 118], [270, 375], [235, 375]], front: [[235, 375], [235, 118]] },
-  { id: 'trial', label: '체험벽', name: '체험벽', color: '#f2f2f2', H: 3.0, lean: 0,
+  { id: 'trial', label: '체험벽', name: '체험벽', color: '#f2f2f2', H: 3.0, lean: 0, angle: -6,
     foot: null, front: [[118, 535], [215, 570], [285, 568]] },
 ];
 SECTORS.forEach((s) => { s.footM = s.foot ? s.foot.map(m) : null; });
@@ -740,6 +740,14 @@ function buildHolds(rand) {
       st.holds.push(h); allHolds.push(h);
       placed++;
     }
+    // 발홀드(풋칩): 매트 바로 위 낮은 곳에 작은 홀드 두 줄
+    for (let u = 0.3; u < st.L - (st.closed ? 0 : 0.3); u += 0.32 + rand() * 0.18) {
+      const v = (rand() < 0.5 ? 0.4 : 0.62) + rand() * 0.12;
+      if (st.holds.some((h) => uvDist(st, h.u, h.v, u, v) < 0.18)) continue;
+      const ty = rand() < 0.6 ? HT.edge : HT.jug;
+      const h = { u, v, strip: st, problem: null, foot: true, hex: palette[Math.floor(rand() * palette.length)], size: 0.03 + rand() * 0.02, type: ty, q: ty.q };
+      st.holds.push(h); allHolds.push(h);
+    }
   });
   // 인스턴싱
   const geos = [makeHoldGeo(1), makeHoldGeo(2), makeHoldGeo(3)];
@@ -1286,6 +1294,7 @@ function setupInput() {
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') { if (e.key === 'Escape') e.target.blur(); return; }
     if (document.querySelector('dialog[open]')) return;
+    if (pl.mode === 'inst' && !e.repeat && instKey(e.code)) { e.preventDefault(); return; }
     if (e.code === 'Enter') { e.preventDefault(); openChat(); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -1355,6 +1364,14 @@ function setupInput() {
   document.querySelectorAll('[data-tech]').forEach((b) => b.addEventListener('click', () => setTech(b.dataset.tech)));
   $('#btn-act2').addEventListener('click', act2);
   $('#btn-chat').addEventListener('click', openChat);
+  const icv = $('#inst-cv');
+  icv.addEventListener('pointerdown', instPointerDown);
+  icv.addEventListener('pointermove', instPointerMove);
+  icv.addEventListener('pointerup', instPointerUp);
+  icv.addEventListener('pointercancel', instPointerUp);
+  $('#inst-hip').addEventListener('click', instToggleHip);
+  $('#inst-down').addEventListener('click', () => { if (pl.mode === 'inst') letGo('down'); });
+  window.addEventListener('resize', () => { if (inst.on) resizeInst(); });
   $('#chatlog').addEventListener('click', () => { if (document.body.classList.contains('touch')) openChat(); });
 }
 function openChat() {
@@ -1597,7 +1614,7 @@ function mount(c) {
   setFocus(prob);
   if (prob) {
     if (guide === prob) setGuide(null);
-    toast(`${problemLabel(prob)} 시작! 같은 색 홀드만 잡을 수 있어요`, 2400);
+    toast(`${problemLabel(prob)} 시작! 손·발·엉덩이를 끌어서 올라가요`, 2600);
   } else toast('자유 등반 — 아무 홀드나 잡아도 돼요', 1800);
   if (conflicts.length) {
     const c = conflicts[0];
@@ -1611,9 +1628,11 @@ function mount(c) {
     westPraise('yield', 2000);
   }
   Sound.grab();
+  if (prob) { pl.usedFeet = false; enterInstance(prob, st); }
   Net.sync(true);
 }
 function letGo(reason) {
+  exitInstanceUI();
   const st = pl.strip;
   const [s] = segAt(st, pl.u);
   bodyPos(st, pl.u, pl.v, pl.pos);
@@ -1773,6 +1792,10 @@ function sendProblem(p) {
 }
 
 function updatePlayer(dt) {
+  if (pl.mode === 'inst') {
+    if (inst.on) { updateInstance(dt); if (inst.on && ['lf', 'rf'].some((k) => inst.limbs[k].hold)) pl.usedFeet = true; }
+    return;
+  }
   const [ix, iy] = input();
   if (pl.mode === 'walk') {
     const fx = -Math.sin(camCtl.yaw), fz = -Math.cos(camCtl.yaw);
@@ -1908,7 +1931,7 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   const target = me.group.position.clone();
-  const climbing = pl.mode === 'climb' || pl.mode === 'air';
+  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst';
   if (climbing) {
     const [s] = segAt(pl.strip, pl.u);
     target.y += 1.1;
@@ -2424,7 +2447,7 @@ function crash(c) {
 }
 function updateEtiquette(dt) {
   if (ety.cooldown > 0) ety.cooldown -= dt;
-  const climbing = pl.mode === 'climb' || pl.mode === 'air';
+  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst';
   ety.near = null;
   if (!climbing) return;
   let nearest = null, nd = Infinity;
@@ -2629,7 +2652,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2770,12 +2793,509 @@ function updateHud(dt) {
   drawMinimap();
 }
 
+// =================================================================
+// 🧗 등반 인던 (2D) — 사지와 엉덩이 포지셔닝으로 무게중심·효율 → 펌핑
+// =================================================================
+const ARM = 0.78, LEG = 0.95, TORSO = 0.55, SH_W = 0.2, HIP_W = 0.11;
+const LIMB_KEYS = ['lh', 'rh', 'lf', 'rf'];
+const LIMB_NAME = { lh: '왼손', rh: '오른손', lf: '왼발', rf: '오른발' };
+const inst = { on: false, drags: new Map(), fx: [] };
+const isHand = (k) => k[1] === 'h';
+const sideOf = (k) => (k[0] === 'l' ? -1 : 1);
+const limbMax = (k) => (isHand(k) ? ARM : LEG);
+function jointOf(k, hip = inst.hip) {
+  return isHand(k) ? { x: hip.x + sideOf(k) * SH_W, y: hip.y + TORSO } : { x: hip.x + sideOf(k) * HIP_W, y: hip.y };
+}
+const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function instX(u) { return inst.st.closed ? inst.uc + signedDu(inst.st, u, inst.uc) : u; }
+function instU(x) { return wrapU(inst.st, x); }
+
+function enterInstance(p, st) {
+  inst.on = true; inst.p = p; inst.st = st; inst.uc = p.start.u;
+  inst.angle = st.sec.angle ?? 10;
+  inst.H = st.H;
+  inst.holds = st.holds.filter((h) => !h.tap || h.problem === p).map((h) => ({ h, x: instX(h.u), y: h.v, prob: h.problem === p, rot: (h.u * 7.3 + h.v * 3.1) % Math.PI }));
+  const s = inst.holds.find((o) => o.h === p.start);
+  inst.hip = { x: s.x, y: Math.max(0.82, s.y - TORSO - 0.45) };
+  inst.limbs = {};
+  LIMB_KEYS.forEach((k) => { inst.limbs[k] = { hold: null, x: 0, y: 0, pump: 0, chalky: 0, drag: false }; });
+  instAttach('lh', s); instAttach('rh', s);
+  instAutoFoot('lf'); instAutoFoot('rf');
+  instConstrainHip();
+  inst.hipIn = false; inst.done = false; inst.doneT = 0; inst.bdT = 0; inst.noHandT = 0; inst.gauge = null;
+  inst.camX = s.x; inst.drags.clear(); inst.fx = []; inst.swing = 0; inst.msgT = 0;
+  inst.stats = { eff: 1, foot: 0, imb: 0, straight: 1 };
+  pl.mode = 'inst'; pl.strip = st; pl.problem = p; pl.topped = false; pl.pump = 0;
+  me.setClimbing(true); me.sitting = false;
+  document.body.classList.add('inst');
+  $('#inst').hidden = false;
+  $('#inst-title').innerHTML = `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span> <small>${st.sec.name} · ${inst.angle > 0 ? `오버행 ${inst.angle}°` : inst.angle < 0 ? `슬랩 ${-inst.angle}°` : '수직'}</small>`;
+  resizeInst();
+  instSync();
+}
+function exitInstanceUI() {
+  if (!inst.on) return;
+  inst.on = false; inst.gauge = null; inst.drags.clear();
+  document.body.classList.remove('inst');
+  $('#inst').hidden = true;
+  $('#gauge').hidden = true;
+}
+function instAttach(k, o) { const l = inst.limbs[k]; l.hold = o; l.x = o.x; l.y = o.y; }
+function instAutoFoot(k) {
+  const j = jointOf(k);
+  let best = null, bs = Infinity;
+  inst.holds.forEach((o) => {
+    if (o.h.tap || o.y > inst.hip.y - 0.12) return;
+    if (d2(j, o) > LEG) return;
+    const sc = Math.abs(o.x - (j.x + sideOf(k) * 0.15)) + Math.abs(o.y - (inst.hip.y - 0.7)) * 0.8;
+    if (sc < bs) { bs = sc; best = o; }
+  });
+  if (best) instAttach(k, best); else inst.limbs[k].hold = null;
+}
+function instConstrainHip() {
+  const hip = inst.hip;
+  for (let it = 0; it < 8; it++) {
+    LIMB_KEYS.forEach((k) => {
+      const l = inst.limbs[k];
+      if (!l.hold) return;
+      const j = jointOf(k, hip), d = d2(j, l.hold), mx = limbMax(k);
+      if (d > mx) { const f = (d - mx) / d; hip.x += (l.hold.x - j.x) * f; hip.y += (l.hold.y - j.y) * f; }
+    });
+  }
+  hip.y = clamp(hip.y, 0.45, inst.H - 0.35);
+}
+function instFreePos(k) {
+  const j = jointOf(k), sd = sideOf(k);
+  return isHand(k) ? { x: j.x + sd * 0.18, y: j.y - 0.5 } : { x: j.x + sd * 0.06 + Math.sin(inst.t * 3 + sd) * 0.04, y: Math.max(0.05, j.y - 0.82) };
+}
+function instBagPos() { return { x: inst.hip.x, y: inst.hip.y + 0.05 }; }
+
+// ---------- 화면 좌표 ----------
+const instV = { w: 0, h: 0, s: 100, cx: 0, y0: 0, k: 0 };
+function resizeInst() {
+  const cv = $('#inst-cv');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  instV.w = window.innerWidth; instV.h = window.innerHeight;
+  cv.width = instV.w * dpr; cv.height = instV.h * dpr;
+  cv.style.width = instV.w + 'px'; cv.style.height = instV.h + 'px';
+  cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  const top = 96, bottom = 70;
+  instV.s = Math.min((instV.h - top - bottom) / ((inst.H || 4.3) + 0.4), instV.w / 3.4);
+  instV.y0 = instV.h - bottom;
+  instV.cx = instV.w / 2;
+  instV.k = clamp((inst.angle || 0) / 90, -0.3, 0.6) * 0.9; // 오버행일수록 위가 넓어 보임
+}
+function w2s(x, y) { const sc = instV.s * (1 + instV.k * (y / inst.H)); return [instV.cx + (x - inst.camX) * sc, instV.y0 - y * instV.s]; }
+function s2w(px, py) { const y = (instV.y0 - py) / instV.s; const sc = instV.s * (1 + instV.k * (y / inst.H)); return { x: inst.camX + (px - instV.cx) / sc, y }; }
+
+// ---------- 입력 ----------
+function instPointerDown(e) {
+  if (!inst.on || inst.done) return;
+  e.preventDefault();
+  if (inst.gauge) { instFireGauge(); return; }
+  const w = s2w(e.offsetX, e.offsetY);
+  let best = null, bd = Infinity;
+  LIMB_KEYS.forEach((k) => {
+    const l = inst.limbs[k];
+    const pos = l.hold ? l.hold : l.drag ? l : instFreePos(k);
+    const [sx, sy] = w2s(pos.x, pos.y);
+    const d = Math.hypot(sx - e.offsetX, sy - e.offsetY);
+    if (d < 34 && d < bd) { bd = d; best = k; }
+  });
+  e.currentTarget.setPointerCapture(e.pointerId);
+  if (best) {
+    const l = inst.limbs[best];
+    l.hold = null; l.drag = true; l.x = w.x; l.y = w.y;
+    inst.drags.set(e.pointerId, { k: best });
+    Sound.tone(300, 0.04, 'triangle', 0.04);
+  } else {
+    // 몸통(엉덩이) 끌기
+    const [hx, hy] = w2s(inst.hip.x, inst.hip.y + 0.25);
+    if (Math.hypot(hx - e.offsetX, hy - e.offsetY) < instV.s * 0.6) inst.drags.set(e.pointerId, { k: 'hip', ox: inst.hip.x - w.x, oy: inst.hip.y - w.y });
+  }
+}
+function instPointerMove(e) {
+  const dr = inst.drags.get(e.pointerId);
+  if (!dr) return;
+  const w = s2w(e.offsetX, e.offsetY);
+  if (dr.k === 'hip') {
+    inst.hip.x = w.x + dr.ox; inst.hip.y = w.y + dr.oy;
+    instConstrainHip();
+  } else { const l = inst.limbs[dr.k]; l.x = w.x; l.y = w.y; }
+}
+function instPointerUp(e) {
+  const dr = inst.drags.get(e.pointerId);
+  inst.drags.delete(e.pointerId);
+  if (!dr || dr.k === 'hip') return;
+  const k = dr.k, l = inst.limbs[k];
+  l.drag = false;
+  const w = { x: l.x, y: l.y };
+  // 초크백으로 손을 가져가면 초크
+  if (isHand(k) && d2(w, instBagPos()) < 0.28) { instChalk(k); return; }
+  let best = null, bd = Infinity;
+  inst.holds.forEach((o) => {
+    if (isHand(k) && !o.prob) return;
+    if (!isHand(k) && o.h.tap) return;
+    const d = d2(w, o);
+    if (d < 0.3 && d < bd) { bd = d; best = o; }
+  });
+  if (!best) return;
+  const j = jointOf(k);
+  if (d2(j, best) <= limbMax(k)) {
+    instAttach(k, best);
+    Sound.grab();
+    instFx(best.x, best.y, isHand(k) ? 'grab' : 'step');
+    return;
+  }
+  if (isHand(k) && d2(j, best) <= ARM + 0.25) { instMsg('조금 멀어요 — 엉덩이를 올리거나 발을 높여봐요'); return; }
+  if (isHand(k) && d2(j, best) <= 2.6) { instStartDyno(k, best); return; }
+  instMsg(`${LIMB_NAME[k]}이 안 닿아요 — 엉덩이를 옮겨봐요`);
+}
+function instKey(code) {
+  if (code === 'Space') { if (inst.gauge) instFireGauge(); return true; }
+  if (code === 'KeyH') { instToggleHip(); return true; }
+  if (code === 'KeyE') { letGo('down'); return true; }
+  if (code === 'KeyC') { const k = inst.limbs.lh.pump > inst.limbs.rh.pump ? 'lh' : 'rh'; instChalk(k); return true; }
+  return false;
+}
+function instToggleHip() {
+  inst.hipIn = !inst.hipIn;
+  $('#inst-hip').setAttribute('aria-pressed', inst.hipIn ? 'true' : 'false');
+  instMsg(inst.hipIn ? '🍑 엉덩이를 벽에 붙였어요' + (inst.angle > 10 ? ' — 오버행에선 팔이 편해져요' : '') : '엉덩이를 벽에서 뗐어요');
+}
+function instChalk(k) {
+  const l = inst.limbs[k];
+  if (!pl.chalkReady) { instMsg('초크는 잠깐 있다가~'); return; }
+  pl.chalkReady = false; setTimeout(() => { pl.chalkReady = true; }, 2500);
+  l.pump = Math.max(0, l.pump - 22); l.chalky = 20;
+  Sound.chalk();
+  instFx(inst.hip.x, inst.hip.y, 'chalk');
+  me.chalk(); Net.event('chalk'); onChalkUsed();
+  instMsg(`${LIMB_NAME[k]} 초크 충전 🤍`);
+}
+function instMsg(t) { const el = $('#inst-msg'); el.textContent = t; el.classList.add('show'); clearTimeout(inst.msgTimer); inst.msgTimer = setTimeout(() => el.classList.remove('show'), 2000); }
+function instFx(x, y, kind) {
+  const n = kind === 'chalk' ? 22 : kind === 'grab' ? 8 : 5;
+  for (let i = 0; i < n; i++) inst.fx.push({ x, y, vx: (Math.random() - 0.5) * (kind === 'chalk' ? 1.6 : 0.8), vy: Math.random() * 0.8, life: 0, max: 0.5 + Math.random() * 0.6, r: kind === 'chalk' ? 4 + Math.random() * 6 : 2 + Math.random() * 3 });
+}
+
+// ---------- 다이노 (게이지) ----------
+function instStartDyno(k, o) {
+  const j = jointOf(k);
+  const from = inst.limbs[k === 'lh' ? 'rh' : 'lh'].hold;
+  const q = Math.min(from ? from.h.q : 0.7, o.h.q);
+  const dist = d2(j, o);
+  inst.gauge = { k, o, t: 0, speed: 1.1 + (1 - q) * 0.8 + inst.p.level * 0.05, center: clamp(0.25 + (dist - ARM) / (2.6 - ARM) * 0.6, 0.12, 0.9), width: 0.08 + 0.26 * q };
+  instMsg('다이노! 초록 칸에서 탭 / Space');
+}
+function instFireGauge() {
+  const g = inst.gauge;
+  const ph = g.t % 2, pos = ph < 1 ? ph : 2 - ph;
+  const diff = Math.abs(pos - g.center);
+  const ok = diff <= g.width / 2, perfect = diff <= g.width * 0.22;
+  inst.gauge = null;
+  $('#gauge').hidden = true;
+  const head = me.group.position.clone().add(new V3(0, 1.6, 0));
+  if (!ok) { popText(pos < g.center ? '힘 부족…' : '너무 셌다!', head, 0.26); instMsg('다이노 실패!'); setTimeout(() => { if (inst.on) letGo('fall'); }, 250); return; }
+  popText(perfect ? 'PERFECT!' : 'GOOD!', head, perfect ? 0.36 : 0.3);
+  // 몸을 날려서 그 손으로 목표 홀드 잡기, 나머지는 떨어짐(컷루즈)
+  const k = g.k, o = g.o, sd = sideOf(k);
+  const sh = { x: o.x - sd * 0.05, y: o.y - ARM * 0.88 };
+  inst.hip.x = sh.x - sd * SH_W; inst.hip.y = sh.y - TORSO;
+  LIMB_KEYS.forEach((kk) => { inst.limbs[kk].hold = null; });
+  instAttach(k, o);
+  inst.limbs[k].pump += perfect ? 4 : 9;
+  inst.swing = sd * 0.5;
+  instFx(o.x, o.y, 'grab');
+  Sound.grab(); Sound.tone(660, 0.12, 'triangle', 0.08, 0.02);
+  if (o.h.tap) {
+    // 더블다이노: 터치 홀드에서 곧바로 한 번 더
+    const next = inst.holds.filter((h) => h.prob && !h.h.tap && h.y > o.y + 0.3).sort((a, b) => a.y - b.y)[0];
+    if (next) { popText('더블!!', head, 0.36); setTimeout(() => { if (inst.on) instStartDyno(k, next); }, 120); pl.didDouble = true; return; }
+  }
+  if (pl.didDouble) { toast('🔥🔥 더블다이노 성공!!', 2200); Store.data.doubles = (Store.data.doubles || 0) + 1; Store.save(); pl.didDouble = false; }
+  else toast('🔥 다이노 성공! 발을 다시 올려요', 1800);
+  westPraise('dyno', 400);
+}
+
+// ---------- 물리: 무게중심, 효율, 펌핑 ----------
+function updateInstance(dt) {
+  inst.t += dt;
+  const L = inst.limbs, hip = inst.hip, ang = inst.angle;
+  if (inst.gauge) {
+    inst.gauge.t += dt * inst.gauge.speed;
+    const g = $('#gauge'); g.hidden = false; g.classList.remove('double');
+    const ph = inst.gauge.t % 2, pos = ph < 1 ? ph : 2 - ph;
+    $('#g-zone').style.display = $('#g-perfect').style.display = 'block';
+    $('#g-zone').style.left = ((inst.gauge.center - inst.gauge.width / 2) * 100) + '%'; $('#g-zone').style.width = (inst.gauge.width * 100) + '%';
+    $('#g-perfect').style.left = ((inst.gauge.center - inst.gauge.width * 0.22) * 100) + '%'; $('#g-perfect').style.width = (inst.gauge.width * 44) + '%';
+    $('#g-mark').style.left = (pos * 100) + '%';
+    $('#g-label').textContent = `다이노 — 초록 칸에서 탭! (${inst.gauge.o.h.tap ? '터치 홀드 TAP' : inst.gauge.o.h.type.n})`;
+  }
+  const hands = ['lh', 'rh'].filter((k) => L[k].hold), feet = ['lf', 'rf'].filter((k) => L[k].hold);
+  // 발에 실리는 무게
+  let foot = 0;
+  if (feet.length) {
+    let base = clamp(0.72 - ang * 0.013, 0.08, 0.86);
+    if (inst.hipIn) base += ang > 5 ? ang * 0.007 : 0.06;
+    const below = feet.filter((k) => L[k].hold.y < hip.y - 0.05).length / feet.length;
+    const fq = feet.reduce((a, k) => a + Math.sqrt(L[k].hold.h.q), 0) / feet.length;
+    foot = clamp(base * (feet.length === 2 ? 1 : 0.6) * fq * (0.45 + 0.55 * below), 0, 0.9);
+  }
+  // 무게중심 (자유로운 발을 반대쪽으로 뻗으면 플래깅 → 중심이 돌아옴)
+  let cogX = hip.x;
+  let flag = false;
+  ['lf', 'rf'].forEach((k) => {
+    if (L[k].hold) return;
+    const fp = L[k].drag ? L[k] : instFreePos(k);
+    if (Math.abs(fp.x - hip.x) > 0.3) { cogX += (fp.x - hip.x) * 0.35; flag = true; }
+  });
+  const sup = [...hands, ...feet].map((k) => L[k].hold.x);
+  const fx = feet.length ? feet.map((k) => L[k].hold.x) : sup;
+  let imb = 0;
+  if (fx.length) {
+    const lo = Math.min(...fx) - 0.1, hi = Math.max(...fx) + 0.1;
+    imb = clamp((cogX < lo ? lo - cogX : cogX > hi ? cogX - hi : 0) / 0.5, 0, 1);
+  }
+  // 바니도어: 한쪽 손발만 걸쳐서 몸이 문짝처럼 돌아감
+  const allLeft = sup.length && sup.every((x) => x < cogX - 0.06), allRight = sup.length && sup.every((x) => x > cogX + 0.06);
+  const barn = (allLeft || allRight) && feet.length >= 1 && sup.length <= 3 && !inst.gauge;
+  if (barn) inst.bdT += dt; else inst.bdT = Math.max(0, inst.bdT - dt * 2);
+  inst.swing = lerp(inst.swing, barn ? (allLeft ? -1 : 1) * Math.min(1, inst.bdT) * 0.6 : 0, damp(4, dt));
+  if (inst.bdT > 2.0) { instMsg('🚪 바니도어! 몸이 돌아갔어요 — 반대 발로 플래깅!'); popText('바니도어!', me.group.position.clone().add(new V3(0, 1.6, 0)), 0.3); letGo('fall'); return; }
+  // 팔 펴기
+  let straight = 1;
+  if (hands.length) straight = hands.reduce((a, k) => a + clamp((d2(jointOf(k), L[k].hold) / ARM - 0.5) / 0.42, 0, 1), 0) / hands.length;
+  const arm = clamp((1 - foot) * (1 + imb * 0.9) * (inst.hipIn || ang <= 5 ? 1 : 1 + ang * 0.008), 0, 1.8);
+  // 손별 펌핑
+  const lvl = 1 + inst.p.level * 0.06;
+  ['lh', 'rh'].forEach((k) => {
+    const l = L[k];
+    if (l.chalky > 0) l.chalky -= dt;
+    if (l.hold) {
+      const st1 = clamp((d2(jointOf(k), l.hold) / ARM - 0.5) / 0.42, 0, 1);
+      const bent = 1.35 - 0.6 * st1;
+      const share = arm / hands.length;
+      const rate = share * 2.6 / Math.pow(l.hold.h.q, 0.8) * bent * lvl * (l.chalky > 0 ? 0.85 : 1);
+      l.pump += (share < 0.12 ? -1 : rate) * dt;
+    } else if (!l.drag && hands.length) l.pump -= 7 * dt; // 털기
+    l.pump = clamp(l.pump, 0, 100);
+    if (l.hold && l.pump >= 100) { l.hold = null; instMsg(`💥 ${LIMB_NAME[k]} 펌핑 한계! 손이 풀렸어요`); popText('손 풀림!', me.group.position.clone().add(new V3(0, 1.5, 0)), 0.26); }
+  });
+  // 손이 하나도 없으면 추락 (잠깐 유예)
+  if (!['lh', 'rh'].some((k) => L[k].hold) && !inst.gauge) {
+    inst.noHandT += dt;
+    if (inst.noHandT > 0.35) { instMsg('손이 다 떨어졌어요!'); letGo('fall'); return; }
+  } else inst.noHandT = 0;
+  // 완등: TOP 매칭
+  const top = inst.holds.find((o) => o.h === inst.p.top);
+  if (!inst.done && L.lh.hold === top && L.rh.hold === top) {
+    inst.done = true; inst.doneT = 0;
+    sendProblem(inst.p);
+    instMsg('🔥 TOP 매칭! 완등!');
+  }
+  if (inst.done) { inst.doneT += dt; if (inst.doneT > (pl.topHoldMax || 3) + 0.5) { letGo('down'); return; } }
+  inst.stats = { eff: clamp(1 - arm * 0.62, 0, 1), foot, imb, straight, feet: feet.length, barn, flag };
+  pl.pump = Math.max(L.lh.pump, L.rh.pump);
+  inst.camX = lerp(inst.camX, hip.x, damp(3, dt));
+  instSync();
+  renderInst(dt);
+  updateInstHud();
+}
+// 3D 세상의 내 캐릭터도 같은 자세로
+function instSync() {
+  const st = inst.st, hip = inst.hip;
+  pl.u = instU(hip.x); pl.v = hip.y + BODY_DROP;
+  const [s] = segAt(st, pl.u);
+  const bp = surf(st, pl.u, hip.y - 0.3).addScaledVector(s.n3, inst.hipIn ? 0.22 : 0.42);
+  pl.pos.copy(bp);
+  me.group.position.lerp(bp, 0.4);
+  me.group.rotation.y = Math.atan2(-s.n3.x, -s.n3.z);
+  me.grips = me.grips || [new V3(), new V3(), new V3(), new V3()];
+  LIMB_KEYS.forEach((k, i) => {
+    const l = inst.limbs[k];
+    const p = l.hold ? l.hold : l.drag ? l : instFreePos(k);
+    const u = instU(p.x);
+    surf(st, u, Math.max(0.05, p.y), me.grips[i]).addScaledVector(segAt(st, u)[0].n3, l.hold ? 0.07 : 0.2);
+  });
+  me.campus = !inst.limbs.lf.hold && !inst.limbs.rf.hold;
+}
+
+// ---------- 그리기 ----------
+function renderInst(dt) {
+  const cv = $('#inst-cv'), g = cv.getContext('2d');
+  const W = instV.w, Hh = instV.h, st = inst.st, H = inst.H;
+  g.clearRect(0, 0, W, Hh);
+  const bg = g.createLinearGradient(0, 0, 0, Hh); bg.addColorStop(0, '#16161a'); bg.addColorStop(1, '#0c0c0e');
+  g.fillStyle = bg; g.fillRect(0, 0, W, Hh);
+  // 벽 (오버행이면 위가 넓어지는 사다리꼴)
+  const x0 = inst.camX - 4, x1 = inst.camX + 4;
+  const corners = [w2s(x0, 0), w2s(x1, 0), w2s(x1, H), w2s(x0, H)];
+  g.beginPath(); corners.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
+  g.fillStyle = st.sec.dark ? '#46414d' : st.sec.id === 'trial' ? '#efede7' : '#e6c18c'; g.fill();
+  const shade = g.createLinearGradient(0, corners[3][1], 0, corners[0][1]);
+  shade.addColorStop(0, inst.angle > 0 ? 'rgba(0,0,0,.28)' : 'rgba(255,255,255,.12)'); shade.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = shade; g.fill();
+  // 볼트 구멍, 판넬 이음새
+  g.fillStyle = 'rgba(90,60,30,.45)';
+  for (let y = 0.1; y < H; y += 0.2) for (let x = Math.floor(x0 / 0.2) * 0.2; x < x1; x += 0.2) { const [sx, sy] = w2s(x, y); g.fillRect(sx - 1.2, sy - 1.2, 2.4, 2.4); }
+  g.strokeStyle = 'rgba(120,85,50,.5)'; g.lineWidth = 1.5;
+  for (let x = Math.floor(x0 / 1.2) * 1.2; x < x1; x += 1.2) { const [ax, ay] = w2s(x, 0), [bx, by] = w2s(x, H); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); }
+  // 섹터 띠 + 매트
+  const [tlx, tly] = w2s(x0, H), [trx] = w2s(x1, H);
+  g.fillStyle = st.sec.color; g.fillRect(tlx, tly - 10, trx - tlx, 10);
+  const [mlx, mly] = w2s(x0, 0), [mrx] = w2s(x1, 0);
+  g.fillStyle = '#c3c8ce'; g.fillRect(mlx - 40, mly, mrx - mlx + 80, 26);
+  g.fillStyle = '#8c939b'; g.fillRect(mlx - 40, mly + 26, mrx - mlx + 80, 14);
+  // 홀드
+  const drag = [...inst.drags.values()].find((d) => d.k !== 'hip');
+  inst.holds.forEach((o) => {
+    if (o.x < x0 - 0.3 || o.x > x1 + 0.3) return;
+    const [sx, sy] = w2s(o.x, o.y);
+    const sc = instV.s * (1 + instV.k * (o.y / H));
+    const r = o.h.size * 1.6 * sc, t = o.h.type.sc;
+    g.save(); g.translate(sx, sy); g.rotate(o.rot);
+    g.globalAlpha = o.prob ? 1 : 0.42;
+    g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(2, 4, r * t[0] * 1.15, r * t[1], 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = o.h.hex; g.beginPath(); g.ellipse(0, 0, r * t[0] * 1.15, r * t[1], 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.ellipse(-r * 0.3, -r * 0.3 * t[1], r * 0.35, r * 0.18, 0, 0, Math.PI * 2); g.fill();
+    g.restore(); g.globalAlpha = 1;
+    // 끌고 있는 손발이 닿는 홀드 강조
+    if (drag) {
+      const k = drag.k;
+      const allowed = isHand(k) ? o.prob : !o.h.tap;
+      if (allowed) {
+        const reach = d2(jointOf(k), o) <= limbMax(k);
+        if (reach || (isHand(k) && d2(jointOf(k), o) > ARM + 0.25 && d2(jointOf(k), o) <= 2.6)) {
+          g.strokeStyle = reach ? 'rgba(47,210,107,.95)' : 'rgba(255,207,74,.9)'; g.lineWidth = 3; g.setLineDash(reach ? [] : [5, 4]);
+          g.beginPath(); g.arc(sx, sy, r * 1.4 + 8, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+        }
+      }
+    }
+    if (o.prob && (o.h === inst.p.start || o.h === inst.p.top || o.h.tap)) {
+      g.fillStyle = o.h.hex; g.font = '900 13px "Noto Sans KR", sans-serif';
+      const txt = o.h === inst.p.start ? 'S' : o.h.tap ? 'TAP' : 'TOP';
+      const tw = g.measureText(txt).width + 10;
+      g.fillRect(sx - r - tw - 4, sy - 9, tw, 18);
+      g.fillStyle = ['black', 'purple', 'blue', 'red'].includes(inst.p.color) ? '#fff' : '#111';
+      g.fillText(txt, sx - r - tw + 1, sy + 5);
+    }
+  });
+  // 캐릭터
+  drawInstClimber(g);
+  // 이펙트
+  for (let i = inst.fx.length - 1; i >= 0; i--) {
+    const f = inst.fx[i]; f.life += dt;
+    if (f.life > f.max) { inst.fx.splice(i, 1); continue; }
+    f.x += f.vx * dt; f.y += f.vy * dt; f.vy -= 0.6 * dt;
+    const [sx, sy] = w2s(f.x, f.y);
+    g.fillStyle = `rgba(255,255,255,${(1 - f.life / f.max) * 0.85})`;
+    g.beginPath(); g.arc(sx, sy, f.r * (1 + f.life), 0, Math.PI * 2); g.fill();
+  }
+  drawInstSide();
+}
+function limbBend(a, b, len, outward) {
+  // 두 마디 팔다리: 가운데 관절을 바깥쪽으로 굽혀서 그리기
+  const d = Math.min(Math.hypot(b[0] - a[0], b[1] - a[1]), len * 0.999);
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  const h = Math.sqrt(Math.max(0, (len / 2) ** 2 - (d / 2) ** 2));
+  const nx = -(b[1] - a[1]), ny = b[0] - a[0], nl = Math.hypot(nx, ny) || 1;
+  return [mx + (nx / nl) * h * outward, my + (ny / nl) * h * outward];
+}
+function drawInstClimber(g) {
+  const hip = inst.hip, L = inst.limbs, s = instV.s;
+  const color = me.color, dark = new THREE.Color(color).multiplyScalar(0.72).getStyle();
+  const hipS = w2s(hip.x, hip.y), neckS = w2s(hip.x + inst.swing * 0.25, hip.y + TORSO + 0.05);
+  const pumpCol = (p) => `rgb(${255},${Math.round(230 - p * 1.9)},${Math.round(204 - p * 1.9)})`;
+  // 팔다리
+  LIMB_KEYS.forEach((k) => {
+    const l = L[k];
+    const p = l.hold ? l.hold : l.drag ? l : instFreePos(k);
+    const j = jointOf(k, { x: hip.x + (isHand(k) ? inst.swing * 0.25 : 0), y: hip.y });
+    const a = w2s(j.x, j.y), b = w2s(p.x, p.y);
+    const len = limbMax(k) * s;
+    const far = Math.hypot(b[0] - a[0], b[1] - a[1]) > len * 1.02;
+    const m = limbBend(a, b, len, isHand(k) ? -sideOf(k) : sideOf(k));
+    g.strokeStyle = far ? 'rgba(227,38,43,.85)' : dark; g.lineWidth = Math.max(6, s * (isHand(k) ? 0.09 : 0.11)); g.lineCap = 'round'; g.lineJoin = 'round';
+    if (far) g.setLineDash([8, 6]);
+    g.beginPath(); g.moveTo(a[0], a[1]);
+    if (far) g.lineTo(b[0], b[1]); else { g.lineTo(m[0], m[1]); g.lineTo(b[0], b[1]); }
+    g.stroke(); g.setLineDash([]);
+    // 손/발 끝
+    const rr = Math.max(9, s * (isHand(k) ? 0.075 : 0.085));
+    g.fillStyle = isHand(k) ? (l.chalky > 0 ? '#ffffff' : pumpCol(l.pump)) : '#2a2a2e';
+    g.strokeStyle = l.hold ? '#fff' : 'rgba(255,255,255,.5)'; g.lineWidth = 2.5;
+    g.beginPath();
+    if (isHand(k)) g.arc(b[0], b[1], rr, 0, Math.PI * 2); else g.ellipse(b[0], b[1], rr * 1.3, rr * 0.8, 0, 0, Math.PI * 2);
+    g.fill(); g.stroke();
+    if (l.drag) { g.strokeStyle = '#ffcf4a'; g.lineWidth = 3; g.beginPath(); g.arc(b[0], b[1], rr + 6, 0, Math.PI * 2); g.stroke(); }
+  });
+  // 몸통
+  g.strokeStyle = dark; g.lineWidth = Math.max(14, s * 0.26); g.lineCap = 'round';
+  g.beginPath(); g.moveTo(hipS[0], hipS[1]); g.lineTo(neckS[0], neckS[1]); g.stroke();
+  // 초크백
+  const bag = w2s(instBagPos().x, instBagPos().y);
+  g.fillStyle = '#f4f1ea'; g.strokeStyle = '#e3262b'; g.lineWidth = 3;
+  g.beginPath(); g.roundRect ? g.roundRect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15, 4) : g.rect(bag[0] - s * 0.07, bag[1] - s * 0.08, s * 0.14, s * 0.15); g.fill(); g.stroke();
+  // 엉덩이 붙이기 표시
+  if (inst.hipIn) { g.fillStyle = 'rgba(255,207,74,.9)'; g.font = `900 ${Math.max(11, s * 0.1)}px "Noto Sans KR"`; g.textAlign = 'center'; g.fillText('🍑', hipS[0], hipS[1] + s * 0.05); g.textAlign = 'left'; }
+  // 큰 불꽃 머리 (뒤통수)
+  const hw = s * 0.62;
+  g.save(); g.translate(neckS[0] - hw / 2, neckS[1] - hw * 0.95); g.scale(hw / 100, hw / 100);
+  g.fillStyle = color; g.strokeStyle = '#fff'; g.lineWidth = 6; const fp = new Path2D(FLAME_D); g.fill(fp); g.stroke(fp);
+  g.restore();
+}
+function drawInstSide() {
+  // 옆에서 본 단면: 벽 각도, 엉덩이 거리, 중력
+  const cv = $('#inst-side'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(14,14,16,.78)'; g.fillRect(0, 0, W, H);
+  const a = (inst.angle * Math.PI) / 180, base = [W * 0.62, H - 30], len = H - 70;
+  const top = [base[0] - Math.sin(a) * len, base[1] - Math.cos(a) * len];
+  g.fillStyle = '#c3c8ce'; g.fillRect(10, H - 30, W - 20, 10);
+  g.strokeStyle = '#e6c18c'; g.lineWidth = 10; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(base[0], base[1]); g.lineTo(top[0], top[1]); g.stroke();
+  // 몸 (엉덩이 붙이면 벽에 가깝게)
+  const t = clamp((inst.hip.y - 0.2) / inst.H, 0, 1);
+  const wx = base[0] - Math.sin(a) * len * t, wy = base[1] - Math.cos(a) * len * t;
+  const off = inst.hipIn ? 22 : 46;
+  const hx = wx - Math.cos(a) * off, hy = wy + Math.sin(a) * off;
+  g.strokeStyle = me.color; g.lineWidth = 6;
+  const handT = clamp(t + 0.22, 0, 1), footT = clamp(t - 0.18, 0, 1);
+  const hpx = base[0] - Math.sin(a) * len * handT - 6, hpy = base[1] - Math.cos(a) * len * handT;
+  const fpx = base[0] - Math.sin(a) * len * footT - 6, fpy = base[1] - Math.cos(a) * len * footT;
+  g.beginPath(); g.moveTo(hpx, hpy); g.lineTo(hx, hy); g.lineTo(fpx, fpy); g.stroke();
+  g.fillStyle = me.color; g.beginPath(); g.arc(hx - 4, hy - 26, 13, 0, Math.PI * 2); g.fill();
+  // 중력 화살표
+  g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2; g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx, hy + 34); g.stroke();
+  g.beginPath(); g.moveTo(hx - 5, hy + 28); g.lineTo(hx, hy + 34); g.lineTo(hx + 5, hy + 28); g.stroke();
+  g.fillStyle = '#fff'; g.font = '700 15px "Noto Sans KR", sans-serif';
+  g.fillText(inst.angle > 0 ? `오버행 ${inst.angle}°` : inst.angle < 0 ? `슬랩 ${-inst.angle}°` : '수직', 12, 22);
+  g.fillStyle = inst.hipIn ? '#ffcf4a' : '#a29d97'; g.font = '700 13px "Noto Sans KR", sans-serif';
+  g.fillText(inst.hipIn ? '엉덩이 붙임 🍑' : '엉덩이 뗌', 12, 42);
+}
+function updateInstHud() {
+  const st = inst.stats, L = inst.limbs;
+  $('#inst-eff').textContent = Math.round(st.eff * 100) + '%';
+  $('#inst-eff').style.color = st.eff > 0.66 ? '#2fd26b' : st.eff > 0.4 ? '#ffcf4a' : '#ff6b6b';
+  $('#pump-l').style.width = L.lh.pump + '%'; $('#pump-r').style.width = L.rh.pump + '%';
+  const ck = (ok, good, bad) => `<li class="${ok ? 'ok' : 'no'}">${ok ? '✔' : '✖'} ${ok ? good : bad}</li>`;
+  const over = inst.angle > 10;
+  $('#inst-checks').innerHTML =
+    ck(st.feet === 2, '발 두 개', st.feet === 1 ? '발 하나뿐 — 나머지 발도 올려요' : '발이 없어요 — 캠퍼싱 중!') +
+    ck(st.straight > 0.6, '팔 쭉 폈어요', '팔이 굽었어요 — 엉덩이를 낮춰요') +
+    ck(st.imb < 0.15, '무게중심 OK', '중심이 치우쳤어요 — 엉덩이를 발 위로') +
+    (over ? ck(inst.hipIn, '엉덩이 붙임', '오버행! 엉덩이를 벽에 붙여요 (H)') : '') +
+    (st.barn ? '<li class="no warn">🚪 바니도어 위험! 반대 발로 플래깅</li>' : st.flag ? '<li class="ok">🦵 플래깅 중</li>' : '');
+}
+
 // 다이노 게이지 (농구 3점슛 게이지 느낌)
 function updateGauge() {
   const g = $('#gauge');
   const climbingNow = pl.mode === 'climb' || pl.mode === 'air';
   document.body.classList.toggle('climbing', climbingNow);
   document.querySelectorAll('[data-tech]').forEach((b) => b.setAttribute('aria-pressed', pl.tech === b.dataset.tech ? 'true' : 'false'));
+  if (pl.mode === 'inst') return;
   if (pl.charging) {
     g.hidden = false; g.classList.remove('double');
     const plan = pl.plan;
@@ -2826,7 +3346,7 @@ function loop() {
   updateCamera(dt);
   updateHud(dt);
   Net.sync(false);
-  renderer.render(scene, camera);
+  if (!inst.on) renderer.render(scene, camera);
   if (west.shotPending) takeWestShot();
   requestAnimationFrame(loop);
 }
@@ -2923,7 +3443,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }

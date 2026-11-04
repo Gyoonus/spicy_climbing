@@ -41,6 +41,7 @@
         <li><b>WASD</b> 이동 · <b>드래그</b> 시점 · <b>휠</b> 줌</li>
         <li><b>E</b> 벽 잡기/내려오기 · <b>Space</b> 점프 · <b>Shift</b> 달리기</li>
         <li><b>C</b> 초크묻히기 · <b>R</b> 앉아서 쉬기</li>
+        <li>문제(S 홀드)에 붙으면 <b>2D 등반 화면</b>: 손·발·엉덩이를 <b>끌어서</b> 올라가요</li>
         <li>벽에서: <b>Space 꾹 → 초록 칸에서 떼기</b> 다이노 · 공중에서 한 번 더 = 더블다이노</li>
         <li><b>1</b> 플래깅 · <b>2</b> 인사이드 스텝 · <b>3</b> 아웃사이드 스텝 · <b>H</b> 매달리기 · <b>Shift</b> 캠퍼싱</li>
       </ul>
@@ -50,6 +51,29 @@
   <!-- 3D 암장 -->
   <div id="game" class="game" hidden>
     <div id="scene" class="scene"></div>
+
+    <!-- 🧗 등반 인던 (2D) -->
+    <div id="inst" class="inst" hidden>
+      <canvas id="inst-cv" class="inst-cv"></canvas>
+      <div class="inst-panel">
+        <div class="inst-title" id="inst-title"></div>
+        <div class="inst-row">
+          <div class="inst-eff"><span>효율</span><b id="inst-eff">0%</b></div>
+          <div class="inst-pumps">
+            <div><span>왼손</span><div class="pb"><i id="pump-l"></i></div></div>
+            <div><span>오른손</span><div class="pb"><i id="pump-r"></i></div></div>
+          </div>
+        </div>
+        <ul class="inst-checks" id="inst-checks"></ul>
+      </div>
+      <canvas id="inst-side" class="inst-side" width="240" height="300"></canvas>
+      <div class="inst-msg" id="inst-msg"></div>
+      <div class="inst-btns">
+        <button id="inst-hip" class="btn" type="button" aria-pressed="false">🍑 엉덩이 붙이기 <kbd>H</kbd></button>
+        <button id="inst-down" class="btn" type="button">⬇️ 내려오기 <kbd>E</kbd></button>
+      </div>
+      <p class="inst-help">손·발·몸통을 끌어서 홀드에 올려요 · 손을 초크백으로 끌면 초크 · TOP을 두 손으로 매칭하면 완등</p>
+    </div>
 
     <header class="hud-top">
       <div class="brand">

@@ -150,6 +150,47 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .chat input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; outline: none; backdrop-filter: blur(8px); }
 .chat input:focus { border-color: var(--red); }
 
+/* 🧗 등반 인던 */
+.inst { position: absolute; inset: 0; }
+.inst-cv { position: absolute; inset: 0; touch-action: none; display: block; }
+.inst-panel {
+  position: absolute; left: 12px; top: 64px; width: min(300px, calc(100% - 150px));
+  background: rgba(14,14,16,.78); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; pointer-events: none;
+}
+.inst-title { font-family: "Black Han Sans", sans-serif; font-size: 1.05rem; }
+.inst-title small { font-family: "Noto Sans KR"; color: var(--muted); font-size: .76rem; }
+.inst-row { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+.inst-eff { display: grid; text-align: center; }
+.inst-eff span { font-size: .7rem; color: var(--muted); }
+.inst-eff b { font-size: 1.5rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.inst-pumps { flex: 1; display: grid; gap: 4px; font-size: .72rem; color: var(--muted); }
+.inst-pumps > div { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 6px; }
+.pb { height: 8px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+.pb i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffcf4a, #ff8a1f 55%, var(--red)); background-size: 200px 100%; }
+.inst-checks { list-style: none; margin: 8px 0 0; padding: 0; font-size: .8rem; line-height: 1.6; }
+.inst-checks .ok { color: #8be0a8; }
+.inst-checks .no { color: #ffb3b3; }
+.inst-checks .warn { color: #ffcf4a; font-weight: 900; animation: blink .4s infinite; }
+.inst-side { position: absolute; right: 12px; top: 64px; width: 120px; height: 150px; border-radius: 12px; border: 1px solid var(--line); pointer-events: none; }
+.inst-msg {
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, 8px); background: rgba(255,255,255,.95); color: #111;
+  padding: 8px 16px; border-radius: 999px; font-weight: 800; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+}
+.inst-msg.show { opacity: 1; transform: translate(-50%, 0); }
+.inst-btns { position: absolute; right: 12px; bottom: max(16px, env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+.inst-btns .btn { background: rgba(22,22,25,.88); }
+.inst-btns .btn[aria-pressed="true"] { border-color: #ffcf4a; background: rgba(90,70,10,.9); }
+.inst-help { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); margin: 0; font-size: .74rem; color: rgba(255,255,255,.6); pointer-events: none; white-space: nowrap; }
+body.inst .hud-buttons, body.inst .hud-sub, body.inst .hud-tech, body.inst #joystick, body.inst #status, body.inst #prompt, body.inst .minimap { display: none !important; }
+body.inst .chatlog { bottom: 120px; pointer-events: none; max-height: 6em; }
+body.inst .chat { bottom: 34px; }
+@media (max-width: 640px) {
+  .inst-panel { width: calc(100% - 150px); padding: 8px 10px; }
+  .inst-checks { font-size: .72rem; }
+  .inst-help { display: none; }
+  body.inst .chatlog { bottom: 150px; width: calc(100% - 190px); max-height: 3.6em; font-size: .8rem; opacity: .85; }
+}
+
 /* 다이노 게이지 */
 .gauge { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(320px, 80vw); text-align: center; pointer-events: none; }
 .g-label { font-weight: 900; font-size: .95rem; margin-bottom: 6px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); }
