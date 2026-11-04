@@ -1591,7 +1591,8 @@ function sendProblem(p) {
     westPraise('campus', 4200);
   }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
-  if (west.av && west.state !== 'photo') { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
+  const firstSend = Store.data.sends[p.id] === 1;
+  if ((firstSend || p.level >= 4) && westCanShoot()) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
   else { pl.topHoldMax = 3; westPraise('top', 600); }
   checkFestival();
 }
@@ -1835,7 +1836,7 @@ function npcUpdate(n, dt, now) {
         n.av.say(pick(LINES.npcTop), 1800);
         npcs.forEach((o) => { if (o !== n && o.state === 'idle' && Math.random() < 0.7) setTimeout(() => o.av.say(pick(LINES.cheer)), 400 + Math.random() * 600); });
         n.holdT = -3.5; n.topPose = true;
-        if (west.state !== 'photo' && Math.random() < 0.6) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
+        if (westCanShoot(0.15)) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
         else westPraise('top', 500);
       } else if (n.topPose) {
         n.topPose = false;
@@ -2032,7 +2033,9 @@ function updateStaff(dt, now) {
 // =================================================================
 // 🤠 웨스트 — 무호K와 정반대. 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
 // =================================================================
-const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [] };
+const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [], lastPhoto: -1e9 };
+const WEST_COOLDOWN = 90000; // 사진은 90초에 한 번만
+function westCanShoot(chance = 1) { return west.av && west.state !== 'photo' && performance.now() - west.lastPhoto > WEST_COOLDOWN && Math.random() < chance; }
 const WEST_LINES = {
   photo: ['찰칵! 📸 인생샷 건졌다 🤠', '이 각도 미쳤다 📸', '프로필 사진 각이에요!', '완등 기념샷 찰칵~ 🤠'],
   top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
@@ -2062,6 +2065,7 @@ function makeWest() {
 // 완등한 사람(av)을 찍으러 달려감. normal: 벽 바깥 방향
 function westPhoto(av, label, normal) {
   if (!west.av || west.state === 'photo') return;
+  west.lastPhoto = performance.now();
   const P = av.group.position;
   let dir = normal ? new V3(normal.x, 0, normal.z) : new V3(west.av.group.position.x - P.x, 0, west.av.group.position.z - P.z);
   if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
@@ -2453,7 +2457,8 @@ const Net = {
       fireConfetti(p.av.group.position.clone().add(new V3(0, 1.4, 0)), 22);
       addFeed(p.name, prob, false);
       toast(`🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 2200);
-      westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
+      if (westCanShoot(0.35)) westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
+      else westPraise('top', 900);
       npcs.forEach((n, k) => { if (n.state === 'idle' && Math.random() < 0.6) setTimeout(() => n.av.say(pick(LINES.cheer)), 400 + k * 400); });
     }
     if (d.type === 'bump' && d.to === this.id) { p.av.say('💥 앗 죄송해요!', 2200); toast(`${p.name}님과 부딪혔어요! 선출발자인 당신은 무사 😎`, 2400); }
