@@ -753,6 +753,12 @@ class Avatar {
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 6, 12), dark);
     torso.position.y = 0.45; this.rig.add(torso);
     const tee = textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }); tee.position.set(0, 0.47, 0.16); this.rig.add(tee);
+    // 초크백 (허리 뒤)
+    const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 14), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.9 }));
+    bag.position.set(0, 0.34, -0.17); this.rig.add(bag);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.073, 0.014, 6, 16), new THREE.MeshStandardMaterial({ color: '#e3262b' }));
+    rim.rotation.x = Math.PI / 2; rim.position.set(0, 0.41, -0.17); this.rig.add(rim);
+    this.skin = skin;
     // 머리 (큰 불꽃)
     this.head = new THREE.Group();
     this.head.position.y = 0.55;
@@ -791,10 +797,12 @@ class Avatar {
     scene.add(this.group);
     this.t = Math.random() * 10; this.phase = 0; this.squashT = 0; this.bubble = null; this.sitting = false;
     this.climbing = false; this.airborne = false; this.grips = null;
+    this.hanging = false; this.campus = false; this.chalkT = 0; this.chalkyT = 0; this.puffed = true;
     this.prev = new V3(); this.speed = 0;
   }
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
   squash() { this.squashT = 0.45; }
+  chalk() { this.chalkT = 1; this.puffed = false; this.chalkyT = 25; }
   say(text, ms = 2800) {
     if (this.bubble) { this.group.remove(this.bubble); disposeSprite(this.bubble); }
     clearTimeout(this.bubbleT);
@@ -827,11 +835,21 @@ class Avatar {
       sy = 1 - 0.35 * Math.sin(k * Math.PI) * k; sx = 1 + (1 - sy) * 0.8;
     }
     const [la, ra, ll, rl] = this.limbs;
-    this.rig.position.y = 0; this.head.rotation.set(0, 0, 0);
+    this.rig.position.y = 0; this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
+    // 초크: 0~0.45 초크백에 손 넣기, 0.45~1 박수 짝!
+    if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
+    const ck = this.chalkT > 0 ? 1 - this.chalkT : -1;
+    if (this.chalkyT > 0) this.chalkyT -= dt;
+    this.skin.color.set('#ffe3cc').lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
     if (this.climbing && this.grips) {
       this.group.updateMatrixWorld(true);
-      this.limbTo(la, this.grips[0]); this.limbTo(ra, this.grips[1]);
-      this.limbTo(ll, this.grips[2]); this.limbTo(rl, this.grips[3]);
+      this.limbTo(la, this.grips[0]);
+      if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
+      if (this.campus || this.hanging) {
+        const f = Math.sin(this.t * (this.hanging ? 2 : 6)) * (this.hanging ? 0.18 : 0.35);
+        this.limbRot(ll, 0.05 + f, -0.1); this.limbRot(rl, 0.05 - f, 0.1);
+        if (this.hanging) this.rig.rotation.z = Math.sin(this.t * 2) * 0.06;
+      } else { this.limbTo(ll, this.grips[2]); this.limbTo(rl, this.grips[3]); }
       this.head.rotation.z = Math.sin(this.t * 2.5) * 0.05;
     } else if (this.climbing || this.airborne) {
       const f = Math.sin(this.t * (this.airborne ? 18 : 4)) * (this.airborne ? 0.35 : 0.1);
@@ -844,14 +862,26 @@ class Avatar {
       this.limbRot(ll, -Math.PI / 2 + 0.1, -0.15); this.limbRot(rl, -Math.PI / 2 + 0.1, 0.15);
       sy *= 1 + Math.sin(this.t * 1.6) * 0.02;
     } else {
-      const sp = clamp(this.speed / 3.4, 0, 1);
-      this.phase += dt * (4 + sp * 9);
-      const s = Math.sin(this.phase) * sp * 0.9;
-      this.limbRot(la, s, -0.12); this.limbRot(ra, -s, 0.12);
+      const sp = clamp(this.speed / 3.4, 0, 1.9);
+      const run = clamp(sp - 1, 0, 0.9) / 0.9;
+      this.phase += dt * (4 + Math.min(sp, 1) * 9 + run * 6);
+      const amp = Math.min(sp, 1) * 0.9 + run * 0.45;
+      const s = Math.sin(this.phase) * amp;
+      this.limbRot(la, s, -0.12 - run * 0.2); this.limbRot(ra, -s, 0.12 + run * 0.2);
       this.limbRot(ll, -s, 0); this.limbRot(rl, s, 0);
-      const bob = sp > 0.1 ? Math.abs(Math.sin(this.phase)) * 0.05 * sp : Math.sin(this.t * 2.6) * 0.012;
+      const bob = sp > 0.1 ? Math.abs(Math.sin(this.phase)) * (0.05 + run * 0.06) * Math.min(sp, 1) : Math.sin(this.t * 2.6) * 0.012;
       this.rig.position.y = bob;
-      this.head.rotation.z = Math.sin(this.phase) * 0.06 * sp;
+      this.rig.rotation.x = run * 0.22;
+      this.head.rotation.z = Math.sin(this.phase) * 0.06 * Math.min(sp, 1);
+    }
+    if (ck >= 0 && !(this.climbing && this.grips)) {
+      if (ck < 0.45) { this.limbRot(la, 0.95, -0.25); this.limbRot(ra, 0.95, 0.25); }
+      else { const c = Math.sin((ck - 0.45) * 28) * 0.18; this.limbRot(la, -1.35, 0.5 + c); this.limbRot(ra, -1.35, -0.5 - c); }
+    }
+    if (ck >= 0.5 && !this.puffed) {
+      this.puffed = true;
+      this.limbs[this.climbing && this.grips ? 1 : 0].end.getWorldPosition(tmpV);
+      chalkPuff(tmpV.clone(), 18);
     }
     this.rig.scale.set(sx, sy, sx);
     this.shadow.position.set(p.x, 0.015, p.z);
@@ -934,6 +964,8 @@ function setupInput() {
     if (e.code === 'Space') jumpPress();
     if (e.code === 'KeyE') grabToggle();
     if (e.code === 'KeyC') useChalk();
+    if (e.code === 'KeyR') toggleSit();
+    if (e.code === 'KeyH') toggleHang();
   });
   window.addEventListener('keyup', (e) => {
     keys.delete(e.code);
@@ -987,6 +1019,8 @@ function setupInput() {
   jb.addEventListener('pointercancel', () => jumpRelease(true));
   $('#btn-grab').addEventListener('click', grabToggle);
   $('#btn-chalk').addEventListener('click', useChalk);
+  $('#btn-act1').addEventListener('click', act1);
+  $('#btn-act2').addEventListener('click', act2);
   $('#btn-chat').addEventListener('click', openChat);
 }
 function openChat() {
@@ -1016,7 +1050,50 @@ const pl = {
   av: null, mode: 'walk', pos: new V3(SPAWN[0], 0, SPAWN[1]), vel: new V3(), vy: 0, yaw: Math.PI,
   strip: null, u: 0, v: 0, du: 0, dv: 0, t: 0, launch: null, problem: null, topped: false, topT: 0,
   pump: 0, charging: false, charge: 0, chalkReady: true, mountCand: null,
+  sitting: false, runToggle: false, campusToggle: false, hanging: false, hangT: 0, hangHold: null, usedFeet: false, dustT: 0,
 };
+const shiftDown = () => keys.has('ShiftLeft') || keys.has('ShiftRight');
+function isCampus() { return pl.mode === 'climb' && !pl.hanging && (shiftDown() || pl.campusToggle); }
+function isRunning() { return shiftDown() || pl.runToggle || Math.hypot(joy.x, joy.y) > 0.96; }
+function toggleSit() {
+  if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
+  if (pl.pos.y > 0.01) return;
+  pl.sitting = !pl.sitting;
+  me.sitting = pl.sitting;
+  if (pl.sitting) {
+    me.say(pick(['휴~', '잠깐 쉬어갈게요', '매트 최고…', '팔 털어야지']), 1600);
+    const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 4);
+    if (n) setTimeout(() => n.av.say(pick(['같이 쉬어요~', '물 마실래요?', '오늘 몇 개 깼어요?'])), 900);
+  }
+  Net.sync(true);
+}
+function standUp() { if (!pl.sitting) return; pl.sitting = false; me.sitting = false; Net.sync(true); }
+function toggleHang() {
+  if (pl.mode !== 'climb') { toast('매달리기는 벽에서! 매트에서는 R로 앉아 쉬기'); return; }
+  if (pl.hanging) { stopHang(); return; }
+  const r = nearestGrab(pl.strip, pl.u, pl.v, pl.problem);
+  if (!r || r.d > REACH) return;
+  pl.hanging = true; pl.hangT = 0; pl.hangHold = r.h;
+  pl.u = r.h.u; pl.v = r.h.v;
+  me.hanging = true;
+  me.say(pick(['대롱대롱~', '팔 쭉!', '버틴다…']), 1400);
+  Net.sync(true);
+}
+function stopHang(silent) {
+  if (!pl.hanging) return;
+  pl.hanging = false; me.hanging = false;
+  const t = pl.hangT, best = Store.data.bestHang || 0;
+  if (!silent && t > 1) {
+    if (t > best) { Store.data.bestHang = t; Store.save(); toast(`🙌 매달리기 신기록! ${t.toFixed(1)}초`, 2400); Sound.top(); }
+    else toast(`🙌 매달리기 ${t.toFixed(1)}초 (최고 ${best.toFixed(1)}초)`, 2000);
+  } else if (t > best && t > 1) { Store.data.bestHang = t; Store.save(); }
+  Net.sync(true);
+}
+function act1() { if (pl.mode === 'walk') toggleSit(); else if (pl.mode === 'climb') toggleHang(); }
+function act2() {
+  if (pl.mode === 'walk') { pl.runToggle = !pl.runToggle; toast(pl.runToggle ? '🏃 달리기 ON' : '걷기', 1000); }
+  else { pl.campusToggle = !pl.campusToggle; toast(pl.campusToggle ? '🦍 캠퍼싱 ON — 발 없이 팔로만!' : '캠퍼싱 OFF', 1200); }
+}
 let me = null;
 let guide = null, guideMesh = null;
 
@@ -1031,8 +1108,8 @@ function nearestGrab(st, u, v, problem, exclude) {
   return best ? { h: best, d: bd } : null;
 }
 function canHold(u, v) { const r = nearestGrab(pl.strip, u, v, pl.problem); return r && r.d <= REACH; }
-function bodyPos(st, u, v, out = new V3()) {
-  const drop = Math.min(BODY_DROP, v - 0.02);
+function bodyPos(st, u, v, out = new V3(), dropMax = BODY_DROP) {
+  const drop = Math.min(dropMax, v - 0.02);
   const [s] = segAt(st, u);
   surf(st, u, v - drop, out).addScaledVector(s.n3, 0.3);
   return out;
@@ -1077,6 +1154,8 @@ function mount(c) {
   const conflicts = conflictsAt(bodyPos(st, u, v), 2.0);
   pl.mode = 'climb'; pl.strip = st; pl.u = u; pl.v = v; pl.problem = prob; pl.topped = false;
   pl.climbStart = Date.now();
+  pl.usedFeet = false; pl.hanging = false;
+  standUp();
   me.setClimbing(true);
   me.sitting = false;
   setFocus(prob);
@@ -1104,6 +1183,8 @@ function letGo(reason) {
   pl.vy = reason === 'down' ? 1.2 : 0;
   pl.mode = 'fall';
   pl.fallReason = reason;
+  stopHang(reason === 'down' ? false : true);
+  me.campus = false;
   me.setClimbing(false);
   pl.charging = false; pl.charge = 0;
   setFocus(null);
@@ -1132,6 +1213,8 @@ function grabToggle() {
   }
 }
 function jumpPress() {
+  if (pl.mode === 'walk' && pl.sitting) { standUp(); return; }
+  if (pl.mode === 'climb' && pl.hanging) stopHang();
   if (pl.mode === 'walk') { if (pl.pos.y <= 0.001) { pl.vy = 5.2; Sound.tone(300, 0.08, 'sine', 0.06, 0, 200); } return; }
   if (pl.mode === 'climb') { pl.charging = true; pl.charge = 0; }
 }
@@ -1156,10 +1239,11 @@ function useChalk() {
   if (!pl.chalkReady) return;
   pl.chalkReady = false;
   $('#btn-chalk').disabled = true;
-  Sound.chalk();
-  chalkPuff(me.group.position.clone().add(new V3(0, 1, 0)), 16);
+  Sound.chalk(); setTimeout(() => Sound.tone(1400, 0.05, 'square', 0.05), 550);
+  me.chalk();
+  Net.event('chalk');
   pl.pump = Math.max(0, pl.pump - 18);
-  me.say(pick(['슥슥', '초크 충전', '후~']), 1000);
+  me.say(pick(['슥슥', '초크 충전', '짝!', '후~']), 1000);
   setTimeout(() => { pl.chalkReady = true; $('#btn-chalk').disabled = false; }, 3500);
 }
 function climbSign() {
@@ -1179,6 +1263,12 @@ function sendProblem(p) {
   Net.event('top', { pid: p.id, text: line });
   addFeed(Store.data.name, p, true);
   toast(`🔥 ${problemLabel(p)} 완등! (총 ${Store.data.sends[p.id]}번째)`, 3000);
+  if (!pl.usedFeet) {
+    Store.data.campus = Store.data.campus || {};
+    Store.data.campus[p.id] = (Store.data.campus[p.id] || 0) + 1; Store.save();
+    setTimeout(() => { toast('🦍 캠퍼싱 완등! 발 하나도 안 썼어요', 2800); fireConfetti(me.group.position.clone().add(new V3(0, 1.4, 0)), 20); }, 1500);
+    setTimeout(() => { const n = npcs.find((x) => x.state === 'idle'); if (n) n.av.say(pick(['고릴라다… 🦍', '발 안 쓰고?!', '팔 미쳤다'])); }, 2000);
+  }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
   checkFestival();
 }
@@ -1188,8 +1278,11 @@ function updatePlayer(dt) {
   if (pl.mode === 'walk') {
     const fx = -Math.sin(camCtl.yaw), fz = -Math.cos(camCtl.yaw);
     const rx = Math.cos(camCtl.yaw), rz = -Math.sin(camCtl.yaw);
-    const mx = fx * iy + rx * ix, mz = fz * iy + rz * ix;
-    const spd = 3.4;
+    let mx = fx * iy + rx * ix, mz = fz * iy + rz * ix;
+    if (pl.sitting) { if (Math.hypot(ix, iy) > 0.2) standUp(); else { mx = 0; mz = 0; } }
+    const running = isRunning() && Math.hypot(mx, mz) > 0.1;
+    const spd = running ? 6.2 : 3.4;
+    if (running && pl.pos.y < 0.01 && (pl.dustT -= dt) < 0) { pl.dustT = 0.16; chalkPuff(pl.pos.clone().add(new V3(0, 0.05, 0)), 2); }
     pl.vel.x = lerp(pl.vel.x, mx * spd, damp(12, dt));
     pl.vel.z = lerp(pl.vel.z, mz * spd, damp(12, dt));
     const nx = pl.pos.x + pl.vel.x * dt, nz = pl.pos.z + pl.vel.z * dt;
@@ -1200,15 +1293,20 @@ function updatePlayer(dt) {
     pl.vy -= 16 * dt;
     pl.pos.y += pl.vy * dt;
     if (pl.pos.y <= 0) { if (pl.vy < -4) me.squash(); pl.pos.y = 0; pl.vy = 0; }
-    pl.pump = Math.max(0, pl.pump - 12 * dt);
+    pl.pump = Math.max(0, pl.pump - (pl.sitting ? 30 : 12) * dt);
     pl.mountCand = findMount();
     me.group.position.lerp(pl.pos, damp(20, dt));
     me.group.rotation.y = lerpAngle(me.group.rotation.y, pl.yaw, damp(14, dt));
   } else if (pl.mode === 'climb') {
     const st = pl.strip, sg = climbSign();
-    const spd = 1.15;
-    const nu = wrapU(st, pl.u + ix * sg * spd * dt), nv = clamp(pl.v + iy * spd * dt, 0.75, st.H - 0.18);
-    const moving = Math.hypot(ix, iy) > 0.1;
+    const campus = isCampus();
+    me.campus = campus;
+    if (pl.hanging && (Math.hypot(ix, iy) > 0.3)) stopHang();
+    const spdU = campus ? 0.9 : 1.15, spdV = campus ? (iy > 0 ? 1.75 : 1.0) : 1.15;
+    const nu = wrapU(st, pl.u + ix * sg * spdU * dt), nv = clamp(pl.v + iy * spdV * dt, 0.75, st.H - 0.18);
+    const moving = !pl.hanging && Math.hypot(ix, iy) > 0.1;
+    if (moving && !campus) pl.usedFeet = true;
+    if (pl.hanging) pl.hangT += dt;
     if (moving) {
       if (canHold(nu, nv)) { pl.u = nu; pl.v = nv; }
       else if (canHold(nu, pl.v)) pl.u = nu;
@@ -1217,8 +1315,9 @@ function updatePlayer(dt) {
     if (iy < -0.5 && pl.v <= 0.8) { letGo('down'); return; }
     if (pl.charging) pl.charge = Math.min(1, pl.charge + dt / 0.7);
     const lvl = pl.problem ? pl.problem.level : 1;
-    pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0));
-    if (pl.problem && !pl.topped && uvDist(st, pl.u, pl.v, pl.problem.top.u, pl.problem.top.v) < 0.38) sendProblem(pl.problem);
+    if (pl.hanging) pl.pump += dt * 0.8;
+    else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0)) * (campus ? 2 : 1);
+    if (pl.problem && !pl.topped && uvDist(st, pl.u, pl.v, pl.problem.top.u, pl.problem.top.v) < 0.5) sendProblem(pl.problem);
     if (pl.topped) { pl.topT += dt; if (pl.topT > 3) { letGo('down'); return; } }
     if (pl.pump >= 100) { pl.pump = 100; letGo('pump'); toast('펌핑 100%… 매트에서 쉬고 초크 바르고 다시!'); return; }
   } else if (pl.mode === 'air') {
@@ -1258,12 +1357,18 @@ function updatePlayer(dt) {
     me.group.position.lerp(pl.pos, damp(25, dt));
   }
   me.airborne = pl.mode === 'air' || pl.mode === 'fall';
-  if (pl.mode === 'climb') me.grips = gripPoints(pl.strip, pl.u, pl.v, pl.problem, me.grips || undefined);
-  else me.grips = null;
+  if (pl.mode === 'climb') {
+    me.grips = gripPoints(pl.strip, pl.u, pl.v, pl.problem, me.grips || undefined);
+    if (pl.hanging && pl.hangHold) {
+      const [s] = segAt(pl.strip, pl.hangHold.u);
+      me.grips[0].copy(pl.hangHold.pos).addScaledVector(s.along3, -0.07).addScaledVector(s.n3, 0.07);
+      me.grips[1].copy(pl.hangHold.pos).addScaledVector(s.along3, 0.07).addScaledVector(s.n3, 0.07);
+    }
+  } else me.grips = null;
   if (pl.mode === 'climb' || pl.mode === 'air') {
     const st = pl.strip;
     const [s] = segAt(st, pl.u);
-    bodyPos(st, pl.u, pl.v, pl.pos);
+    bodyPos(st, pl.u, pl.v, pl.pos, pl.hanging ? 1.25 : me.campus ? 1.1 : BODY_DROP);
     me.group.position.lerp(pl.pos, damp(pl.mode === 'air' ? 30 : 16, dt));
     pl.yaw = Math.atan2(-s.n3.x, -s.n3.z);
     me.group.rotation.y = lerpAngle(me.group.rotation.y, pl.yaw, damp(12, dt));
@@ -1539,7 +1644,7 @@ function renderRecords() {
     PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.level - b.level).forEach((p) => {
       const row = document.createElement('div'); row.className = 'prob';
       const sent = d.sends[p.id] || 0;
-      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.dyno ? '<span class="tag">다이노</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
+      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.dyno ? '<span class="tag">다이노</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '안내';
       b.addEventListener('click', () => { setGuide(p); $('#records').close(); toast(`${problemLabel(p)} — 깃발과 미니맵 ★을 따라가세요`, 2600); });
       row.appendChild(b);
@@ -1562,7 +1667,7 @@ function renderRecords() {
   }
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()}`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회`;
 }
 
 // =================================================================
@@ -1655,7 +1760,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0,
+      m: pl.mode === 'climb' || pl.mode === 'air' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -1692,11 +1797,13 @@ const Net = {
     p.mode = d.m === 'c' ? 'c' : 'w';
     p.st = Number.isFinite(+d.st) ? +d.st : 0;
     p.av.setClimbing(p.mode === 'c');
+    p.av.sitting = d.a === 's'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
   },
   onEvent(p, d) {
     if (!p) return;
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
     if (d.type === 'say' && text) p.av.say(text, 3200);
+    if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
       const prob = PROBLEMS.find((x) => x.id === d.pid);
@@ -1746,19 +1853,27 @@ function updateHud(dt) {
     const p = pl.problem;
     title.innerHTML = p ? `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span>${p.dyno ? ' 🔥' : ''}<small>${pl.topped ? '완등! 곧 내려와요' : 'TOP 홀드까지 같은 색만!'}</small>`
       : `자유 등반<small>${pl.strip.sec.name} · 아무 홀드나 OK</small>`;
+    if (pl.hanging) title.innerHTML += `<small style="color:#9fe0ff">🙌 매달리기 ${pl.hangT.toFixed(1)}초 · 최고 ${(Store.data.bestHang || 0).toFixed(1)}초</small>`;
+    else if (me.campus) title.innerHTML += `<small style="color:#ffb26b">🦍 캠퍼싱 중 — 펌핑 ×2${pl.problem ? (pl.usedFeet ? ' (발 이미 씀)' : ' · 발 안 씀 유지!') : ''}</small>`;
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고 — ${ety.near.start < (pl.climbStart || 0) ? '상대가 선출발' : '내가 선출발'}</small>`;
     const v = Math.round(pl.pump);
     $('#pump-val').textContent = v + '%';
     $('#pump-fill').style.width = v + '%';
     $('#pump').classList.toggle('danger', v >= 75);
-    prompt.textContent = pl.mode === 'air' ? '' : touch ? '🔥 꾹 눌렀다 떼면 다이노 · ✋ 내려오기' : '방향키로 이동 · Space 꾹→떼기 다이노 · E 내려오기';
+    prompt.textContent = pl.mode === 'air' ? '' : pl.hanging ? '🙌 대롱대롱… 움직이면 다시 등반' : touch ? '🔥 꾹→떼기 다이노 · 🙌 매달리기 · 🦍 캠퍼싱' : 'WASD 이동 · Space 꾹→떼기 다이노 · H 매달리기 · Shift 캠퍼싱 · E 내려오기';
     $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
+    $('#act1-icon').textContent = pl.hanging ? '✊' : '🙌';
+    $('#act1-label').innerHTML = (pl.hanging ? '그만' : '매달리기') + (touch ? '' : ' <kbd>H</kbd>');
+    $('#act2-icon').textContent = '🦍';
+    $('#act2-label').innerHTML = '캠퍼싱' + (touch ? '' : ' <kbd>Shift</kbd>');
+    $('#btn-act2').setAttribute('aria-pressed', me.campus ? 'true' : 'false');
     $('#jump-label').innerHTML = touch ? '다이노' : '다이노 <kbd>Space</kbd>';
   } else {
     const n = FEST_SECTORS.filter(sectorDone).length;
     title.innerHTML = guide ? `★ ${problemLabel(guide)}<small>미니맵의 ★로 가서 벽을 잡으세요</small>` : `스탬프 ${n} / ${SECTORS.length} · 🌡️ ${Manner.v}℃ ${Manner.emoji()}<small>${Store.data.festival ? '🏆 페스티벌 완주자' : '섹터마다 한 문제씩 완등!'}</small>`;
     const c = pl.mountCand;
-    if (c && pl.mode === 'walk') {
+    if (pl.sitting) prompt.textContent = '🪑 앉아서 쉬는 중 — 펌핑이 빨리 풀려요';
+    else if (c && pl.mode === 'walk') {
       const near = c.st.problems.find((p) => uvDist(c.st, p.start.u, p.start.v, c.u, 1.55) <= REACH);
       const busy = conflictsAt(bodyPos(c.st, c.u, 1.55), 2.0);
       if (busy.length) {
@@ -1768,6 +1883,11 @@ function updateHud(dt) {
     } else prompt.textContent = '';
     $('#btn-grab').classList.toggle('ready', !!c);
     $('#grab-label').innerHTML = touch ? '잡기' : '잡기 <kbd>E</kbd>';
+    $('#act1-icon').textContent = pl.sitting ? '🧍' : '🪑';
+    $('#act1-label').innerHTML = (pl.sitting ? '일어나기' : '앉아 쉬기') + (touch ? '' : ' <kbd>R</kbd>');
+    $('#act2-icon').textContent = '🏃';
+    $('#act2-label').innerHTML = '달리기' + (touch ? '' : ' <kbd>Shift</kbd>');
+    $('#btn-act2').setAttribute('aria-pressed', isRunning() ? 'true' : 'false');
     $('#jump-label').innerHTML = touch ? '점프' : '점프 <kbd>Space</kbd>';
   }
   drawMinimap();
@@ -1787,7 +1907,11 @@ function loop() {
   updateEtiquette(dt);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
-    if (idle.length) pick(idle).av.say(pick(LINES.idle));
+    if (idle.length) {
+      const n = pick(idle);
+      if (Math.random() < 0.35) { n.av.chalk(); n.av.say(pick(['짝!', '초크 충전', '슥슥']), 1000); }
+      else n.av.say(pick(LINES.idle));
+    }
     chatNext = now + 7000 + Math.random() * 7000;
   }
   if (guideMesh) { guideMesh.position.copy(guideMesh.userData.base); guideMesh.position.y += Math.sin(now / 250) * 0.12; }

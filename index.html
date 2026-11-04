@@ -39,8 +39,9 @@
       </form>
       <ul class="intro-keys">
         <li><b>WASD</b> 이동 · <b>드래그</b> 시점 · <b>휠</b> 줌</li>
-        <li><b>E</b> 벽 잡기/내려오기 · <b>Space</b> 점프</li>
-        <li>벽에서 <b>Space 꾹 → 떼기</b> = 다이노 · <b>C</b> 초크</li>
+        <li><b>E</b> 벽 잡기/내려오기 · <b>Space</b> 점프 · <b>Shift</b> 달리기</li>
+        <li><b>C</b> 초크묻히기 · <b>R</b> 앉아서 쉬기</li>
+        <li>벽에서: <b>Space 꾹→떼기</b> 다이노 · <b>H</b> 매달리기 · <b>Shift</b> 캠퍼싱</li>
       </ul>
     </div>
   </main>
@@ -78,6 +79,10 @@
 
     <div id="joystick" class="joystick only-touch" aria-hidden="true"><div class="knob"></div></div>
 
+    <div class="hud-sub">
+      <button id="btn-act1" class="hud-btn small" type="button"><i id="act1-icon">🪑</i><span id="act1-label">앉아 쉬기 <kbd>R</kbd></span></button>
+      <button id="btn-act2" class="hud-btn small" type="button"><i id="act2-icon">🏃</i><span id="act2-label">달리기 <kbd>Shift</kbd></span></button>
+    </div>
     <div class="hud-buttons">
       <button id="btn-chalk" class="hud-btn" type="button">🤍<span>초크 <kbd>C</kbd></span></button>
       <button id="btn-grab" class="hud-btn" type="button">✋<span id="grab-label">잡기 <kbd>E</kbd></span></button>
