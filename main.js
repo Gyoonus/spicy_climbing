@@ -1325,7 +1325,7 @@ const pl = {
 };
 const shiftDown = () => keys.has('ShiftLeft') || keys.has('ShiftRight');
 function isCampus() { return pl.mode === 'climb' && !pl.hanging && (shiftDown() || pl.campusToggle); }
-function isRunning() { return shiftDown() || pl.runToggle || Math.hypot(joy.x, joy.y) > 0.96; }
+function isRunning() { return shiftDown() || pl.runToggle; }
 function toggleSit() {
   if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
   if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.01) return;
