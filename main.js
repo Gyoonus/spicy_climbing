@@ -444,17 +444,82 @@ function quadsGeometry(quads) {
   return g;
 }
 
-function buildWorld() {
-  // 바닥 (매트)
+// =================================================================
+// 매트 — 벽을 따라 두껍게 (높이 30cm)
+// =================================================================
+const MAT_H = 0.3;
+function matWidth(st) { return st.sec.id === 'trial' ? 1.6 : 2.0 + st.lean * 0.6; }
+function isMat(x, z) {
+  if (!inPoly(x, z, FLOOR)) return false;
+  for (const o of OBSTACLES) if (inPoly(x, z, o.footM)) return false;
+  for (const st of strips) {
+    const W = st.matW;
+    for (const sg of st.segs) if (segProject(x, z, sg.a, sg.b).d < W) return true;
+  }
+  return false;
+}
+function groundY(x, z) { return isMat(x, z) ? MAT_H : 0; }
+function buildMats() {
+  strips.forEach((st) => { st.matW = matWidth(st); });
+  const cell = 0.2;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  FLOOR.forEach(([x, z]) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); });
+  minX -= cell; minZ -= cell;
+  const nx = Math.ceil((maxX - minX) / cell) + 2, nz = Math.ceil((maxZ - minZ) / cell) + 2;
+  const grid = [];
+  for (let i = 0; i <= nx; i++) { grid[i] = []; for (let j = 0; j <= nz; j++) grid[i][j] = isMat(minX + i * cell, minZ + j * cell); }
+  const top = [], topUv = [], side = [];
+  const H = MAT_H;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    const cs = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([a, b]) => ({ x: minX + a * cell, z: minZ + b * cell, in: grid[a][b] }));
+    if (!cs.some((c) => c.in)) continue;
+    const pts = [];
+    for (let k = 0; k < 4; k++) {
+      const c = cs[k], n = cs[(k + 1) % 4];
+      if (c.in) pts.push({ x: c.x, z: c.z, mid: false });
+      if (c.in !== n.in) pts.push({ x: (c.x + n.x) / 2, z: (c.z + n.z) / 2, mid: true });
+    }
+    if (pts.length < 3) continue;
+    for (let k = 1; k < pts.length - 1; k++) {
+      [pts[0], pts[k + 1], pts[k]].forEach((q) => { top.push(q.x, H, q.z); topUv.push(q.x / 2, q.z / 1.4); });
+    }
+    for (let k = 0; k < pts.length; k++) {
+      const a = pts[k], b = pts[(k + 1) % pts.length];
+      if (!(a.mid && b.mid)) continue;
+      side.push(a.x, H, a.z, b.x, H, b.z, b.x, 0, b.z, a.x, H, a.z, b.x, 0, b.z, a.x, 0, a.z);
+    }
+  }
   const matTex = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#c8ccd1'; g.fillRect(0, 0, w, h);
-    const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, 'rgba(255,255,255,.06)'); grd.addColorStop(1, 'rgba(0,0,0,.05)');
+    g.fillStyle = '#c3c8ce'; g.fillRect(0, 0, w, h);
+    const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, 'rgba(255,255,255,.08)'); grd.addColorStop(0.5, 'rgba(255,255,255,0)'); grd.addColorStop(1, 'rgba(0,0,0,.06)');
     g.fillStyle = grd; g.fillRect(0, 0, w, h);
-    g.strokeStyle = '#a9aeb4'; g.lineWidth = 4; g.strokeRect(0, 0, w, h);
+    g.strokeStyle = '#9ea4ab'; g.lineWidth = 5; g.strokeRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2;
+    for (let y = 32; y < h; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
   });
   matTex.wrapS = matTex.wrapT = THREE.RepeatWrapping;
-  matTex.repeat.set(0.5, 0.5);
-  flatPoly(FLOOR, 0, new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.95 }));
+  const tg = new THREE.BufferGeometry();
+  tg.setAttribute('position', new THREE.Float32BufferAttribute(top, 3));
+  tg.setAttribute('uv', new THREE.Float32BufferAttribute(topUv, 2));
+  tg.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(top.length).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+  scene.add(new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.95, side: THREE.DoubleSide })));
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(side, 3));
+  sg.computeVertexNormals();
+  scene.add(new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: '#7e858d', roughness: 0.9, side: THREE.DoubleSide })));
+}
+
+function buildWorld() {
+  // 바닥 (콘크리트)
+  const conc = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#6c6e73'; g.fillRect(0, 0, w, h);
+    const r = mulberry(42);
+    for (let i = 0; i < 1600; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},${0.05 * r()})`; g.fillRect(r() * w, r() * h, 2 + r() * 3, 2 + r() * 3); }
+    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 2; g.strokeRect(0, 0, w, h);
+  });
+  conc.wrapS = conc.wrapT = THREE.RepeatWrapping;
+  conc.repeat.set(0.25, 0.25);
+  flatPoly(FLOOR, 0, new THREE.MeshStandardMaterial({ map: conc, roughness: 0.75, metalness: 0.05 }));
   // 아래쪽 복도는 마루
   const wood = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = '#8a6a4a'; g.fillRect(0, 0, w, h);
@@ -559,6 +624,8 @@ function buildWorld() {
       }
     }
   });
+
+  buildMats();
 
   // 불꽃이 벽화 (1번 섹터 3번째 판넬)
   const st1 = strips[0], ms = st1.segs[2];
@@ -904,8 +971,9 @@ class Avatar {
       }
     }
     this.rig.scale.set(sx, sy, sx);
-    this.shadow.position.set(p.x, 0.015, p.z);
-    const s = clamp(1 - p.y / 5, 0.3, 1);
+    const gy = groundY(p.x, p.z);
+    this.shadow.position.set(p.x, gy + 0.015, p.z);
+    const s = clamp(1 - (p.y - gy) / 5, 0.3, 1);
     this.shadow.scale.setScalar(s);
     this.shadow.material.opacity = s;
   }
@@ -1025,7 +1093,7 @@ function shockRing(pos, size) {
 function floorMark(pos) {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: blotchTex, transparent: true, depthWrite: false, opacity: 0.75 }));
   mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = Math.random() * 6;
-  mesh.position.set(pos.x + (Math.random() - 0.5) * 0.3, 0.02 + floorMarks.length * 0.0005, pos.z + (Math.random() - 0.5) * 0.3);
+  mesh.position.set(pos.x + (Math.random() - 0.5) * 0.3, groundY(pos.x, pos.z) + 0.02 + floorMarks.length * 0.0005, pos.z + (Math.random() - 0.5) * 0.3);
   mesh.scale.setScalar(0.9 + Math.random() * 0.7);
   scene.add(mesh);
   floorMarks.push({ mesh, t: 0 });
@@ -1040,7 +1108,7 @@ function chalkClap(av, i, pos) {
   Sound.clap(big, av === me ? 1 : clamp(1 - dist / 12, 0, 0.6));
   if (!big) return;
   if (av === me) camCtl.shake = 0.12;
-  if (av.group.position.y < 0.05) floorMark(av.group.position);
+  if (av.group.position.y - groundY(av.group.position.x, av.group.position.z) < 0.05) floorMark(av.group.position);
   // 주변 사람 기침
   const near = [...npcs.map((n) => n.av), ...[...Net.peers.values()].map((p) => p.av), me].filter((o) => o && o !== av && o.group.position.distanceTo(pos) < 2.8);
   near.forEach((o, k) => {
@@ -1172,7 +1240,7 @@ function isCampus() { return pl.mode === 'climb' && !pl.hanging && (shiftDown() 
 function isRunning() { return shiftDown() || pl.runToggle || Math.hypot(joy.x, joy.y) > 0.96; }
 function toggleSit() {
   if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
-  if (pl.pos.y > 0.01) return;
+  if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.01) return;
   pl.sitting = !pl.sitting;
   me.sitting = pl.sitting;
   if (!pl.sitting) { onStandUp(); Net.sync(true); return; }
@@ -1266,7 +1334,7 @@ function nearestGrab(st, u, v, problem, exclude) {
 }
 function canHold(u, v) { const r = nearestGrab(pl.strip, u, v, pl.problem); return r && r.d <= REACH; }
 function bodyPos(st, u, v, out = new V3(), dropMax = BODY_DROP) {
-  const drop = Math.min(dropMax, v - 0.02);
+  const drop = Math.min(dropMax, v - MAT_H - 0.02);
   const [s] = segAt(st, u);
   surf(st, u, v - drop, out).addScaledVector(s.n3, 0.3);
   return out;
@@ -1289,7 +1357,7 @@ function gripPoints(st, u, v, problem, out) {
 }
 
 function findMount() {
-  if (pl.pos.y > 0.6) return null;
+  if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.5) return null;
   let best = null;
   for (const st of strips) {
     for (const s of st.segs) {
@@ -1372,7 +1440,7 @@ function grabToggle() {
 function jumpPress() {
   if (pl.mode === 'walk' && pl.sitting) { standUp(); return; }
   if (pl.mode === 'climb' && pl.hanging) stopHang();
-  if (pl.mode === 'walk') { if (pl.pos.y <= 0.001) { pl.vy = 5.2; Sound.tone(300, 0.08, 'sine', 0.06, 0, 200); } return; }
+  if (pl.mode === 'walk') { if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) <= 0.001) { pl.vy = 5.2; Sound.tone(300, 0.08, 'sine', 0.06, 0, 200); } return; }
   if (pl.mode === 'climb') { pl.charging = true; pl.charge = 0; }
 }
 function jumpRelease(cancel) {
@@ -1440,7 +1508,7 @@ function updatePlayer(dt) {
     if (pl.sitting) { if (Math.hypot(ix, iy) > 0.2) standUp(); else { mx = 0; mz = 0; } }
     const running = isRunning() && Math.hypot(mx, mz) > 0.1;
     const spd = running ? 6.2 : 3.4;
-    if (running && pl.pos.y < 0.01 && (pl.dustT -= dt) < 0) { pl.dustT = 0.16; chalkPuff(pl.pos.clone().add(new V3(0, 0.05, 0)), 2); }
+    if (running && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01 && (pl.dustT -= dt) < 0) { pl.dustT = 0.16; chalkPuff(pl.pos.clone().add(new V3(0, 0.05, 0)), 2); }
     pl.vel.x = lerp(pl.vel.x, mx * spd, damp(12, dt));
     pl.vel.z = lerp(pl.vel.z, mz * spd, damp(12, dt));
     const nx = pl.pos.x + pl.vel.x * dt, nz = pl.pos.z + pl.vel.z * dt;
@@ -1450,7 +1518,8 @@ function updatePlayer(dt) {
     if (Math.hypot(mx, mz) > 0.1) pl.yaw = lerpAngle(pl.yaw, Math.atan2(mx, mz), damp(10, dt));
     pl.vy -= 16 * dt;
     pl.pos.y += pl.vy * dt;
-    if (pl.pos.y <= 0) { if (pl.vy < -4) me.squash(); pl.pos.y = 0; pl.vy = 0; }
+    const gy = groundY(pl.pos.x, pl.pos.z);
+    if (pl.pos.y <= gy) { if (pl.vy < -4) me.squash(); pl.pos.y = gy; pl.vy = 0; }
     pl.pump = Math.max(0, pl.pump - (pl.sitting ? 30 : 12) * dt);
     pl.mountCand = findMount();
     me.group.position.lerp(pl.pos, damp(20, dt));
@@ -1502,11 +1571,12 @@ function updatePlayer(dt) {
     const nx = pl.pos.x + pl.vel.x * dt, nz = pl.pos.z + pl.vel.z * dt;
     if (walkable(nx, nz, 0.15)) { pl.pos.x = nx; pl.pos.z = nz; }
     pl.vel.multiplyScalar(0.97);
-    if (pl.pos.y <= 0) {
-      pl.pos.y = 0; pl.vy = 0; pl.vel.set(0, 0, 0);
+    if (pl.pos.y <= groundY(pl.pos.x, pl.pos.z)) {
+      pl.vy = 0; pl.vel.set(0, 0, 0);
       let k = 0;
       const [s] = segAt(pl.strip, pl.u);
       while (!walkable(pl.pos.x, pl.pos.z) && k++ < 30) { pl.pos.x += s.n3.x * 0.1; pl.pos.z += s.n3.z * 0.1; }
+      pl.pos.y = groundY(pl.pos.x, pl.pos.z);
       me.squash();
       chalkPuff(pl.pos.clone().add(new V3(0, 0.1, 0)), pl.fallReason === 'down' ? 6 : 14);
       pl.mode = 'walk'; pl.problem = null; pl.strip = null;
@@ -1593,7 +1663,7 @@ function planPath(a, b) {
 function makeNpc(d) {
   const av = new Avatar(d.name, d.color);
   const spot = m(d.spot);
-  av.group.position.set(spot[0], 0, spot[1]);
+  av.group.position.set(spot[0], groundY(spot[0], spot[1]), spot[1]);
   av.group.rotation.y = Math.random() * 6;
   av.sitting = true;
   return { av, spot, state: 'idle', next: performance.now() + 6000 + Math.random() * 10000, path: [], problem: null, hold: 0 };
@@ -1639,6 +1709,7 @@ function npcUpdate(n, dt, now) {
     } else {
       const sp = Math.min(d, 2.4 * dt);
       g.position.x += (dx / d) * sp; g.position.z += (dz / d) * sp;
+      g.position.y = lerp(g.position.y, groundY(g.position.x, g.position.z), damp(14, dt));
       g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(dx, dz), damp(10, dt));
     }
   } else if (n.state === 'climb') {
@@ -1664,17 +1735,19 @@ function npcUpdate(n, dt, now) {
     }
   } else if (n.state === 'drop') {
     n.av.setClimbing(false);
-    n.av.airborne = g.position.y > 0.05;
+    const ngy = groundY(g.position.x, g.position.z);
+    n.av.airborne = g.position.y - ngy > 0.05;
     const [s] = segAt(n.problem.strip, n.problem.holds[n.hold].u);
     n.vy -= 16 * dt;
     g.position.y += n.vy * dt;
     g.position.x += s.n3.x * 1.3 * dt; g.position.z += s.n3.z * 1.3 * dt;
-    if (g.position.y <= 0) {
-      g.position.y = 0;
+    if (g.position.y <= ngy) {
+      g.position.y = ngy;
       n.av.squash();
       chalkPuff(g.position.clone().add(new V3(0, 0.1, 0)), 8);
       let k = 0;
       while (!walkable(g.position.x, g.position.z, 0.15) && k++ < 30) { g.position.x += s.n3.x * 0.1; g.position.z += s.n3.z * 0.1; }
+      g.position.y = groundY(g.position.x, g.position.z);
       n.state = 'rest'; n.restT = 1.2; n.av.airborne = false;
     }
   } else if (n.state === 'rest') {
