@@ -1512,6 +1512,7 @@ function letGo(reason) {
     const n = npcs.find((x) => x.state === 'idle');
     if (n && reason !== 'crash') setTimeout(() => n.av.say(pick(LINES.comfort)), 700);
     if (reason !== 'crash' && Math.random() < 0.7) westPraise('fall', 1500);
+    if (staff.av && staff.av.group.position.distanceTo(me.group.position) < 12 && staffMayNag(0.25)) setTimeout(() => staffSay(pick(STAFF_LINES.care), 2600), 2600);
   }
   Net.sync(true);
 }
@@ -1594,6 +1595,7 @@ function sendProblem(p) {
   const firstSend = Store.data.sends[p.id] === 1;
   if ((firstSend ? westCanShoot() : p.level >= 4 && westCanShoot(0.5))) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
   else { pl.topHoldMax = 3; westPraise('top', 600); }
+  if (staff.av && staff.av.group.position.distanceTo(me.group.position) < 14 && staffMayNag(0.2)) setTimeout(() => staffSay(pick(STAFF_LINES.praise), 2600), 3500);
   checkFestival();
 }
 
@@ -1620,7 +1622,7 @@ function updatePlayer(dt) {
       if (performance.now() - watch.gateMsg > 2500) {
         watch.gateMsg = performance.now();
         toast('🐯 2만원 내야 입장 가능! 무호K를 기다려요');
-        if (staff.state === 'collect') { staffSay('2만원 먼저요~ 😾', 1800); setTimeout(openPay, 900); }
+        if (staff.state === 'collect') { staffSay('계산 먼저 하고 가요~ 🐯', 1800); setTimeout(openPay, 900); }
       }
     }
     if (Math.hypot(mx, mz) > 0.1) pl.yaw = lerpAngle(pl.yaw, Math.atan2(mx, mz), damp(10, dt));
@@ -1878,11 +1880,13 @@ const STAFF_PATROL = [[450, 460], [690, 470], [420, 820], [690, 800], [180, 440]
 const staff = { av: null, state: 'patrol', path: [], speed: 2, next: 0, replan: 0, nagT: 0, dustT: 0, onArrive: null };
 const watch = { chalks: [], runT: 0, calmT: 0, chaseNag: 0, chalkNag: 0, gateMsg: 0 };
 const STAFF_LINES = {
-  run: ['거기 뛰지 마세요!!', '암장에서 뛰면 다쳐요! 😾', '불꽃 학생 멈춰!!', '매트에서 뛰지 말라고요~!', '내가 더 빠르다 🐯💨', '걸어 다니세요 걸어서!!'],
-  chalk: ['초크 팡팡 그만~ 옆사람 콜록거려요 😾', '초크는 등반할 때 쓰는 거예요~', '팡팡은 완등하고 해요 🐯', '초크 파티 하러 왔어요? ㅋㅋ', '자꾸 그러면 초크통 압수합니다 🐯'],
-  crash: ['거기! 선출발자 우선 몰라요?! 😾', '벽 위에서 교통사고 내지 마요~', '동선 확인하고 붙어요!!'],
-  cutin: ['새치기 금지~! 🐯', '먼저 붙은 사람 있잖아요!'],
-  calm: ['그래요 천천히~ 🐯', '이제 좀 낫네요', '걸어 다니니까 얼마나 좋아요'],
+  run: ['뛰면 넘어져요~ 천천히 걸어요 🐯', '앗 거기 조심조심! …걱정돼서 그런 거 아니고요', '천천히 가도 벽은 안 도망가요~', '넘어지면 내가 속상하… 아, 아무것도 아니에요', '흥, 그래도 내가 더 빠르거든요 🐯💨'],
+  chalk: ['초크 팡팡은 조금만 해요~ 옆사람 콜록콜록 🐯', '팡팡은 완등하고 해요! 그땐 박수 쳐줄게요', '초크 많이 썼네요~ 손은 잘 말랐죠? 🐯', '…그 박수 소리 좀 좋긴 하네요. 그래도 조금만~'],
+  crash: ['둘 다 괜찮아요? 다음엔 먼저 붙은 사람 먼저~ 🐯', '앗 부딪혔네! 다친 데 없죠? 동선 한 번만 봐요~'],
+  cutin: ['저분이 먼저 붙었어요~ 조금만 기다려볼까요? 🐯', '순서 지키면 더 멋있어요… 라고 생각한 건 아니고요'],
+  calm: ['그래요 그렇게 천천히~ 잘하네요 🐯', '훨씬 낫네요. …칭찬한 거 맞아요', '천천히 걸으니까 보기 좋네요 🐯'],
+  care: ['…괜찮아요? 걱정한 건 아니고요 🐯', '안 다쳤죠? 그럼 됐어요~', '매트 푹신하죠? 다행이다… 아니 그냥요'],
+  praise: ['오… 좀 하네요? 칭찬은 아니고요 🐯', '방금 무브 괜찮았어요. 진짜 조금요', '흥, 멋있었어요. 오늘만 말해주는 거예요'],
 };
 const todayStr = () => new Date().toLocaleDateString('ko-KR');
 const STAFF_NAG_COOLDOWN = 45000; // 잔소리 한 번 하면 45초는 조용
@@ -1900,7 +1904,7 @@ function makeStaff() {
   const st = m([690, 470]);
   staff.av.group.position.set(st[0], groundY(st[0], st[1]), st[1]);
 }
-function staffRushToEntry(onArrive, line = '잠깐만요~!! 🐯💨') {
+function staffRushToEntry(onArrive, line = '잠깐만요~ 지금 가요! 🐯💨') {
   const tgt = [ENTRY[0] + 0.6, ENTRY[1] - 1.1];
   staffGo(tgt, 9.5);
   staff.state = 'rush'; staff.onArrive = onArrive;
@@ -1910,18 +1914,18 @@ function staffArrivedForPlayer() {
   const g = staff.av.group;
   g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
   if (paidToday()) {
-    staffSay('오늘 이미 결제하셨네요~ 들어가세요! 🔥', 2600);
+    staffSay('오늘 또 왔네요? …반가운 건 아니고요. 결제돼 있으니 들어가요 🐯', 3000);
     staff.state = 'thanks'; staff.next = performance.now() + 2200;
     return;
   }
-  staffSay('어서오세요~ 일일이용 2만원입니다! 🐯', 3000);
+  staffSay('어서와요~ 기다린 건 아니고요. 일일이용 2만원이에요 🐯', 3200);
   staff.state = 'collect';
   setTimeout(openPay, 700);
 }
 function openPay() {
   if (paidToday()) return;
   const d = $('#pay');
-  $('#pay-say').innerHTML = '"어서오세요~ 스파이시입니다! 일일이용 <b>2만원</b>이에요 🐯"';
+  $('#pay-say').innerHTML = '"어서와요~ 스파이시예요. 일일이용 <b>2만원</b>이에요. …오늘 재밌게 놀다 가요 🐯"';
   d.querySelector('[data-pay="member"]').disabled = false;
   if (!d.open) d.showModal();
 }
@@ -1932,7 +1936,7 @@ function payDone(method) {
   $('#pay').close();
   Sound.tone(1800, 0.08, 'square', 0.06); Sound.tone(1800, 0.08, 'square', 0.06, 0.12);
   toast(`🧾 일일이용권 20,000원 결제 완료 (${method}) — 입장!`, 2600);
-  staffSay(pick(['감사합니다~ 즐클하세요! 🔥', '오늘도 매운맛 등반 화이팅 🐯', '뛰지 말고, 초크는 적당히~']), 2600);
+  staffSay(pick(['고마워요~ 즐클해요! 다치지 말고요 🐯', '물은 저기 있어요~ 그냥 알려주는 거예요', '오늘도 화이팅… 응원한 거 아니고요 🔥']), 2800);
   setTimeout(() => me.say('들어갑니다~!', 1600), 600);
   westPraise('enter', 3000);
   staff.state = 'thanks'; staff.next = performance.now() + 2200;
@@ -1946,11 +1950,11 @@ function setupPay() {
     else if (k === 'cash') payDone('현금');
     else if (k === 'member') {
       b.disabled = true;
-      $('#pay-say').textContent = '"회원권이요? 조회해볼게요… 🔍"';
-      setTimeout(() => { $('#pay-say').innerHTML = '"명단에 없는데요? 😾 <b>2만원</b>이요."'; staffSay('명단에 없는데요? 😾', 2000); }, 1300);
+      $('#pay-say').textContent = '"회원권이요? 특별히 조회해줄게요… 🔍"';
+      setTimeout(() => { $('#pay-say').innerHTML = '"음… 명단엔 없네요 ㅎㅎ 오늘은 <b>2만원</b>이에요. 다음엔 회원권 만들어요~"'; staffSay('명단엔 없네요~ ㅎㅎ', 2000); }, 1300);
     } else if (k === 'sneak') {
       d.close();
-      staffSay('어딜 가요~ 2만원!! 😾', 2200);
+      staffSay('어어 거기~ 계산하고 들어가요 ㅎㅎ 🐯', 2200);
       me.say('헉 들켰다', 1400);
       setTimeout(openPay, 1800);
     }
@@ -1959,7 +1963,7 @@ function setupPay() {
 function staffCatch() {
   westPraise('console', 3200);
   pl.vel.set(0, 0, 0); pl.runToggle = false; pl.stunT = 1.3;
-  staffSay('잡았다!! 🐯 천천히 걸어 다녀요~', 2600);
+  staffSay('잡았다~ 🐯 다친 데는 없죠? 천천히 다녀요', 2800);
   setTimeout(() => me.say('죄송합니다…', 1600), 700);
   setTimeout(() => Manner.add(-0.3, '무호K한테 잡힘 🐯'), 1000);
   staff.state = 'thanks'; staff.next = performance.now() + 2500;
@@ -2005,7 +2009,7 @@ function updateStaff(dt, now) {
       if (watch.runT > (watch.runRoll || 4)) { watch.runRoll = watch.runT + 4; spotted = Math.random() < 0.2 && staffMayNag(1); }
       if (paidToday() && spotted && pl.mode === 'walk') {
         staff.state = 'chase'; staff.replan = 0; staff.nagT = 0;
-        staffSay(STAFF_LINES.run[Math.min(watch.chaseNag++, 1)], 2200);
+        staffSay(STAFF_LINES.run[Math.min(watch.chaseNag++, STAFF_LINES.run.length - 1)], 2400);
       }
       break;
     case 'rush':
@@ -2023,7 +2027,7 @@ function updateStaff(dt, now) {
       if ((staff.nagT += dt) > 3.5) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
       if (toMe < 1.0 && pl.isRunningNow) staffCatch();
       else if (watch.calmT > 2.5 || pl.mode !== 'walk') {
-        staffSay(pl.mode !== 'walk' ? '내려오면 얘기 좀 해요 😾' : pick(STAFF_LINES.calm), 2200);
+        staffSay(pl.mode !== 'walk' ? '벽 위는 뛰는 거 아니니까 봐줄게요~ 조심해요 🐯' : pick(STAFF_LINES.calm), 2400);
         staff.state = 'thanks'; staff.next = now + 1500; staff.path = [];
       }
       break;
@@ -2048,7 +2052,7 @@ const WEST_LINES = {
   top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
   climb: ['가보자고~!! 🤠', '발 좋다 발 좋다!', '자세 너무 좋아요!', '거의 다 왔어요!', '호흡 천천히~ 할 수 있어!'],
   fall: ['괜찮아요! 떨어지는 것도 등반이에요 🤠', '방금 무브 진짜 좋았는데!', '다음엔 무조건 돼요!', '시도한 게 멋있는 거예요 👍'],
-  console: ['괜찮아요~ 무호가 원래 저래요 🤠', '무호 말투만 저래요 ㅎㅎ 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
+  console: ['무호 원래 츤데레예요 ㅎㅎ 걱정돼서 그래요 🤠', '무호 말투만 저래요~ 속은 엄청 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
   dyno: ['다이노 미쳤다!!! 🤠', '날았다!! 슈퍼맨인 줄', '저 점프력 뭐예요?!'],
   yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
   campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
@@ -2439,7 +2443,7 @@ const Net = {
       this.updateCount();
       if (Date.now() - this.startedAt > 4000) {
         toast(`${name}님이 암장에 들어왔어요 👋`, 2000);
-        if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name}님 일일이용 2만원이요~ 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
+        if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name}님 어서와요~ 일일이용 2만원이에요 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
         const idle = npcs.filter((n) => n.state === 'idle');
         if (idle.length) setTimeout(() => pick(idle).av.say(`${name}님 어서 와요~`), 700);
       }
