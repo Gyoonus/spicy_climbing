@@ -839,13 +839,43 @@ function buildTigerHead(head) {
   const mR = mL.clone(); mR.position.x = 0.032; head.add(mR);
 }
 
+// 웨스트의 카우보이 얼굴
+function buildCowboyHead(head) {
+  const skin = new THREE.MeshStandardMaterial({ color: '#ffd9b3', roughness: 0.65 });
+  const hat = new THREE.MeshStandardMaterial({ color: '#8b5a2b', roughness: 0.75 });
+  const band = new THREE.MeshStandardMaterial({ color: '#e3262b', roughness: 0.6 });
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.39, 30, 20), skin);
+  face.scale.set(1.05, 0.95, 0.95); face.position.y = 0.37; head.add(face);
+  [-1, 1].forEach((sd) => {
+    const eye = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.012, 6, 12, Math.PI), blackMat); // 웃는 눈 ∩
+    eye.position.set(sd * 0.13, 0.42, 0.35); head.add(eye);
+    const blush = new THREE.Mesh(new THREE.CircleGeometry(0.05, 16), new THREE.MeshBasicMaterial({ color: '#ff9aa8', transparent: true, opacity: 0.75 }));
+    blush.position.set(sd * 0.22, 0.31, 0.33); blush.rotation.y = sd * 0.5; head.add(blush);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), skin); ear.scale.set(0.6, 1, 0.8); ear.position.set(sd * 0.4, 0.37, 0); head.add(ear);
+  });
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.016, 8, 16, Math.PI), new THREE.MeshStandardMaterial({ color: '#7a2a2a' }));
+  smile.rotation.z = Math.PI; smile.position.set(0, 0.27, 0.36); head.add(smile);
+  const tooth = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#fff' }));
+  tooth.rotation.z = Math.PI; tooth.position.set(0, 0.272, 0.362); head.add(tooth);
+  // 카우보이 모자
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.035, 32), hat);
+  brim.position.y = 0.66; brim.scale.set(1, 1, 0.85); head.add(brim);
+  [-1, 1].forEach((sd) => { const curl = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 6, 12, Math.PI), hat); curl.rotation.set(Math.PI / 2, 0, sd > 0 ? 0 : Math.PI); curl.rotation.z = Math.PI / 2; curl.position.set(sd * 0.56, 0.7, 0); head.add(curl); });
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.31, 0.34, 24), hat);
+  crown.position.y = 0.84; head.add(crown);
+  const dent = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), hat);
+  dent.scale.set(1.2, 0.35, 1); dent.position.y = 1.0; head.add(dent);
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.315, 0.315, 0.06, 24, 1, true), band);
+  b.position.y = 0.71; head.add(b);
+}
+
 // 2등신 불꽃이: 큰 불꽃 머리 + 작은 몸 + 늘어나는 팔다리 (IK로 홀드를 잡음)
 const LIMB = { arm: 0.3, leg: 0.28 };
 const limbGeo = { arm: new THREE.CapsuleGeometry(0.048, LIMB.arm, 4, 8).translate(0, -LIMB.arm / 2, 0), leg: new THREE.CapsuleGeometry(0.06, LIMB.leg, 4, 8).translate(0, -LIMB.leg / 2, 0) };
 const handGeo = new THREE.SphereGeometry(0.07, 12, 8), footGeo = new THREE.SphereGeometry(0.08, 12, 8).scale(1, 0.7, 1.4);
 const DOWN = new V3(0, -1, 0);
 class Avatar {
-  constructor(name, color, { isPlayer = false, visitor = false, tiger = false } = {}) {
+  constructor(name, color, { isPlayer = false, visitor = false, tiger = false, cowboy = false } = {}) {
     this.name = name; this.color = color;
     this.group = new THREE.Group();
     this.rig = new THREE.Group();
@@ -857,10 +887,10 @@ class Avatar {
     // 몸통 (작은 티셔츠)
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 6, 12), dark);
     torso.position.y = 0.45; this.rig.add(torso);
-    const tee = tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
+    const tee = cowboy ? textSprite('⭐', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }) : tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
     tee.position.set(0, 0.47, 0.16); this.rig.add(tee);
     if (tiger) skin.color.set('#f39a2b');
-    this.skinBase = tiger ? '#f39a2b' : '#ffe3cc';
+    this.skinBase = tiger ? '#f39a2b' : cowboy ? '#ffd9b3' : '#ffe3cc';
     // 초크백 (허리 뒤)
     const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 14), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.9 }));
     bag.position.set(0, 0.34, -0.17); this.rig.add(bag);
@@ -872,6 +902,13 @@ class Avatar {
     this.head.position.y = 0.55;
     const hs = 0.86;
     if (tiger) { buildTigerHead(this.head); bag.visible = false; rim.visible = false; }
+    else if (cowboy) {
+      buildCowboyHead(this.head); bag.visible = false; rim.visible = false;
+      this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.26, 0.025), new THREE.MeshStandardMaterial({ color: '#16161a', roughness: 0.3 }));
+      this.phone.position.set(0, 0.86, 0.42); this.phone.visible = false; this.rig.add(this.phone);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.025, 12), new THREE.MeshBasicMaterial({ color: '#7fb6ff' }));
+      lens.position.set(0.04, 0.08, 0.014); this.phone.add(lens);
+    }
     else {
     const flame = new THREE.Mesh(getFlameGeo(), main); flame.scale.setScalar(hs); this.head.add(flame);
     [-0.12, 0.12].forEach((x) => {
@@ -899,8 +936,9 @@ class Avatar {
       return { pivot, seg, end, len: LIMB[kind], kind };
     };
     this.limbs = [mk('arm', -0.2, 0.55, 0), mk('arm', 0.2, 0.55, 0), mk('leg', -0.085, 0.3, 0), mk('leg', 0.085, 0.3, 0)];
-    this.tag = textSprite(tiger ? `🐯 ${name}` : name, { h: 0.17, bg: isPlayer ? '#e3262b' : tiger ? '#f39a2b' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor || tiger ? '#111' : '#fff' });
-    this.tag.position.y = 1.5;
+    this.tag = textSprite(tiger ? `🐯 ${name}` : cowboy ? `🤠 ${name}` : name, { h: 0.17, bg: isPlayer ? '#e3262b' : tiger ? '#f39a2b' : cowboy ? '#ffd166' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor || tiger || cowboy ? '#111' : '#fff' });
+    if (cowboy) this.tag.position.y = 1.62;
+    if (!cowboy) this.tag.position.y = 1.5;
     this.group.add(this.tag);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
     this.shadow.rotation.x = -Math.PI / 2;
@@ -985,6 +1023,11 @@ class Avatar {
       this.rig.rotation.x = run * 0.22;
       this.head.rotation.z = Math.sin(this.phase) * 0.06 * Math.min(sp, 1);
     }
+    if (this.photoPose) {
+      this.limbRot(la, -1.75, 0.55); this.limbRot(ra, -1.75, -0.55);
+      this.limbLen(la, 0.26); this.limbLen(ra, 0.26);
+    }
+    if (this.phone) this.phone.visible = !!this.photoPose;
     const onWall = this.climbing && this.grips;
     if (ck >= 0 && !onWall) {
       // 초크백에 손 넣기 → 쫙! 쫙! 팡!!
@@ -1330,6 +1373,7 @@ function updateSitNag(dt) {
   if (pl.nagN === 3) setTimeout(() => toast('🏅 칭호 획득: 매트 지박령 👻', 2600), 1200);
   if (pl.nagN === 3) { Store.data.titles = Store.data.titles || {}; Store.data.titles.mat = true; Store.save(); }
   if (pl.nagN === 2) setTimeout(() => me.say(pick(['아 조금만 더…', '5분만…', '지금 일어나려 했어!']), 2000), 1800);
+  if (pl.nagN === 2) westPraise('sit', 3800);
 }
 function onStandUp() {
   if ((pl.nagN || 0) >= 2) {
@@ -1354,7 +1398,7 @@ function stopHang(silent) {
   pl.hanging = false; me.hanging = false;
   const t = pl.hangT, best = Store.data.bestHang || 0;
   if (!silent && t > 1) {
-    if (t > best) { Store.data.bestHang = t; Store.save(); toast(`🙌 매달리기 신기록! ${t.toFixed(1)}초`, 2400); Sound.top(); }
+    if (t > best) { Store.data.bestHang = t; Store.save(); toast(`🙌 매달리기 신기록! ${t.toFixed(1)}초`, 2400); Sound.top(); westPraise('hang', 800); }
     else toast(`🙌 매달리기 ${t.toFixed(1)}초 (최고 ${best.toFixed(1)}초)`, 2000);
   } else if (t > best && t > 1) { Store.data.bestHang = t; Store.save(); }
   Net.sync(true);
@@ -1442,6 +1486,7 @@ function mount(c) {
     const w = ety.waitedFor; ety.waitedFor = null;
     w.av.say('기다려줘서 고마워요 🙏', 2400);
     setTimeout(() => Manner.add(+0.5, '기다릴 줄 아는 클라이머'), 900);
+    westPraise('yield', 2000);
   }
   Sound.grab();
   Net.sync(true);
@@ -1466,6 +1511,7 @@ function letGo(reason) {
     Net.event('fall', { text: line });
     const n = npcs.find((x) => x.state === 'idle');
     if (n && reason !== 'crash') setTimeout(() => n.av.say(pick(LINES.comfort)), 700);
+    if (reason !== 'crash' && Math.random() < 0.7) westPraise('fall', 1500);
   }
   Net.sync(true);
 }
@@ -1479,6 +1525,7 @@ function grabToggle() {
     if (nb && nb.start < pl.climbStart && !pl.topped) {
       nb.av.say(pick(['감사합니다~ 🙏', '양보 천사다…', '다음엔 먼저 하세요!']), 2400);
       setTimeout(() => Manner.add(+0.5, '양보는 매너의 꽃'), 700);
+      westPraise('yield', 1800);
     }
     letGo('down');
   }
@@ -1541,8 +1588,11 @@ function sendProblem(p) {
     Store.data.campus[p.id] = (Store.data.campus[p.id] || 0) + 1; Store.save();
     setTimeout(() => { toast('🦍 캠퍼싱 완등! 발 하나도 안 썼어요', 2800); fireConfetti(me.group.position.clone().add(new V3(0, 1.4, 0)), 20); }, 1500);
     setTimeout(() => { const n = npcs.find((x) => x.state === 'idle'); if (n) n.av.say(pick(['고릴라다… 🦍', '발 안 쓰고?!', '팔 미쳤다'])); }, 2000);
+    westPraise('campus', 4200);
   }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
+  if (west.av && west.state !== 'photo') { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
+  else { pl.topHoldMax = 3; westPraise('top', 600); }
   checkFestival();
 }
 
@@ -1602,7 +1652,7 @@ function updatePlayer(dt) {
     if (pl.hanging) pl.pump += dt * 0.8;
     else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0)) * (campus ? 2 : 1);
     if (pl.problem && !pl.topped && uvDist(st, pl.u, pl.v, pl.problem.top.u, pl.problem.top.v) < 0.5) sendProblem(pl.problem);
-    if (pl.topped) { pl.topT += dt; if (pl.topT > 3) { letGo('down'); return; } }
+    if (pl.topped) { pl.topT += dt; if (pl.topT > (pl.topHoldMax || 3)) { letGo('down'); return; } }
     if (pl.pump >= 100) { pl.pump = 100; letGo('pump'); toast('펌핑 100%… 매트에서 쉬고 초크 바르고 다시!'); return; }
   } else if (pl.mode === 'air') {
     const st = pl.strip;
@@ -1617,7 +1667,7 @@ function updatePlayer(dt) {
         pl.mode = 'climb'; pl.u = r.h.u; pl.v = r.h.v - 0.05;
         Sound.grab(); Sound.tone(660, 0.12, 'triangle', 0.08, 0.02);
         me.say(pick(['잡았다!', '캐치!!', '휴…']), 1200);
-        if (r.h.dynoTarget) toast('🔥 다이노 성공!', 1400);
+        if (r.h.dynoTarget) { toast('🔥 다이노 성공!', 1400); westPraise('dyno', 400); }
         Net.sync(true);
       }
     }
@@ -1780,10 +1830,15 @@ function npcUpdate(n, dt, now) {
     g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(-s.n3.x, -s.n3.z), damp(8, dt));
     if (n.holdT > 0.9 + Math.random() * 0.4) {
       n.holdT = 0;
-      if (n.hold === p.holds.length - 1) {
+      if (n.hold === p.holds.length - 1 && !n.topPose) {
         fireConfetti(surf(st, h.u, h.v), 16);
         n.av.say(pick(LINES.npcTop), 1800);
         npcs.forEach((o) => { if (o !== n && o.state === 'idle' && Math.random() < 0.7) setTimeout(() => o.av.say(pick(LINES.cheer)), 400 + Math.random() * 600); });
+        n.holdT = -3.5; n.topPose = true;
+        if (west.state !== 'photo' && Math.random() < 0.6) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
+        else westPraise('top', 500);
+      } else if (n.topPose) {
+        n.topPose = false;
         n.state = 'drop'; n.vy = 1.2; n.dropT = 0;
       } else if (n.hold > 0 && Math.random() < 0.03 + p.level * 0.045) {
         n.av.say(pick(LINES.npcFall), 1600);
@@ -1875,6 +1930,7 @@ function payDone(method) {
   toast(`🧾 일일이용권 20,000원 결제 완료 (${method}) — 입장!`, 2600);
   staffSay(pick(['감사합니다~ 즐클하세요! 🔥', '오늘도 매운맛 등반 화이팅 🐯', '뛰지 말고, 초크는 적당히~']), 2600);
   setTimeout(() => me.say('들어갑니다~!', 1600), 600);
+  westPraise('enter', 3000);
   staff.state = 'thanks'; staff.next = performance.now() + 2200;
 }
 function setupPay() {
@@ -1897,6 +1953,7 @@ function setupPay() {
   }));
 }
 function staffCatch() {
+  westPraise('console', 3200);
   pl.vel.set(0, 0, 0); pl.runToggle = false; pl.stunT = 1.3;
   staffSay('잡았다!! 🐯 천천히 걸어 다녀요~', 2600);
   setTimeout(() => me.say('죄송합니다…', 1600), 700);
@@ -1908,9 +1965,11 @@ function onChalkUsed() {
   const now = Date.now();
   watch.chalks = watch.chalks.filter((t) => now - t < 15000);
   watch.chalks.push(now);
+  if (watch.chalks.length === 1 && Math.random() < 0.4) westPraise('chalk', 1800);
   if (watch.chalks.length >= 3 && paidToday() && (staff.state === 'patrol' || staff.state === 'thanks')) {
     staff.state = 'scold'; staff.replan = 0; staff.scoldT = 0;
     staffSay(STAFF_LINES.chalk[Math.min(watch.chalkNag++, STAFF_LINES.chalk.length - 1)], 3000);
+    westPraise('console', 3400);
     watch.chalks = [];
   }
 }
@@ -1968,6 +2027,126 @@ function updateStaff(dt, now) {
       break;
   }
   staff.av.update(dt);
+}
+
+// =================================================================
+// 🤠 웨스트 — 무호K와 정반대. 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
+// =================================================================
+const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [] };
+const WEST_LINES = {
+  photo: ['찰칵! 📸 인생샷 건졌다 🤠', '이 각도 미쳤다 📸', '프로필 사진 각이에요!', '완등 기념샷 찰칵~ 🤠'],
+  top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
+  climb: ['가보자고~!! 🤠', '발 좋다 발 좋다!', '자세 너무 좋아요!', '거의 다 왔어요!', '호흡 천천히~ 할 수 있어!'],
+  fall: ['괜찮아요! 떨어지는 것도 등반이에요 🤠', '방금 무브 진짜 좋았는데!', '다음엔 무조건 돼요!', '시도한 게 멋있는 거예요 👍'],
+  console: ['괜찮아요~ 무호가 원래 저래요 🤠', '무호 말투만 저래요 ㅎㅎ 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
+  dyno: ['다이노 미쳤다!!! 🤠', '날았다!! 슈퍼맨인 줄', '저 점프력 뭐예요?!'],
+  yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
+  campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
+  hang: ['버티기 장인 🤠', '악력 실화예요?'],
+  sit: ['쉬는 것도 훈련이에요~ 🤠', '천천히 쉬어요, 벽은 안 도망가요'],
+  enter: ['어서와요~ 무호 무섭죠? ㅎㅎ 🤠', '입장 축하해요! 오늘 재밌게 놀아요'],
+  chalk: ['초크 바르는 폼이 프로네 🤠', '그 박수 소리 좋다 ㅋㅋ'],
+};
+function westSay(text, ms = 2600, important = false) {
+  if (!west.av) return;
+  west.av.say(text, ms);
+  if (important && me && west.av.group.position.distanceTo(me.group.position) > 9) toast(`🤠 웨스트: ${text}`, 2200);
+}
+function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo') setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600, kind === 'console'), delay); }
+function westGo(pt, speed) { const g = west.av.group; west.path = planPath([g.position.x, g.position.z], pt); west.speed = speed; }
+function makeWest() {
+  west.av = new Avatar('웨스트', '#3d7bd9', { cowboy: true });
+  const st = m([420, 820]);
+  west.av.group.position.set(st[0], groundY(st[0], st[1]), st[1]);
+}
+// 완등한 사람(av)을 찍으러 달려감. normal: 벽 바깥 방향
+function westPhoto(av, label, normal) {
+  if (!west.av || west.state === 'photo') return;
+  const P = av.group.position;
+  let dir = normal ? new V3(normal.x, 0, normal.z) : new V3(west.av.group.position.x - P.x, 0, west.av.group.position.z - P.z);
+  if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
+  dir.normalize();
+  let tx = P.x + dir.x * 3.0, tz = P.z + dir.z * 3.0;
+  for (let k = 0; k < 20 && !walkable(tx, tz); k++) { tx -= dir.x * 0.15; tz -= dir.z * 0.15; }
+  westGo([tx, tz], 7);
+  west.state = 'photo'; west.subject = av; west.label = label; west.shotT = 0;
+  westSay(pick(['잠깐!! 사진 찍어줄게요 📸', '그대로 멈춰요~ 📸', '완등샷 각!! 🤠']), 1800);
+}
+function updateWest(dt, now) {
+  if (!west.av) return;
+  const g = west.av.group;
+  if (west.path.length) {
+    const tgt = west.path[0];
+    const dx = tgt[0] - g.position.x, dz = tgt[1] - g.position.z, d = Math.hypot(dx, dz);
+    if (d < 0.12) west.path.shift();
+    else {
+      const sp = Math.min(d, west.speed * dt);
+      g.position.x += (dx / d) * sp; g.position.z += (dz / d) * sp;
+      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(dx, dz), damp(12, dt));
+    }
+  }
+  g.position.y = lerp(g.position.y, groundY(g.position.x, g.position.z), damp(14, dt));
+  if (west.state === 'roam') {
+    if (!west.path.length && now > west.next) { westGo(pick(STAFF_PATROL), 1.5); west.next = now + 6000 + Math.random() * 7000; }
+    // 벽에 붙은 플레이어 응원
+    if ((pl.mode === 'climb') && (west.cheerT -= dt) <= 0) {
+      west.cheerT = 6 + Math.random() * 4;
+      if (g.position.distanceTo(me.group.position) < 9) westSay(pick(WEST_LINES.climb), 2200);
+    }
+  } else if (west.state === 'photo') {
+    west.shotT += dt;
+    const S = west.subject.group.position;
+    const arrived = !west.path.length;
+    if (arrived || west.shotT > 2.2) {
+      west.path = [];
+      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(S.x - g.position.x, S.z - g.position.z), damp(10, dt));
+      west.av.photoPose = true;
+      if (!west.posedAt) west.posedAt = now;
+      if (now - west.posedAt > 600 && !west.shotPending && !west.shotDone) west.shotPending = true;
+      if (west.shotDone && now - west.posedAt > 2200) {
+        west.av.photoPose = false; west.posedAt = 0; west.shotDone = false;
+        west.state = 'roam'; west.next = now + 1500;
+      }
+    }
+  }
+  west.av.update(dt);
+}
+// 렌더 직후 호출: 웨스트 시점으로 한 장 찍기
+const photoCam = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+function takeWestShot() {
+  west.shotPending = false; west.shotDone = true;
+  const S = west.subject.group.position;
+  const from = west.av.group.position.clone().add(new V3(0, 1.25, 0));
+  const look = S.clone().add(new V3(0, 0.8, 0));
+  photoCam.aspect = renderer.domElement.width / renderer.domElement.height;
+  photoCam.position.copy(from); photoCam.lookAt(look); photoCam.updateProjectionMatrix();
+  const vis = west.av.group.visible;
+  west.av.group.visible = false;
+  renderer.render(scene, photoCam);
+  west.av.group.visible = vis;
+  const src = renderer.domElement;
+  const H = src.height, W = Math.round(H * 0.8);
+  const c = document.createElement('canvas'); c.width = 480; c.height = 600;
+  c.getContext('2d').drawImage(src, (src.width - W) / 2, 0, W, H, 0, 0, 480, 600);
+  const url = c.toDataURL('image/jpeg', 0.85);
+  renderer.render(scene, camera);
+  // 플래시 + 셔터
+  const fl = $('#flash'); fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on');
+  Sound.tone(2600, 0.04, 'square', 0.05); Sound.tone(1200, 0.06, 'square', 0.04, 0.06);
+  westSay(pick(WEST_LINES.photo), 2600, true);
+  west.photos.unshift({ url, label: west.label, t: Date.now() });
+  if (west.photos.length > 8) west.photos.length = 8;
+  showPolaroid(url, west.label);
+}
+let polaroidT;
+function showPolaroid(url, label) {
+  const el = $('#polaroid');
+  el.querySelector('img').src = url;
+  el.querySelector('.pol-cap').textContent = label;
+  const a = el.querySelector('a'); a.href = url; a.download = `spicy-west-${Date.now()}.jpg`;
+  el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(polaroidT);
+  polaroidT = setTimeout(() => { if (!el.matches(':hover')) el.hidden = true; }, 9000);
 }
 
 // =================================================================
@@ -2116,6 +2295,14 @@ function renderRecords() {
       li.append(dot, tx, tm); ul.appendChild(li);
     });
   }
+  const alb = $('#album');
+  alb.innerHTML = west.photos.length ? '' : '<p class="empty">완등하면 웨스트가 달려와서 찍어줘요 🤠📸</p>';
+  west.photos.forEach((ph) => {
+    const a = document.createElement('a'); a.href = ph.url; a.download = `spicy-west-${ph.t}.jpg`; a.className = 'album-item';
+    const img = document.createElement('img'); img.src = ph.url; img.alt = ph.label;
+    const cap = document.createElement('span'); cap.textContent = ph.label;
+    a.append(img, cap); alb.appendChild(a);
+  });
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
   $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
@@ -2161,6 +2348,7 @@ function drawMinimap() {
   npcs.forEach((n) => { const [x, y] = P(n.av.group.position.x, n.av.group.position.z); g.fillStyle = n.av.color; g.beginPath(); g.arc(x, y, 7, 0, 7); g.fill(); });
   Net.peers.forEach((p) => { const [x, y] = P(p.av.group.position.x, p.av.group.position.z); g.fillStyle = p.av.color; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke(); });
   if (staff.av) { const [sx, sy] = P(staff.av.group.position.x, staff.av.group.position.z); g.font = '26px sans-serif'; g.fillText('🐯', sx, sy); }
+  if (west.av) { const [wx, wy] = P(west.av.group.position.x, west.av.group.position.z); g.font = '26px sans-serif'; g.fillText('🤠', wx, wy); }
   const [x, y] = P(me.group.position.x, me.group.position.z);
   const a = me.group.rotation.y;
   g.save(); g.translate(x, y); g.rotate(-a + Math.PI);
@@ -2265,6 +2453,7 @@ const Net = {
       fireConfetti(p.av.group.position.clone().add(new V3(0, 1.4, 0)), 22);
       addFeed(p.name, prob, false);
       toast(`🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 2200);
+      westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
       npcs.forEach((n, k) => { if (n.state === 'idle' && Math.random() < 0.6) setTimeout(() => n.av.say(pick(LINES.cheer)), 400 + k * 400); });
     }
     if (d.type === 'bump' && d.to === this.id) { p.av.say('💥 앗 죄송해요!', 2200); toast(`${p.name}님과 부딪혔어요! 선출발자인 당신은 무사 😎`, 2400); }
@@ -2360,6 +2549,7 @@ function loop() {
   updateEtiquette(dt);
   updateSitNag(dt);
   updateStaff(dt, now);
+  updateWest(dt, now);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
     if (idle.length) {
@@ -2375,6 +2565,7 @@ function loop() {
   updateHud(dt);
   Net.sync(false);
   renderer.render(scene, camera);
+  if (west.shotPending) takeWestShot();
   requestAnimationFrame(loop);
 }
 let chatNext = performance.now() + 5000;
@@ -2419,7 +2610,9 @@ async function enterGym(name, color) {
   me.group.position.copy(pl.pos);
   me.group.rotation.y = pl.yaw;
   makeStaff();
+  makeWest();
   setupPay();
+  $('#polaroid .pol-close').addEventListener('click', () => { $('#polaroid').hidden = true; });
   setTimeout(() => { toast('🐯 무호K가 누구보다 빠르게 입구로 달려오는 중…', 2200); staffRushToEntry(staffArrivedForPlayer); }, 900);
   setupInput();
   drawMinimapStatic();
@@ -2466,7 +2659,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { get me() { return me; }, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
