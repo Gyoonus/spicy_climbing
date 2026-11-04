@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>스파이시 클라이밍 · 온라인 암장</title>
+  <meta name="description" content="빨간 불꽃이와 함께 벽을 오르는 온라인 클라이밍장. 문제를 고르고, 초크 바르고, 완등하세요." />
+  <meta name="theme-color" content="#0d0d0d" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Sedgwick+Ave+Display&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 입구 -->
+  <main id="intro" class="intro">
+    <div class="intro-inner">
+      <svg class="intro-mascot" viewBox="0 0 100 100" aria-hidden="true">
+        <use href="#flame-shape" fill="#e3262b" />
+        <circle cx="38" cy="60" r="4.2" fill="#1a0a06" />
+        <circle cx="62" cy="60" r="4.2" fill="#1a0a06" />
+        <path d="M42 72 q4 -4 8 0 q4 4 8 0" fill="none" stroke="#1a0a06" stroke-width="2.6" stroke-linecap="round" />
+      </svg>
+      <h1 class="logo">SPICY</h1>
+      <p class="intro-sub">스파이시 클라이밍 · 온라인 암장</p>
+      <p class="intro-desc">퇴근하고 몸이 무거운 날,<br />매운맛 벽 앞에서 잠깐 손끝을 데워요.</p>
+
+      <form id="enter-form" class="enter-form" autocomplete="off">
+        <label class="field">
+          <span>닉네임</span>
+          <input id="nickname" maxlength="8" placeholder="불꽃이" required />
+        </label>
+        <fieldset class="field">
+          <legend>내 불꽃 색</legend>
+          <div class="swatches" id="swatches"></div>
+        </fieldset>
+        <button class="btn btn-primary btn-lg" type="submit">암장 입장하기 🔥</button>
+      </form>
+      <p class="intro-foot">신발은 벗고, 초크는 넉넉히.</p>
+    </div>
+  </main>
+
+  <!-- 암장 -->
+  <div id="gym" class="gym" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <svg viewBox="0 0 100 100" class="brand-icon" aria-hidden="true"><use href="#flame-shape" fill="#e3262b" /></svg>
+        <span class="brand-name">SPICY</span>
+        <span class="brand-sub">온라인 암장</span>
+      </div>
+      <div class="top-actions">
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="소리 켜기/끄기">🔈</button>
+        <button id="btn-records" class="icon-btn" type="button">📋 <span class="hide-sm">내 기록</span></button>
+      </div>
+    </header>
+
+    <div class="wall-wrap" id="wall-wrap">
+      <svg id="wall" viewBox="0 0 1200 720" role="img" aria-label="스파이시 클라이밍 볼더링 벽"></svg>
+    </div>
+
+    <section class="controls">
+      <div class="problems" id="problems" role="list"></div>
+
+      <div class="status-row">
+        <div class="current" id="current">문제를 골라주세요</div>
+        <div class="pump" aria-label="펌핑 게이지">
+          <div class="pump-label"><span>펌핑</span><b id="pump-val">0%</b></div>
+          <div class="pump-bar"><div class="pump-fill" id="pump-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btn-chalk" class="btn" type="button">🤍 초크</button>
+        <button id="btn-down" class="btn" type="button">⬇️ 내려오기</button>
+        <form id="chat-form" class="chat" autocomplete="off">
+          <input id="chat-input" maxlength="24" placeholder="한마디 하기 (예: 가자!)" />
+          <button class="btn btn-primary" type="submit">말하기</button>
+        </form>
+      </div>
+      <p class="tip">반짝이는 홀드를 순서대로 눌러 오르세요. 펌핑이 100%가 되면 떨어져요 — 초크로 숨 돌리고, 매트에서 쉬면 회복돼요.</p>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <dialog id="records" class="records">
+    <form method="dialog" class="records-inner">
+      <h2>내 완등 기록</h2>
+      <p class="records-summary" id="records-summary"></p>
+      <ul class="records-list" id="records-list"></ul>
+      <h3>최근 완등</h3>
+      <ol class="records-recent" id="records-recent"></ol>
+      <div class="records-actions">
+        <button class="btn" type="button" id="btn-reset">기록 초기화</button>
+        <button class="btn btn-primary" value="close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 공용 불꽃 모양 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <path id="flame-shape" d="M50 4 C57 17 63 21 70 15 C71 27 77 30 85 24 C81 39 93 50 91 67 C89 86 72 96 50 96 C28 96 11 86 9 67 C7 50 19 39 15 24 C23 30 29 27 30 15 C37 21 43 17 50 4 Z" />
+    </defs>
+  </svg>
+
+  <script src="app.js"></script>
+</body>
+</html>
