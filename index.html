@@ -2,9 +2,9 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>스파이시 클라이밍 · 온라인 암장</title>
-  <meta name="description" content="빨간 불꽃이와 함께 벽을 오르는 온라인 클라이밍장. 문제를 고르고, 초크 바르고, 완등하세요." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>스파이시 클라이밍 · 3D 온라인 암장</title>
+  <meta name="description" content="스파이시 클라이밍 암장을 3D로 걸어 다니며 벽을 오르고, 다이노로 날아보는 온라인 클라이밍장." />
   <meta name="theme-color" content="#0d0d0d" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,8 +23,8 @@
         <path d="M42 72 q4 -4 8 0 q4 4 8 0" fill="none" stroke="#1a0a06" stroke-width="2.6" stroke-linecap="round" />
       </svg>
       <h1 class="logo">SPICY</h1>
-      <p class="intro-sub">스파이시 클라이밍 · 온라인 암장</p>
-      <p class="intro-desc">퇴근하고 몸이 무거운 날,<br />매운맛 벽 앞에서 잠깐 손끝을 데워요.</p>
+      <p class="intro-sub">스파이시 클라이밍 · 3D 온라인 암장</p>
+      <p class="intro-desc">신발 벗고 들어와서 섹터를 돌아다니다가,<br />마음에 드는 벽에 붙어 오르고 다이노로 날아보세요.</p>
 
       <form id="enter-form" class="enter-form" autocomplete="off">
         <label class="field">
@@ -37,86 +37,100 @@
         </fieldset>
         <button class="btn btn-primary btn-lg" type="submit">암장 입장하기 🔥</button>
       </form>
-      <p class="intro-foot">신발은 벗고, 초크는 넉넉히.</p>
+      <ul class="intro-keys">
+        <li><b>WASD</b> 이동 · <b>드래그</b> 시점 · <b>휠</b> 줌</li>
+        <li><b>E</b> 벽 잡기/내려오기 · <b>Space</b> 점프</li>
+        <li>벽에서 <b>Space 꾹 → 떼기</b> = 다이노 · <b>C</b> 초크</li>
+      </ul>
     </div>
   </main>
 
-  <!-- 암장 -->
-  <div id="gym" class="gym" hidden>
-    <header class="topbar">
+  <!-- 3D 암장 -->
+  <div id="game" class="game" hidden>
+    <div id="scene" class="scene"></div>
+
+    <header class="hud-top">
       <div class="brand">
         <svg viewBox="0 0 100 100" class="brand-icon" aria-hidden="true"><use href="#flame-shape" fill="#e3262b" /></svg>
         <span class="brand-name">SPICY</span>
-        <span class="brand-sub">온라인 암장</span>
       </div>
       <div class="top-actions">
         <span id="online" class="online" data-state="connecting">연결 중…</span>
-        <button id="btn-music" class="icon-btn" type="button" aria-label="배경음악 켜기/끄기">🎵 <span class="hide-sm">음악</span></button>
-        <button id="btn-sound" class="icon-btn" type="button" aria-label="소리 켜기/끄기">🔈</button>
-        <button id="btn-records" class="icon-btn" type="button">📋 <span class="hide-sm">내 기록</span></button>
+        <button id="btn-chat" class="icon-btn only-touch" type="button" aria-label="말하기">💬</button>
+        <button id="btn-music" class="icon-btn" type="button" aria-label="배경음악">🎵</button>
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="효과음">🔈</button>
+        <button id="btn-records" class="icon-btn" type="button">📋 <span class="hide-sm">문제·기록</span></button>
       </div>
     </header>
 
-    <div class="wall-wrap" id="wall-wrap">
-      <svg id="wall" viewBox="0 0 1200 720" role="img" aria-label="스파이시 클라이밍 볼더링 벽"></svg>
+    <canvas id="minimap" class="minimap" width="300" height="416" aria-label="암장 지도"></canvas>
+
+    <div id="status" class="status">
+      <div id="status-title" class="status-title"></div>
+      <div id="pump" class="pump">
+        <span>펌핑</span>
+        <div class="pump-bar"><div id="pump-fill" class="pump-fill"></div></div>
+        <b id="pump-val">0%</b>
+      </div>
     </div>
 
-    <section class="controls">
-      <div class="problems" id="problems" role="list"></div>
+    <div id="prompt" class="prompt"></div>
 
-      <div class="status-row">
-        <div class="current" id="current">문제를 골라주세요</div>
-        <div class="pump" aria-label="펌핑 게이지">
-          <div class="pump-label"><span>펌핑</span><b id="pump-val">0%</b></div>
-          <div class="pump-bar"><div class="pump-fill" id="pump-fill"></div></div>
-        </div>
-      </div>
+    <div id="joystick" class="joystick only-touch" aria-hidden="true"><div class="knob"></div></div>
 
-      <div class="actions">
-        <button id="btn-chalk" class="btn" type="button">🤍 초크</button>
-        <button id="btn-down" class="btn" type="button">⬇️ 내려오기</button>
-        <form id="chat-form" class="chat" autocomplete="off">
-          <input id="chat-input" maxlength="24" placeholder="한마디 하기 (예: 가자!)" />
-          <button class="btn btn-primary" type="submit">말하기</button>
-        </form>
-      </div>
-      <p class="tip" id="tip">반짝이는 홀드를 순서대로 눌러 오르세요. 펌핑이 100%가 되면 떨어져요 — 초크로 숨 돌리고, 매트에서 쉬면 회복돼요.</p>
-    </section>
+    <div class="hud-buttons">
+      <button id="btn-chalk" class="hud-btn" type="button">🤍<span>초크 <kbd>C</kbd></span></button>
+      <button id="btn-grab" class="hud-btn" type="button">✋<span id="grab-label">잡기 <kbd>E</kbd></span></button>
+      <button id="btn-jump" class="hud-btn big" type="button">🔥<span id="jump-label">점프 <kbd>Space</kbd></span></button>
+    </div>
 
-    <section class="festival" id="festival">
-      <div class="fest-main">
-        <div class="fest-poster">
-          <svg viewBox="0 0 100 100" class="fest-flame" aria-hidden="true">
-            <use href="#flame-shape" fill="#e3262b" />
-            <circle cx="38" cy="60" r="4.2" fill="#1a0a06" /><circle cx="62" cy="60" r="4.2" fill="#1a0a06" />
-            <path d="M42 72 q4 -4 8 0 q4 4 8 0" fill="none" stroke="#1a0a06" stroke-width="2.6" stroke-linecap="round" />
-          </svg>
-          <div>
-            <p class="fest-kicker">SPICY</p>
-            <h2 class="fest-title">OPEN FESTIVAL</h2>
-            <p class="fest-sub">온라인 오픈 페스티벌 · 스탬프 투어</p>
-          </div>
-        </div>
-        <p class="fest-desc">6개 문제를 모두 완등해서 스탬프를 모으면 페스티벌 완주 배지를 드려요.</p>
-        <div class="stamps" id="stamps"></div>
-        <p class="fest-status" id="fest-status"></p>
-      </div>
-      <div class="feed">
-        <h3>실시간 완등 피드</h3>
-        <ul id="feed"><li class="empty">아직 완등 소식이 없어요. 첫 테이프를 끊어보세요!</li></ul>
-      </div>
-    </section>
+    <form id="chat-form" class="chat" autocomplete="off">
+      <input id="chat-input" maxlength="24" placeholder="Enter로 한마디 (예: 가자!)" />
+      <button class="btn btn-primary" type="submit">말하기</button>
+    </form>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="loading" id="loading">암장 불 켜는 중…</div>
   </div>
 
   <dialog id="records" class="records">
     <form method="dialog" class="records-inner">
-      <h2>내 완등 기록</h2>
+      <div class="rec-head">
+        <h2>문제 · 기록</h2>
+        <button class="icon-btn" value="close" aria-label="닫기">✕</button>
+      </div>
+
+      <section class="fest">
+        <div class="fest-poster">
+          <svg viewBox="0 0 100 100" class="fest-flame" aria-hidden="true">
+            <use href="#flame-shape" fill="#e3262b" />
+            <circle cx="38" cy="60" r="4.2" fill="#1a0a06" /><circle cx="62" cy="60" r="4.2" fill="#1a0a06" />
+          </svg>
+          <div>
+            <p class="fest-kicker">SPICY</p>
+            <h3 class="fest-title">OPEN FESTIVAL</h3>
+            <p class="fest-sub">섹터 스탬프 투어 — 6개 구역에서 한 문제씩 완등!</p>
+          </div>
+        </div>
+        <div class="stamps" id="stamps"></div>
+        <p class="fest-status" id="fest-status"></p>
+      </section>
+
+      <h3 class="rec-h">문제 목록 <small>‘안내’를 누르면 시작 홀드까지 깃발이 떠요</small></h3>
+      <div id="problem-list" class="problem-list"></div>
+
+      <h3 class="rec-h">🚦 암장 매너 <small>벽 위 교통사고를 피하는 법</small></h3>
+      <ul class="manners">
+        <li><b>선출발자 우선</b> — 이미 오르는 사람이 있으면 루트가 겹칠 때 기다려요</li>
+        <li><b>붙기 전에 확인</b> — 옆 사람 동선을 보고 출발! 새치기하면 매너 온도 −1</li>
+        <li><b>부딪히면</b> — 늦게 출발한 쪽이 추락 💥 · ‘죄송합니다’ 하면 온도 회복</li>
+        <li><b>양보하기</b> — 겹치면 먼저 내려오는 게 안전하고 멋져요 · 온도 +0.5</li>
+      </ul>
+
+      <h3 class="rec-h">실시간 완등 피드</h3>
+      <ul id="feed" class="feed"><li class="empty">아직 완등 소식이 없어요. 첫 테이프를 끊어보세요!</li></ul>
+
       <p class="records-summary" id="records-summary"></p>
-      <ul class="records-list" id="records-list"></ul>
-      <h3>최근 완등</h3>
-      <ol class="records-recent" id="records-recent"></ol>
       <div class="records-actions">
         <button class="btn" type="button" id="btn-reset">기록 초기화</button>
         <button class="btn btn-primary" value="close">닫기</button>
@@ -124,7 +138,6 @@
     </form>
   </dialog>
 
-  <!-- 공용 불꽃 모양 -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <path id="flame-shape" d="M50 4 C57 17 63 21 70 15 C71 27 77 30 85 24 C81 39 93 50 91 67 C89 86 72 96 50 96 C28 96 11 86 9 67 C7 50 19 39 15 24 C23 30 29 27 30 15 C37 21 43 17 50 4 Z" />
@@ -132,6 +145,6 @@
   </svg>
 
   <script src="vendor/mqtt.min.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
