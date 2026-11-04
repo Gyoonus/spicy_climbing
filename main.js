@@ -802,7 +802,7 @@ class Avatar {
   }
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
   squash() { this.squashT = 0.45; }
-  chalk() { this.chalkT = 1; this.puffed = false; this.chalkyT = 25; }
+  chalk() { this.chalkDur = this.climbing ? 1.0 : 1.5; this.chalkT = this.chalkDur; this.puffed = false; this.clapIdx = 0; this.chalkyT = 25; }
   say(text, ms = 2800) {
     if (this.bubble) { this.group.remove(this.bubble); disposeSprite(this.bubble); }
     clearTimeout(this.bubbleT);
@@ -838,7 +838,7 @@ class Avatar {
     this.rig.position.y = 0; this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
     // 초크: 0~0.45 초크백에 손 넣기, 0.45~1 박수 짝!
     if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
-    const ck = this.chalkT > 0 ? 1 - this.chalkT : -1;
+    const ck = this.chalkT > 0 ? this.chalkDur - this.chalkT : -1;
     if (this.chalkyT > 0) this.chalkyT -= dt;
     this.skin.color.set('#ffe3cc').lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
     if (this.climbing && this.grips) {
@@ -874,14 +874,34 @@ class Avatar {
       this.rig.rotation.x = run * 0.22;
       this.head.rotation.z = Math.sin(this.phase) * 0.06 * Math.min(sp, 1);
     }
-    if (ck >= 0 && !(this.climbing && this.grips)) {
-      if (ck < 0.45) { this.limbRot(la, 0.95, -0.25); this.limbRot(ra, 0.95, 0.25); }
-      else { const c = Math.sin((ck - 0.45) * 28) * 0.18; this.limbRot(la, -1.35, 0.5 + c); this.limbRot(ra, -1.35, -0.5 - c); }
+    const onWall = this.climbing && this.grips;
+    if (ck >= 0 && !onWall) {
+      // 초크백에 손 넣기 → 쫙! 쫙! 팡!!
+      if (ck < 0.35) { this.limbRot(la, 0.95, -0.25); this.limbRot(ra, 0.95, 0.25); }
+      else {
+        let pulse = 0;
+        CLAPS.forEach((tc) => { pulse = Math.max(pulse, Math.exp(-(((ck - tc) / 0.06) ** 2))); });
+        const th = 0.78 * pulse - 0.15 * (1 - pulse), lift = -1.25 - 0.3 * pulse;
+        this.limbRot(la, lift, th); this.limbRot(ra, lift, -th);
+        sy *= 1 - 0.07 * pulse; sx *= 1 + 0.04 * pulse;
+        this.head.rotation.x = -0.12 * pulse;
+      }
     }
-    if (ck >= 0.5 && !this.puffed) {
-      this.puffed = true;
-      this.limbs[this.climbing && this.grips ? 1 : 0].end.getWorldPosition(tmpV);
-      chalkPuff(tmpV.clone(), 18);
+    if (ck >= 0) {
+      if (onWall) {
+        if (ck >= 0.5 && !this.puffed) {
+          this.puffed = true;
+          this.limbs[1].end.getWorldPosition(tmpV);
+          chalkBurst(tmpV.clone(), 14, 1.0);
+          popText('후~', tmpV.clone().add(new V3(0, 0.2, 0)), 0.24);
+        }
+      } else {
+        while (this.clapIdx < CLAPS.length && ck >= CLAPS[this.clapIdx]) {
+          const i = this.clapIdx++;
+          const a = this.limbs[0].end.getWorldPosition(new V3()), b = this.limbs[1].end.getWorldPosition(new V3());
+          chalkClap(this, i, a.lerp(b, 0.5));
+        }
+      }
     }
     this.rig.scale.set(sx, sy, sx);
     this.shadow.position.set(p.x, 0.015, p.z);
@@ -928,11 +948,106 @@ function updateParticles(dt) {
     p.life += dt;
     if (p.life >= p.max) { scene.remove(p.sp); p.sp.material.dispose(); particles.splice(i, 1); continue; }
     p.vel.y += p.g * dt;
-    p.vel.multiplyScalar(0.985);
+    if (p.drag) p.vel.multiplyScalar(Math.exp(-p.drag * dt)); else p.vel.multiplyScalar(0.985);
     p.sp.position.addScaledVector(p.vel, dt);
-    if (p.grow) p.sp.scale.addScalar(p.grow * dt);
-    p.sp.material.opacity = Math.min(1, (1 - p.life / p.max) * 2);
+    if (p.pop) p.sp.scale.copy(p.base).multiplyScalar(p.life < 0.12 ? 0.4 + (p.life / 0.12) * 0.9 : 1.3 - Math.min(0.3, (p.life - 0.12) * 1.5));
+    else if (p.grow) p.sp.scale.addScalar(p.grow * dt);
+    p.sp.material.opacity = (p.alpha ?? 1) * Math.min(1, (1 - p.life / p.max) * 2);
   }
+  for (let i = floorMarks.length - 1; i >= 0; i--) {
+    const fm = floorMarks[i];
+    fm.t += dt;
+    fm.mesh.material.opacity = 0.75 * clamp(1 - (fm.t - 15) / 10, 0, 1);
+    if (fm.t > 25) { scene.remove(fm.mesh); fm.mesh.material.dispose(); floorMarks.splice(i, 1); }
+  }
+}
+
+// ----- 초크 쫙쫙 팡팡 -----
+const CLAPS = [0.5, 0.78, 1.1];
+const floorMarks = [];
+const ringTex = canvasTex(128, 128, (g) => { g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 10; g.shadowColor = '#fff'; g.shadowBlur = 12; g.beginPath(); g.arc(64, 64, 50, 0, Math.PI * 2); g.stroke(); });
+const blotchTex = canvasTex(128, 128, (g) => {
+  const r = mulberry(7);
+  for (let i = 0; i < 26; i++) {
+    const x = 64 + (r() - 0.5) * 70, y = 64 + (r() - 0.5) * 70, rad = 6 + r() * 22;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  }
+});
+Sound.clap = function (big, vol = 1) {
+  this.tone(big ? 900 : 1500, 0.05, 'square', 0.06 * vol);
+  this.tone(big ? 170 : 260, big ? 0.2 : 0.07, 'triangle', 0.14 * vol, 0, -70);
+  if (big) this.tone(2400, 0.12, 'sawtooth', 0.025 * vol, 0.02, -1800);
+};
+function chalkBurst(pos, n, power) {
+  for (let i = 0; i < n; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false }));
+    sp.position.copy(pos);
+    sp.scale.setScalar(0.06 + Math.random() * 0.1);
+    scene.add(sp);
+    const d = new V3(Math.random() - 0.5, Math.random() - 0.35, Math.random() - 0.5).normalize();
+    particles.push({ sp, vel: d.multiplyScalar(power * (1.5 + Math.random() * 2.5)), g: -0.25, drag: 3.2, life: 0, max: 1.2 + Math.random() * 1.2, grow: 0.35 * power, alpha: 0.95 });
+  }
+  // 둥실 초크 구름
+  for (let i = 0; i < Math.round(n / 5); i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false }));
+    sp.position.copy(pos).add(new V3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.3));
+    sp.scale.setScalar(0.3 + Math.random() * 0.3 * power);
+    scene.add(sp);
+    particles.push({ sp, vel: new V3((Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, (Math.random() - 0.5) * 0.6), g: 0, drag: 0.8, life: 0, max: 2.2 + Math.random() * 1.3, grow: 0.3 * power, alpha: 0.42 });
+  }
+}
+function popText(text, pos, h) {
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d');
+  const font = '64px "Black Han Sans", sans-serif';
+  g.font = font;
+  const w = Math.ceil(g.measureText(text).width + 30);
+  c.width = w; c.height = 90;
+  g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 10; g.strokeStyle = '#e3262b'; g.lineJoin = 'round';
+  g.strokeText(text, w / 2, 48); g.fillStyle = '#fff'; g.fillText(text, w / 2, 48);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+  sp.renderOrder = 12;
+  sp.position.copy(pos).add(new V3((Math.random() - 0.5) * 0.3, 0, 0));
+  const base = new V3((w / 90) * h, h, 1);
+  sp.scale.copy(base);
+  scene.add(sp);
+  particles.push({ sp, vel: new V3(0, 0.9, 0), g: 0, drag: 2, life: 0, max: 0.85, pop: true, base, alpha: 1 });
+}
+function shockRing(pos, size) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false }));
+  sp.position.copy(pos); sp.scale.setScalar(0.15);
+  scene.add(sp);
+  particles.push({ sp, vel: new V3(), g: 0, drag: 0, life: 0, max: 0.4, grow: size * 4.5, alpha: 0.9 });
+}
+function floorMark(pos) {
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: blotchTex, transparent: true, depthWrite: false, opacity: 0.75 }));
+  mesh.rotation.x = -Math.PI / 2; mesh.rotation.z = Math.random() * 6;
+  mesh.position.set(pos.x + (Math.random() - 0.5) * 0.3, 0.02 + floorMarks.length * 0.0005, pos.z + (Math.random() - 0.5) * 0.3);
+  mesh.scale.setScalar(0.9 + Math.random() * 0.7);
+  scene.add(mesh);
+  floorMarks.push({ mesh, t: 0 });
+  if (floorMarks.length > 25) { const o = floorMarks.shift(); scene.remove(o.mesh); o.mesh.material.dispose(); }
+}
+function chalkClap(av, i, pos) {
+  const big = i === CLAPS.length - 1;
+  chalkBurst(pos, big ? 48 : 16, big ? 2.4 : 1.2);
+  popText(big ? '팡!!' : '쫙!', pos.clone().add(new V3(0, 0.3, 0)), big ? 0.42 : 0.28);
+  shockRing(pos, big ? 2.2 : 0.9);
+  const dist = me ? me.group.position.distanceTo(pos) : 0;
+  Sound.clap(big, av === me ? 1 : clamp(1 - dist / 12, 0, 0.6));
+  if (!big) return;
+  if (av === me) camCtl.shake = 0.12;
+  if (av.group.position.y < 0.05) floorMark(av.group.position);
+  // 주변 사람 기침
+  const near = [...npcs.map((n) => n.av), ...[...Net.peers.values()].map((p) => p.av), me].filter((o) => o && o !== av && o.group.position.distanceTo(pos) < 2.8);
+  near.forEach((o, k) => {
+    if (o === me ? Math.random() < 0.6 : Math.random() < 0.75) {
+      setTimeout(() => o.say(pick(['콜록콜록 😷', '먼지 미쳤다 ㅋㅋ', '초크 아껴 써요~', '눈에 들어갔어!', '에취!']), 1800), 350 + k * 300);
+    }
+  });
 }
 
 // =================================================================
@@ -1060,14 +1175,56 @@ function toggleSit() {
   if (pl.pos.y > 0.01) return;
   pl.sitting = !pl.sitting;
   me.sitting = pl.sitting;
+  if (!pl.sitting) { onStandUp(); Net.sync(true); return; }
   if (pl.sitting) {
+    pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3;
     me.say(pick(['휴~', '잠깐 쉬어갈게요', '매트 최고…', '팔 털어야지']), 1600);
     const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 4);
     if (n) setTimeout(() => n.av.say(pick(['같이 쉬어요~', '물 마실래요?', '오늘 몇 개 깼어요?'])), 900);
   }
   Net.sync(true);
 }
-function standUp() { if (!pl.sitting) return; pl.sitting = false; me.sitting = false; Net.sync(true); }
+function standUp() { if (!pl.sitting) return; pl.sitting = false; me.sitting = false; onStandUp(); Net.sync(true); }
+// ----- 앉아만 있으면 잔소리 -----
+const NAGS = [
+  '쉬는 거 좋지~ 근데 너무 오래 쉬는 거 아냐?',
+  '너는 맨날 앉아서 쉬냐? 등반은 언제 할래?',
+  '매트 지박령 등장 👻',
+  '여기 매트 대여료 받습니다 💸',
+  '노랑 V0라도 하나 하자… 응?',
+];
+const NAGS_MORE = ['등반은 언제 할래?', '엉덩이에 뿌리 내리겠다 🌱', '펌핑 다 풀렸잖아 ㅋㅋ', '오늘 몇 개 깼어? …0개?',
+  '사장님 여기 앉아만 있는 사람 있어요', '초크값은 냈니?', '암장에 쉬러 왔어? ㅋㅋㅋ', '눈 감으면 잔다 진짜'];
+function nagger() {
+  const pos = me.group.position;
+  const idle = npcs.filter((n) => n.state === 'idle').sort((a, b) => a.av.group.position.distanceTo(pos) - b.av.group.position.distanceTo(pos));
+  return idle[0] || null;
+}
+function updateSitNag(dt) {
+  if (!pl.sitting) return;
+  pl.sitT += dt;
+  if (pl.sitT < pl.nagNext) return;
+  const n = nagger();
+  pl.nagNext = pl.sitT + 8 + Math.random() * 5;
+  if (!n) return;
+  const line = pl.nagN < NAGS.length ? NAGS[pl.nagN] : pick(NAGS_MORE);
+  pl.nagN++;
+  const g = n.av.group;
+  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
+  n.av.sitting = false;
+  setTimeout(() => { if (n.state === 'idle') n.av.sitting = true; }, 3500);
+  n.av.say(line, 3200);
+  if (pl.nagN === 3) setTimeout(() => toast('🏅 칭호 획득: 매트 지박령 👻', 2600), 1200);
+  if (pl.nagN === 3) { Store.data.titles = Store.data.titles || {}; Store.data.titles.mat = true; Store.save(); }
+  if (pl.nagN === 2) setTimeout(() => me.say(pick(['아 조금만 더…', '5분만…', '지금 일어나려 했어!']), 2000), 1800);
+}
+function onStandUp() {
+  if ((pl.nagN || 0) >= 2) {
+    const n = nagger();
+    if (n) setTimeout(() => n.av.say(pick(['오 드디어 일어났다!', '가자가자~!!', '그래 그거야 🔥']), 2200), 400);
+  }
+  pl.nagN = 0; pl.sitT = 0;
+}
 function toggleHang() {
   if (pl.mode !== 'climb') { toast('매달리기는 벽에서! 매트에서는 R로 앉아 쉬기'); return; }
   if (pl.hanging) { stopHang(); return; }
@@ -1239,11 +1396,12 @@ function useChalk() {
   if (!pl.chalkReady) return;
   pl.chalkReady = false;
   $('#btn-chalk').disabled = true;
-  Sound.chalk(); setTimeout(() => Sound.tone(1400, 0.05, 'square', 0.05), 550);
+  Sound.chalk();
   me.chalk();
   Net.event('chalk');
   pl.pump = Math.max(0, pl.pump - 18);
-  me.say(pick(['슥슥', '초크 충전', '짝!', '후~']), 1000);
+  if (pl.mode === 'climb') me.say(pick(['슥슥', '후~ 초크 충전']), 1000);
+  else setTimeout(() => me.say(pick(['쫙쫙 팡팡!', '가루 날린다~ 💨', '초크 풀충전!']), 1400), 1150);
   setTimeout(() => { pl.chalkReady = true; $('#btn-chalk').disabled = false; }, 3500);
 }
 function climbSign() {
@@ -1406,6 +1564,11 @@ function updateCamera(dt) {
   const pos = tmpV2.copy(target).addScaledVector(dir, camCtl.useDist);
   pos.y = Math.max(0.3, pos.y);
   camera.position.copy(pos);
+  if (camCtl.shake > 0) {
+    camCtl.shake = Math.max(0, camCtl.shake - dt * 0.5);
+    camera.position.x += (Math.random() - 0.5) * camCtl.shake;
+    camera.position.y += (Math.random() - 0.5) * camCtl.shake;
+  }
   camera.lookAt(target);
 }
 
@@ -1667,7 +1830,7 @@ function renderRecords() {
   }
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''}`;
 }
 
 // =================================================================
@@ -1905,11 +2068,12 @@ function loop() {
   npcs.forEach((n) => { npcUpdate(n, dt, now); n.av.update(dt); });
   Net.update(dt);
   updateEtiquette(dt);
+  updateSitNag(dt);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
     if (idle.length) {
       const n = pick(idle);
-      if (Math.random() < 0.35) { n.av.chalk(); n.av.say(pick(['짝!', '초크 충전', '슥슥']), 1000); }
+      if (Math.random() < 0.35) { n.av.chalk(); setTimeout(() => n.av.say(pick(['쫙쫙 팡팡!', '초크 충전 💨']), 1200), 1150); }
       else n.av.say(pick(LINES.idle));
     }
     chatNext = now + 7000 + Math.random() * 7000;
@@ -2008,7 +2172,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { get me() { return me; }, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
