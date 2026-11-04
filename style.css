@@ -150,6 +150,19 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .chat input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; outline: none; backdrop-filter: blur(8px); }
 .chat input:focus { border-color: var(--red); }
 
+/* 채팅 로그 (게임식) */
+.chatlog {
+  position: absolute; left: 14px; bottom: 74px; width: min(400px, 42vw); max-height: 10.5em;
+  overflow-y: auto; font-size: .92rem; line-height: 1.5; color: #fff; pointer-events: auto;
+  text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,.85), 0 0 2px #000;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 2.2em); mask-image: linear-gradient(to bottom, transparent 0, #000 2.2em);
+  scrollbar-width: none; overscroll-behavior: contain;
+}
+.chatlog::-webkit-scrollbar { display: none; }
+.chatlog .ln { padding: 1px 0; word-break: break-word; }
+.chatlog .ln b { font-weight: 900; }
+.chatlog .sys { color: #d7d4cf; font-size: .8rem; }
+body.touch .chatlog { bottom: 172px; width: calc(100% - 150px); max-height: 8em; font-size: .86rem; }
 .toast {
   position: absolute; left: 50%; top: 120px; transform: translate(-50%, -10px);
   background: #fff; color: #111; font-weight: 700; font-size: .9rem; padding: 10px 18px; border-radius: 999px;

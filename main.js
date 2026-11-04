@@ -964,7 +964,7 @@ class Avatar {
     this.bubbleT = setTimeout(() => { if (this.bubble === b) { this.group.remove(b); disposeSprite(b); this.bubble = null; this.layoutBubbles(); } }, ms);
   }
   // 직접 입력한 채팅: 70초 유지, 새 채팅이 올 때만 바뀜 (위 칸)
-  chat(text, ms = 70000) {
+  chat(text, ms = 15000) {
     if (this.chatBubble) { this.group.remove(this.chatBubble); disposeSprite(this.chatBubble); }
     clearTimeout(this.chatT);
     const b = textSprite(text, { h: 0.23, bg: '#ffffff', fg: '#151515', border: this.color, tail: true, font: '700 40px "Noto Sans KR", sans-serif' });
@@ -1311,6 +1311,7 @@ function setupInput() {
   $('#btn-act1').addEventListener('click', act1);
   $('#btn-act2').addEventListener('click', act2);
   $('#btn-chat').addEventListener('click', openChat);
+  $('#chatlog').addEventListener('click', () => { if (document.body.classList.contains('touch')) openChat(); });
 }
 function openChat() {
   const f = $('#chat-form');
@@ -1334,7 +1335,7 @@ function problemLabel(p) { return `${p.sector.label.length === 1 ? p.sector.labe
 // =================================================================
 // 플레이어
 // =================================================================
-const SPAWN = m([435, 1040]);
+const SPAWN = m([435, 985]);
 const pl = {
   av: null, mode: 'walk', pos: new V3(SPAWN[0], 0, SPAWN[1]), vel: new V3(), vy: 0, yaw: Math.PI,
   strip: null, u: 0, v: 0, du: 0, dv: 0, t: 0, launch: null, problem: null, topped: false, topT: 0,
@@ -1601,6 +1602,7 @@ function sendProblem(p) {
   Store.addSend(p);
   Net.event('top', { pid: p.id, text: line });
   addFeed(Store.data.name, p, true);
+  logChat('', '', `🔥 ${Store.data.name}님 ${problemLabel(p)} 완등!`, 'sys');
   toast(`🔥 ${problemLabel(p)} 완등! (총 ${Store.data.sends[p.id]}번째)`, 3000);
   if (!pl.usedFeet) {
     Store.data.campus = Store.data.campus || {};
@@ -1756,7 +1758,7 @@ function updateCamera(dt) {
   let use = d;
   for (let k = 0.6; k <= d; k += 0.25) {
     const p = tmpV.copy(target).addScaledVector(dir, k);
-    if (camBlocked(p.x, p.y, p.z)) { use = Math.max(2.2, k - 0.3); break; }
+    if (camBlocked(p.x, p.y, p.z)) { use = Math.max(1.2, k - 0.3); break; }
   }
   camCtl.useDist = lerp(camCtl.useDist || use, use, damp(use < (camCtl.useDist || use) ? 20 : 4, dt));
   const pos = tmpV2.copy(target).addScaledVector(dir, camCtl.useDist);
@@ -1890,9 +1892,27 @@ function npcUpdate(n, dt, now) {
 }
 
 // =================================================================
+// 💬 채팅 로그 — 게임처럼 화면 빈 곳에 글씨만
+// =================================================================
+function logChat(name, color, text, kind = 'msg') {
+  const box = $('#chatlog');
+  if (!box) return;
+  const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+  const ln = document.createElement('div');
+  ln.className = 'ln ' + kind;
+  if (kind === 'msg') {
+    const b = document.createElement('b'); b.textContent = name; b.style.color = color;
+    ln.append(b, document.createTextNode(': ' + text));
+  } else ln.textContent = text;
+  box.appendChild(ln);
+  while (box.children.length > 60) box.firstChild.remove();
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+
+// =================================================================
 // 🐯 무호K — 입장료 2만원 받고, 나쁜 짓 하면 잔소리
 // =================================================================
-const ENTRY = m([435, 1040]);
+const ENTRY = m([435, 985]);
 const GATE_Z = (905 - 100) * S;
 const STAFF_PATROL = [[450, 460], [690, 470], [420, 820], [690, 800], [180, 440], [520, 300], [430, 950]].map(m);
 const staff = { av: null, state: 'patrol', path: [], speed: 2, next: 0, replan: 0, nagT: 0, dustT: 0, onArrive: null };
@@ -1948,6 +1968,7 @@ function openPay() {
   if (!d.open) d.showModal();
 }
 function payDone(method) {
+  logChat('', '', '🐯 무호K: 고마워요~ 즐클해요! (일일이용권 결제)', 'sys');
   Store.data.paidDate = todayStr();
   Store.data.spent = (Store.data.spent || 0) + 20000;
   Store.save();
@@ -2461,6 +2482,7 @@ const Net = {
       this.updateCount();
       if (Date.now() - this.startedAt > 4000) {
         toast(`${name}님이 암장에 들어왔어요 👋`, 2000);
+        logChat('', '', `👋 ${name}님이 들어왔어요`, 'sys');
         if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name}님 어서와요~ 일일이용 2만원이에요 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
         const idle = npcs.filter((n) => n.state === 'idle');
         if (idle.length) setTimeout(() => pick(idle).av.say(`${name}님 어서 와요~`), 700);
@@ -2476,7 +2498,7 @@ const Net = {
   onEvent(p, d) {
     if (!p) return;
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
-    if (d.type === 'say' && text) p.av.chat(text);
+    if (d.type === 'say' && text) { p.av.chat(text); logChat(p.name, p.av.color, text); }
     if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
@@ -2485,6 +2507,7 @@ const Net = {
       if (text) p.av.say(text, 2000);
       fireConfetti(p.av.group.position.clone().add(new V3(0, 1.4, 0)), 22);
       addFeed(p.name, prob, false);
+      logChat('', '', `🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 'sys');
       toast(`🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 2200);
       if (westCanShoot(0.2)) westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
       else westPraise('top', 900);
@@ -2500,7 +2523,7 @@ const Net = {
       p.av.update(dt);
     });
   },
-  remove(id) { const p = this.peers.get(id); if (!p) return; p.av.dispose(); this.peers.delete(id); this.updateCount(); },
+  remove(id) { const p = this.peers.get(id); if (!p) return; logChat('', '', `🚪 ${p.name}님이 나갔어요`, 'sys'); p.av.dispose(); this.peers.delete(id); this.updateCount(); },
   prune() { const now = Date.now(); this.peers.forEach((p, id) => { if (now - p.last > 20000) this.remove(id); }); },
   setStatus(s) { this.status = s; this.updateCount(); },
   updateCount() {
@@ -2653,6 +2676,7 @@ async function enterGym(name, color) {
   $('#loading').hidden = true;
 
   Net.start(name, color);
+  logChat('', '', '💬 Enter(모바일은 💬)로 채팅해요. 같은 링크로 들어온 사람들과 대화할 수 있어요', 'sys');
   setTimeout(() => me.say(`안녕하세요! ${name}예요`, 2400), 600);
   setTimeout(() => npcs[0].av.say('어서 와요~ 신발 벗고 들어와요', 2600), 1700);
 
@@ -2664,6 +2688,7 @@ async function enterGym(name, color) {
     inp.blur(); $('#chat-form').classList.remove('open');
     if (!v) return;
     me.chat(v);
+    logChat(Store.data.name, me.color, v);
     Net.event('say', { text: v });
     inp.value = '';
     tryApology(v);
