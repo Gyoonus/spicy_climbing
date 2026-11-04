@@ -40,7 +40,7 @@ function segProject(px, pz, a, b) {
 // =================================================================
 // 평면도 → 월드 좌표 (도면 px × 0.025 = m)
 // =================================================================
-const S = 0.025;
+const S = 0.036; // 1.45배 넓게 (벽 높이·캐릭터 크기는 그대로)
 const m = ([x, z]) => [(x - 100) * S, (z - 100) * S];
 const toPx = (x, z) => [x / S + 100, z / S + 100];
 
@@ -1268,7 +1268,7 @@ function chalkClap(av, i, pos) {
 // =================================================================
 const keys = new Set();
 const joy = { x: 0, y: 0, id: null };
-const camCtl = { yaw: 0, pitch: 0.32, dist: 6, lastDrag: -9999, pointers: new Map(), pinch: 0 };
+const camCtl = { yaw: 0, pitch: 0.3, dist: 5, lastDrag: -9999, pointers: new Map(), pinch: 0 };
 function input() {
   let x = 0, y = 0;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) x -= 1;
@@ -1918,13 +1918,23 @@ function updateCamera(dt) {
     }
   } else target.y += 1.0;
   const d = camCtl.dist;
-  const dir = new V3(Math.sin(camCtl.yaw) * Math.cos(camCtl.pitch), Math.sin(camCtl.pitch), Math.cos(camCtl.yaw) * Math.cos(camCtl.pitch));
-  let use = d;
-  for (let k = 0.6; k <= d; k += 0.25) {
-    const p = tmpV.copy(target).addScaledVector(dir, k);
-    if (camBlocked(p.x, p.y, p.z)) { use = Math.max(1.2, k - 0.3); break; }
+  const dirOf = (pitch, out = new V3()) => out.set(Math.sin(camCtl.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(camCtl.yaw) * Math.cos(pitch));
+  const rayHit = (pitch) => {
+    const dr = dirOf(pitch);
+    for (let k = 0.6; k <= d; k += 0.25) { const p = tmpV.copy(target).addScaledVector(dr, k); if (camBlocked(p.x, p.y, p.z)) return k; }
+    return null;
+  };
+  // 벽에 가리면 카메라를 위로 올려서 벽 너머로 내려다보기 → 그래도 안 되면 가까이
+  let usePitch = camCtl.pitch, use = d;
+  const hit = rayHit(camCtl.pitch);
+  if (hit !== null) {
+    let found = false;
+    for (let pp = camCtl.pitch + 0.1; pp <= Math.min(1.35, camCtl.pitch + 0.45); pp += 0.1) { if (rayHit(pp) === null) { usePitch = pp; found = true; break; } }
+    if (!found) use = Math.max(1.2, hit - 0.3);
   }
+  camCtl.usePitch = lerp(camCtl.usePitch ?? usePitch, usePitch, damp(usePitch > (camCtl.usePitch ?? 0) ? 10 : 3, dt));
   camCtl.useDist = lerp(camCtl.useDist || use, use, damp(use < (camCtl.useDist || use) ? 20 : 4, dt));
+  const dir = dirOf(camCtl.usePitch);
   const pos = tmpV2.copy(target).addScaledVector(dir, camCtl.useDist);
   pos.y = Math.max(0.3, pos.y);
   camera.position.copy(pos);
