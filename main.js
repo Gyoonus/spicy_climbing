@@ -952,6 +952,7 @@ class Avatar {
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
   squash() { this.squashT = 0.45; }
   chalk() { this.chalkDur = this.climbing ? 1.0 : 1.5; this.chalkT = this.chalkDur; this.puffed = false; this.clapIdx = 0; this.chalkyT = 25; }
+  // 자동 말풍선: 금방 사라짐 (아래 칸)
   say(text, ms = 2800) {
     if (this.bubble) { this.group.remove(this.bubble); disposeSprite(this.bubble); }
     clearTimeout(this.bubbleT);
@@ -959,7 +960,22 @@ class Avatar {
     b.position.y = 1.64;
     this.group.add(b);
     this.bubble = b;
-    this.bubbleT = setTimeout(() => { if (this.bubble === b) { this.group.remove(b); disposeSprite(b); this.bubble = null; } }, ms);
+    this.layoutBubbles();
+    this.bubbleT = setTimeout(() => { if (this.bubble === b) { this.group.remove(b); disposeSprite(b); this.bubble = null; this.layoutBubbles(); } }, ms);
+  }
+  // 직접 입력한 채팅: 70초 유지, 새 채팅이 올 때만 바뀜 (위 칸)
+  chat(text, ms = 70000) {
+    if (this.chatBubble) { this.group.remove(this.chatBubble); disposeSprite(this.chatBubble); }
+    clearTimeout(this.chatT);
+    const b = textSprite(text, { h: 0.23, bg: '#ffffff', fg: '#151515', border: this.color, tail: true, font: '700 40px "Noto Sans KR", sans-serif' });
+    this.group.add(b);
+    this.chatBubble = b;
+    this.layoutBubbles();
+    this.chatT = setTimeout(() => { if (this.chatBubble === b) { this.group.remove(b); disposeSprite(b); this.chatBubble = null; this.layoutBubbles(); } }, ms);
+  }
+  layoutBubbles() {
+    if (this.bubble) this.bubble.position.y = 1.64;
+    if (this.chatBubble) this.chatBubble.position.y = this.bubble ? 1.98 : 1.64;
   }
   limbRot(l, rx, rz = 0) { l.pivot.quaternion.setFromEuler(new THREE.Euler(rx, 0, rz)); this.limbLen(l, l.len); }
   limbLen(l, d) { l.seg.scale.y = d / l.len; l.end.position.y = -d; }
@@ -1068,6 +1084,8 @@ class Avatar {
     scene.remove(this.group); scene.remove(this.shadow);
     disposeSprite(this.tag);
     if (this.bubble) disposeSprite(this.bubble);
+    if (this.chatBubble) disposeSprite(this.chatBubble);
+    clearTimeout(this.bubbleT); clearTimeout(this.chatT);
   }
 }
 
@@ -2458,7 +2476,7 @@ const Net = {
   onEvent(p, d) {
     if (!p) return;
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
-    if (d.type === 'say' && text) p.av.say(text, 3200);
+    if (d.type === 'say' && text) p.av.chat(text);
     if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
@@ -2645,7 +2663,7 @@ async function enterGym(name, color) {
     const v = inp.value.trim();
     inp.blur(); $('#chat-form').classList.remove('open');
     if (!v) return;
-    me.say(v, 3200);
+    me.chat(v);
     Net.event('say', { text: v });
     inp.value = '';
     tryApology(v);
