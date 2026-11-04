@@ -150,10 +150,23 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .chat input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; outline: none; backdrop-filter: blur(8px); }
 .chat input:focus { border-color: var(--red); }
 
+/* 다이노 게이지 */
+.gauge { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(320px, 80vw); text-align: center; pointer-events: none; }
+.g-label { font-weight: 900; font-size: .95rem; margin-bottom: 6px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); }
+.g-bar { position: relative; height: 18px; border-radius: 999px; background: rgba(20,20,22,.85); border: 2px solid rgba(255,255,255,.6); overflow: hidden; }
+.g-zone { position: absolute; top: 0; bottom: 0; background: #2fd26b; opacity: .85; }
+.g-perfect { position: absolute; top: 0; bottom: 0; background: #ffe14d; }
+.g-mark { position: absolute; top: -3px; bottom: -3px; width: 5px; margin-left: -2.5px; background: #fff; box-shadow: 0 0 8px #fff; border-radius: 3px; }
+.gauge.double .g-bar { display: none; }
+.gauge.double .g-label { font-size: 1.3rem; color: #ffe14d; animation: blink .25s infinite; }
+.hud-tech { position: absolute; right: 16px; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 196px); display: none; gap: 22px; }
+body.climbing .hud-tech { display: flex; }
+@media (max-width: 640px) { .hud-tech { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 182px); gap: 18px; } .gauge { bottom: 300px; } }
+
 /* 채팅 로그 (게임식) */
 .chatlog {
-  position: absolute; left: 14px; bottom: 74px; width: min(400px, 42vw); max-height: 10.5em;
-  overflow-y: auto; font-size: .92rem; line-height: 1.5; color: #fff; pointer-events: auto;
+  position: absolute; left: 14px; bottom: 74px; width: min(480px, 44vw); max-height: 10.5em;
+  overflow-y: auto; font-size: 1.1rem; line-height: 1.5; color: #fff; pointer-events: auto;
   text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,.85), 0 0 2px #000;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 2.2em); mask-image: linear-gradient(to bottom, transparent 0, #000 2.2em);
   scrollbar-width: none; overscroll-behavior: contain;
@@ -161,8 +174,8 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .chatlog::-webkit-scrollbar { display: none; }
 .chatlog .ln { padding: 1px 0; word-break: break-word; }
 .chatlog .ln b { font-weight: 900; }
-.chatlog .sys { color: #d7d4cf; font-size: .8rem; }
-body.touch .chatlog { bottom: 172px; width: calc(100% - 150px); max-height: 8em; font-size: .86rem; }
+.chatlog .sys { color: #d7d4cf; font-size: .92rem; }
+body.touch .chatlog { bottom: 172px; width: calc(100% - 150px); max-height: 8em; font-size: 1rem; }
 .toast {
   position: absolute; left: 50%; top: 120px; transform: translate(-50%, -10px);
   background: #fff; color: #111; font-weight: 700; font-size: .9rem; padding: 10px 18px; border-radius: 999px;

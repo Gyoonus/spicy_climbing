@@ -77,7 +77,7 @@ const OBSTACLES = SECTORS.filter((s) => s.footM);
 // [섹터, 색, 레벨, 그레이드, 위치(0~1), 다이노]
 const PROBLEM_DEFS = [
   ['s1', 'yellow', 0, 'V0', 0.08], ['s1', 'green', 1, 'V1', 0.3], ['s1', 'blue', 2, 'V2', 0.62], ['s1', 'purple', 5, 'V5', 0.88, true],
-  ['s2', 'blue', 2, 'V2', 0.16], ['s2', 'red', 4, 'V4', 0.5, true], ['s2', 'black', 6, 'V6', 0.84, true],
+  ['s2', 'blue', 2, 'V2', 0.16], ['s2', 'red', 4, 'V4', 0.5, true], ['s2', 'black', 6, 'V6', 0.84, 'double'],
   ['s3', 'yellow', 0, 'V0', 0.14], ['s3', 'green', 1, 'V1', 0.45], ['s3', 'red', 3, 'V3', 0.78],
   ['s4', 'yellow', 0, 'V0', 0.06], ['s4', 'blue', 2, 'V2', 0.4], ['s4', 'purple', 5, 'V5', 0.74, true],
   ['spray', 'pink', 3, 'V3', 0.28], ['spray', 'white', 5, 'V5', 0.74, true],
@@ -85,6 +85,22 @@ const PROBLEM_DEFS = [
 ];
 
 const REACH = 0.85;   // 손이 닿는 거리 (m)
+// 홀드 종류: 나쁠수록(q↓) 펌핑이 빨리 차고, 다이노 게이지 초록 칸이 좁아짐
+const HOLD_TYPES = [
+  { k: 'jug', n: '저그', q: 1.0, sc: [1, 1, 1.15] },
+  { k: 'edge', n: '엣지', q: 0.7, sc: [1.3, 0.55, 0.75] },
+  { k: 'pinch', n: '핀치', q: 0.55, sc: [0.6, 1.3, 1.05] },
+  { k: 'crimp', n: '크림프', q: 0.4, sc: [1.15, 0.4, 0.55] },
+  { k: 'sloper', n: '슬로퍼', q: 0.3, sc: [1.4, 1.15, 0.45] },
+];
+const HT = Object.fromEntries(HOLD_TYPES.map((t) => [t.k, t]));
+function pickHoldType(level, rand) {
+  const w = [Math.max(0.08, 1 - level * 0.16), 0.3 + level * 0.04, 0.15 + level * 0.05, 0.05 + level * 0.09, 0.05 + level * 0.08];
+  let r = rand() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return HOLD_TYPES[i]; }
+  return HOLD_TYPES[0];
+}
+const TECHS = { flag: { n: '플래깅', icon: '🦵' }, inside: { n: '인사이드 스텝', icon: '↩️' }, outside: { n: '아웃사이드 스텝', icon: '↪️' } };
 const CATCH = 0.34;   // 다이노 캐치 반경
 const BODY_DROP = 0.98; // 손 → 발바닥 높이 (2등신)
 const PLAYER_R = 0.28;
@@ -669,8 +685,20 @@ function buildHolds(rand) {
   PROBLEM_DEFS.forEach(([secId, color, level, grade, at, dyno]) => {
     const st = strips.find((s) => s.sec.id === secId);
     const H = st.H, topV = H - 0.32;
-    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], level, grade, dyno: !!dyno, holds: [] };
+    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], level, grade, dyno: !!dyno, double: dyno === 'double', holds: [] };
     let u = at * st.L, v = 1.3;
+    if (dyno === 'double') {
+      // 더블다이노: 시작 → (터치 홀드, 못 잡음) → TOP. 한 번에는 절대 못 닿는 거리
+      const uu = wrapU(st, u);
+      p.holds.push({ u: uu, v: 1.0, start: true, type: HT.jug });
+      p.holds.push({ u: wrapU(st, u + 0.05), v: 2.5, tap: true, type: HT.sloper });
+      p.holds.push({ u: wrapU(st, u + 0.1), v: topV, top: true, dynoTarget: true, type: HT.jug });
+      p.holds.forEach((h) => { h.strip = st; h.problem = p; h.hex = p.hex; h.q = h.type.q; h.size = h.top ? 0.13 : h.tap ? 0.12 : 0.1; st.holds.push(h); allHolds.push(h); });
+      p.start = p.holds[0]; p.top = p.holds[p.holds.length - 1];
+      st.problems.push(p); PROBLEMS.push(p);
+      return;
+    }
+    let stretchDone = level < 3;
     const step = 0.58 + level * 0.07, lat = 0.18 + level * 0.04;
     let dynoDone = !dyno, dynoTop = false;
     p.holds.push({ u: wrapU(st, u), v, start: true });
@@ -679,14 +707,18 @@ function buildHolds(rand) {
       let isDyno = false;
       if (!dynoDone && topV - v >= 1.8 && topV - v <= 2.3) { dynoTop = true; break; }
       if (!dynoDone && v > H * 0.3 && v + 2.0 < topV - 0.2) { s = 2.0; dynoDone = true; isDyno = true; }
+      let isStretch = false;
+      if (!isDyno && !stretchDone && v > 1.8 && v + 1.92 < topV - 0.2) { s = 1.92; stretchDone = true; isStretch = true; }
       if (v + s >= topV - 0.2) break;
       v += s;
-      if (!isDyno) u += (rand() - 0.5) * 2 * lat;
-      p.holds.push({ u: wrapU(st, u), v, dynoTarget: isDyno });
+      if (!isDyno && !isStretch) u += (rand() - 0.5) * 2 * lat;
+      p.holds.push({ u: wrapU(st, u), v, dynoTarget: isDyno, stretch: isStretch });
     }
     p.holds.push({ u: wrapU(st, dynoTop ? u : u + (rand() - 0.5) * 0.3), v: topV, top: true, dynoTarget: dynoTop });
     p.holds.forEach((h) => {
       h.strip = st; h.problem = p; h.hex = p.hex;
+      h.type = h.start ? HT.jug : h.top ? (level >= 5 ? HT.edge : HT.jug) : pickHoldType(level, rand);
+      h.q = h.type.q;
       h.size = h.top ? 0.13 : h.dynoTarget ? 0.12 : 0.085 + rand() * 0.04 - level * 0.004;
       st.holds.push(h); allHolds.push(h);
     });
@@ -703,7 +735,8 @@ function buildHolds(rand) {
       const u = rand() * st.L, v = 0.5 + rand() * (st.H - 0.8);
       if (!st.closed && (u < 0.2 || u > st.L - 0.2)) continue;
       if (st.holds.some((h) => uvDist(st, h.u, h.v, u, v) < (st.sec.dark ? 0.22 : 0.32))) continue;
-      const h = { u, v, strip: st, problem: null, hex: palette[Math.floor(rand() * palette.length)], size: 0.04 + rand() * 0.06 };
+      const ty = pickHoldType(2, rand);
+      const h = { u, v, strip: st, problem: null, hex: palette[Math.floor(rand() * palette.length)], size: 0.04 + rand() * 0.06, type: ty, q: ty.q };
       st.holds.push(h); allHolds.push(h);
       placed++;
     }
@@ -722,8 +755,8 @@ function buildHolds(rand) {
       const th = rand() * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
       const x = s.along3.clone().multiplyScalar(c).addScaledVector(s.up3, sn);
       const y = s.along3.clone().multiplyScalar(-sn).addScaledVector(s.up3, c);
-      const hs = h.size * 1.6;
-      mtx.makeBasis(x.multiplyScalar(hs * 1.15), y.multiplyScalar(hs), s.n3.clone().multiplyScalar(hs * 0.9));
+      const hs = h.size * 1.6, sc = h.type.sc;
+      mtx.makeBasis(x.multiplyScalar(hs * 1.15 * sc[0]), y.multiplyScalar(hs * sc[1]), s.n3.clone().multiplyScalar(hs * 0.9 * sc[2]));
       h.pos = surf(st, h.u, h.v);
       mtx.setPosition(h.pos);
       mesh.setMatrixAt(i, mtx);
@@ -738,7 +771,7 @@ function buildHolds(rand) {
   });
   // S / TOP 테이프
   PROBLEMS.forEach((p) => {
-    [[p.start, 'S'], [p.top, 'TOP']].forEach(([h, txt]) => {
+    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP'])].forEach(([h, txt]) => {
       const st = p.strip;
       const [s] = segAt(st, h.u);
       const dark = ['black', 'purple', 'blue', 'red'].includes(p.color);
@@ -1010,7 +1043,14 @@ class Avatar {
       this.group.updateMatrixWorld(true);
       this.limbTo(la, this.grips[0]);
       if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
-      if (this.campus || this.hanging) {
+      if (this.tech === 'flag' && !this.hanging) {
+        this.limbTo(ll, this.grips[2]);
+        this.limbRot(rl, 0.15, 1.35); this.limbLen(rl, 0.42);
+        this.rig.rotation.z = -0.08;
+      } else if ((this.tech === 'inside' || this.tech === 'outside') && !this.hanging) {
+        this.rig.rotation.y = this.tech === 'inside' ? 0.5 : -0.5;
+        this.limbTo(ll, this.grips[2]); this.limbTo(rl, this.grips[3]);
+      } else if (this.campus || this.hanging) {
         const f = Math.sin(this.t * (this.hanging ? 2 : 6)) * (this.hanging ? 0.18 : 0.35);
         this.limbRot(ll, 0.05 + f, -0.1); this.limbRot(rl, 0.05 - f, 0.1);
         if (this.hanging) this.rig.rotation.z = Math.sin(this.t * 2) * 0.06;
@@ -1254,6 +1294,9 @@ function setupInput() {
     if (e.code === 'KeyE') grabToggle();
     if (e.code === 'KeyC') useChalk();
     if (e.code === 'KeyR') toggleSit();
+    if (e.code === 'Digit1') setTech('flag');
+    if (e.code === 'Digit2') setTech('inside');
+    if (e.code === 'Digit3') setTech('outside');
     if (e.code === 'KeyH') toggleHang();
   });
   window.addEventListener('keyup', (e) => {
@@ -1309,6 +1352,7 @@ function setupInput() {
   $('#btn-grab').addEventListener('click', grabToggle);
   $('#btn-chalk').addEventListener('click', useChalk);
   $('#btn-act1').addEventListener('click', act1);
+  document.querySelectorAll('[data-tech]').forEach((b) => b.addEventListener('click', () => setTech(b.dataset.tech)));
   $('#btn-act2').addEventListener('click', act2);
   $('#btn-chat').addEventListener('click', openChat);
   $('#chatlog').addEventListener('click', () => { if (document.body.classList.contains('touch')) openChat(); });
@@ -1343,7 +1387,7 @@ const pl = {
   sitting: false, runToggle: false, campusToggle: false, hanging: false, hangT: 0, hangHold: null, usedFeet: false, dustT: 0,
 };
 const shiftDown = () => keys.has('ShiftLeft') || keys.has('ShiftRight');
-function isCampus() { return pl.mode === 'climb' && !pl.hanging && (shiftDown() || pl.campusToggle); }
+function isCampus() { return pl.mode === 'climb' && !pl.hanging && !pl.tech && (shiftDown() || pl.campusToggle); }
 function isRunning() { return shiftDown() || pl.runToggle; }
 function toggleSit() {
   if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
@@ -1422,6 +1466,18 @@ function stopHang(silent) {
   } else if (t > best && t > 1) { Store.data.bestHang = t; Store.save(); }
   Net.sync(true);
 }
+function setTech(t, silent) {
+  if (t && pl.mode !== 'climb') { toast('기술은 벽에 매달려서 써요!'); return; }
+  pl.tech = pl.tech === t ? null : t;
+  if (pl.tech) { pl.campusToggle = false; stopHang(); }
+  if (me) me.tech = pl.tech;
+  if (pl.tech && !silent) {
+    popText(TECHS[pl.tech].n + '!', me.group.position.clone().add(new V3(0, 1.6, 0)), 0.3);
+    Sound.tone(660, 0.06, 'triangle', 0.06);
+    if (Math.random() < 0.4) westPraise('tech', 900);
+  }
+  Net.sync(true);
+}
 function act1() { if (pl.mode === 'walk') toggleSit(); else if (pl.mode === 'climb') toggleHang(); }
 function act2() {
   if (pl.mode === 'walk') { pl.runToggle = !pl.runToggle; toast(pl.runToggle ? '🏃 달리기 ON' : '걷기', 1000); }
@@ -1434,13 +1490,60 @@ function nearestGrab(st, u, v, problem, exclude) {
   let best = null, bd = Infinity;
   for (const h of st.holds) {
     if (problem && h.problem !== problem) continue;
+    if (h.tap) continue; // 터치 홀드는 못 잡음
     if (exclude && uvDist(st, h.u, h.v, exclude.u, exclude.v) < 0.55) continue;
     const d = uvDist(st, h.u, h.v, u, v);
     if (d < bd) { bd = d; best = h; }
   }
   return best ? { h: best, d: bd } : null;
 }
-function canHold(u, v) { const r = nearestGrab(pl.strip, u, v, pl.problem); return r && r.d <= REACH; }
+function techBonus(h, u, v) {
+  const dv = h.v - v, du = Math.abs(h.u - u);
+  if (pl.tech === 'inside' && dv > 0) return 0.25;
+  if (pl.tech === 'outside' && du > Math.abs(dv)) return 0.3;
+  return 0;
+}
+function canHold(u, v) {
+  const st = pl.strip;
+  for (const h of st.holds) {
+    if (pl.problem && h.problem !== pl.problem) continue;
+    if (h.tap) continue;
+    if (uvDist(st, h.u, h.v, u, v) <= REACH + techBonus(h, u, v)) return true;
+  }
+  return false;
+}
+function signedDu(st, a, b) { let d = a - b; if (st.closed) { d = ((d % st.L) + st.L * 1.5) % st.L - st.L / 2; } return d; }
+// 다이노 계획: 방향에 있는 목표 홀드와 필요한 힘(0~1), 게이지 초록 칸 폭
+function planDyno(fromU, fromV, dirU, dirV, launchQ) {
+  const st = pl.strip;
+  let best = null, bs = Infinity;
+  for (const h of st.holds) {
+    if (pl.problem && h.problem !== pl.problem) continue;
+    const du = signedDu(st, h.u, fromU), dv = h.v - fromV, d = Math.hypot(du, dv);
+    if (d < (h.tap ? 0.3 : REACH * 0.8) || d > 3.4) continue;
+    const dot = (du * dirU + dv * dirV) / d;
+    if (dot < 0.55) continue;
+    const sol = dynoSolve(du, dv);
+    if (sol.p > 1.02) continue;
+    const sc = d - dot * 0.6;
+    if (sc < bs) { bs = sc; best = { h, du, dv, ...sol }; }
+  }
+  if (!best) return null;
+  const q = Math.min(launchQ, best.h.q);
+  best.width = 0.07 + 0.27 * q;
+  best.center = clamp(best.p, 0.06, 0.94);
+  return best;
+}
+function dynoSolve(du, dv) {
+  const g = 9.8;
+  let vy, T;
+  if (dv > 0.05) { vy = Math.sqrt(2 * g * (dv + 0.04)); T = vy / g; }
+  else { vy = 2.2; T = (vy + Math.sqrt(vy * vy - 2 * g * dv)) / g; }
+  const vu = du / T;
+  const sp = Math.hypot(vu, vy);
+  return { vu, vy, p: (sp - 2.4) / 3.4 };
+}
+function currentHoldQ() { const r = nearestGrab(pl.strip, pl.u, pl.v, pl.problem); return r ? r.h.q : 1; }
 function bodyPos(st, u, v, out = new V3(), dropMax = BODY_DROP) {
   const drop = Math.min(dropMax, v - MAT_H - 0.02);
   const [s] = segAt(st, u);
@@ -1520,6 +1623,7 @@ function letGo(reason) {
   pl.fallReason = reason;
   stopHang(reason === 'down' ? false : true);
   me.campus = false;
+  setTech(null, true);
   me.setClimbing(false);
   pl.charging = false; pl.charge = 0;
   setFocus(null);
@@ -1554,22 +1658,71 @@ function jumpPress() {
   if (pl.mode === 'walk' && pl.sitting) { standUp(); return; }
   if (pl.mode === 'climb' && pl.hanging) stopHang();
   if (pl.mode === 'walk') { if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) <= 0.001) { pl.vy = 5.2; Sound.tone(300, 0.08, 'sine', 0.06, 0, 200); } return; }
-  if (pl.mode === 'climb') { pl.charging = true; pl.charge = 0; }
+  if (pl.mode === 'climb') {
+    const [ix, iy] = input();
+    let dx = ix * climbSign(), dy = iy;
+    if (Math.hypot(dx, dy) < 0.3) { dx = 0; dy = 1; }
+    const l = Math.hypot(dx, dy);
+    pl.dynoDir = [dx / l, dy / l];
+    pl.launchQ = currentHoldQ();
+    pl.plan = planDyno(pl.u, pl.v, dx / l, dy / l, pl.launchQ);
+    pl.gaugeT = 0; pl.charging = true; pl.charge = 0;
+    pl.gaugeSpeed = 1.15 + (1 - pl.launchQ) * 0.7 + (pl.problem ? pl.problem.level * 0.05 : 0);
+    return;
+  }
+  if (pl.mode === 'air') tryDoubleDyno();
+}
+function tryDoubleDyno() {
+  if (pl.doubleUsed) return;
+  pl.doubleUsed = true;
+  const st = pl.strip;
+  let tap = null, td = Infinity;
+  for (const h of st.holds) { if (!h.tap || (pl.problem && h.problem !== pl.problem)) continue; const d = uvDist(st, h.u, h.v, pl.u, pl.v); if (d < td) { td = d; tap = h; } }
+  // 터치 홀드가 없으면 아무 홀드나 살짝 치고 튀기기 (창이 더 좁음)
+  if (!tap) { const r = nearestGrab(st, pl.u, pl.v, pl.problem, pl.launch); if (r) { tap = r.h; td = r.d; } }
+  const win = tap ? (tap.tap ? 0.2 : 0.12) + 0.2 * tap.q : 0;
+  if (!tap || td > win) {
+    popText('삐끗!', me.group.position.clone().add(new V3(0, 1.5, 0)), 0.26);
+    Sound.tone(180, 0.15, 'square', 0.06);
+    return;
+  }
+  const plan = planDyno(tap.u, tap.v, 0, 1, tap.q);
+  if (!plan) { popText('삐끗!', me.group.position.clone().add(new V3(0, 1.5, 0)), 0.26); return; }
+  pl.u = tap.u; pl.v = tap.v;
+  pl.du = plan.vu; pl.dv = plan.vy;
+  pl.launch = { u: tap.u, v: tap.v };
+  pl.t = 0; pl.didDouble = true;
+  pl.pump += 4;
+  popText('더블!!', me.group.position.clone().add(new V3(0, 1.5, 0)), 0.38);
+  chalkBurst(surf(st, tap.u, tap.v), 10, 0.8);
+  Sound.tone(520, 0.1, 'triangle', 0.1); Sound.tone(780, 0.14, 'triangle', 0.1, 0.06);
 }
 function jumpRelease(cancel) {
   if (!pl.charging) return;
   pl.charging = false;
   if (cancel || pl.mode !== 'climb') { pl.charge = 0; return; }
-  const [ix, iy] = input();
-  let dx = ix * climbSign(), dy = iy;
-  if (Math.hypot(dx, dy) < 0.3) { dx = 0; dy = 1; }
-  const l = Math.hypot(dx, dy);
-  const sp = 2.4 + 3.4 * pl.charge;
-  pl.du = (dx / l) * sp; pl.dv = (dy / l) * sp;
+  const pos = pl.charge, plan = pl.plan;
+  let verdict = 'free';
+  if (plan) {
+    const diff = Math.abs(pos - plan.center);
+    verdict = diff <= plan.width * 0.22 ? 'perfect' : diff <= plan.width / 2 ? 'good' : 'miss';
+  }
+  const head = me.group.position.clone().add(new V3(0, 1.6, 0));
+  if (verdict === 'perfect' || verdict === 'good') {
+    pl.du = plan.vu; pl.dv = plan.vy;
+    popText(verdict === 'perfect' ? 'PERFECT!' : 'GOOD!', head, verdict === 'perfect' ? 0.36 : 0.3);
+    pl.pump += verdict === 'perfect' ? 2 : 5;
+  } else {
+    const [dx, dy] = plan ? [plan.du / Math.hypot(plan.du, plan.dv), plan.dv / Math.hypot(plan.du, plan.dv)] : pl.dynoDir;
+    const sp = 2.4 + 3.4 * pos;
+    pl.du = dx * sp; pl.dv = dy * sp;
+    if (verdict === 'miss') popText(pos < plan.center ? '힘 부족…' : '너무 셌다!', head, 0.26);
+    pl.pump += 5;
+  }
   pl.launch = { u: pl.u, v: pl.v };
-  pl.mode = 'air'; pl.t = 0;
-  pl.pump += 5;
-  pl.charge = 0;
+  pl.mode = 'air'; pl.t = 0; pl.doubleUsed = false; pl.didDouble = false;
+  pl.charge = 0; pl.plan = null;
+  stopHang(true);
   Sound.tone(220, 0.25, 'triangle', 0.1, 0, 400);
   Net.sync(true);
 }
@@ -1670,10 +1823,20 @@ function updatePlayer(dt) {
       else if (canHold(pl.u, nv)) pl.v = nv;
     }
     if (iy < -0.5 && pl.v <= 0.8) { letGo('down'); return; }
-    if (pl.charging) pl.charge = Math.min(1, pl.charge + dt / 0.7);
+    if (pl.charging) { pl.gaugeT += dt * pl.gaugeSpeed; const ph = pl.gaugeT % 2; pl.charge = ph < 1 ? ph : 2 - ph; }
     const lvl = pl.problem ? pl.problem.level : 1;
-    if (pl.hanging) pl.pump += dt * 0.8;
-    else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0)) * (campus ? 2 : 1);
+    const hq = currentHoldQ();
+    const techMul = pl.tech === 'flag' ? 0.6 : pl.tech ? 0.9 : 1;
+    if (pl.hanging) pl.pump += dt * (0.8 + (1 - hq) * 0.8);
+    else pl.pump += dt * (1.6 + lvl * 0.55 + (moving ? 1.1 : 0) + (1 - hq) * 1.6) * (campus ? 2 : 1) * techMul;
+    pl.holdName = (nearestGrab(st, pl.u, pl.v, pl.problem) || {}).h?.type?.n || '';
+    // 닿을 듯 말 듯한 홀드 힌트
+    if (iy > 0.5 && moving && !canHold(pl.u, nv) && (pl.stuckT = (pl.stuckT || 0) + dt) > 0.8) {
+      pl.stuckT = 0;
+      const far = st.holds.find((h) => (!pl.problem || h.problem === pl.problem) && !h.tap && h.v > pl.v && uvDist(st, h.u, h.v, pl.u, pl.v) < REACH + 0.3);
+      if (far && !pl.tech) toast('닿을 듯 말 듯… 인사이드 스텝(2)이나 다이노로!', 1800);
+      else if (!far) toast('너무 멀어요 — Space 꾹 → 초록 칸에서 떼서 다이노!', 1800);
+    }
     if (pl.problem && !pl.topped && uvDist(st, pl.u, pl.v, pl.problem.top.u, pl.problem.top.v) < 0.5) sendProblem(pl.problem);
     if (pl.topped) { pl.topT += dt; if (pl.topT > (pl.topHoldMax || 3)) { letGo('down'); return; } }
     if (pl.pump >= 100) { pl.pump = 100; letGo('pump'); toast('펌핑 100%… 매트에서 쉬고 초크 바르고 다시!'); return; }
@@ -1690,7 +1853,8 @@ function updatePlayer(dt) {
         pl.mode = 'climb'; pl.u = r.h.u; pl.v = r.h.v - 0.05;
         Sound.grab(); Sound.tone(660, 0.12, 'triangle', 0.08, 0.02);
         me.say(pick(['잡았다!', '캐치!!', '휴…']), 1200);
-        if (r.h.dynoTarget) { toast('🔥 다이노 성공!', 1400); westPraise('dyno', 400); }
+        if (pl.didDouble) { toast('🔥🔥 더블다이노 성공!!', 2200); Store.data.doubles = (Store.data.doubles || 0) + 1; Store.save(); westPraise('dyno', 400); }
+        else if (r.h.dynoTarget) { toast('🔥 다이노 성공!', 1400); westPraise('dyno', 400); }
         Net.sync(true);
       }
     }
@@ -2096,6 +2260,7 @@ const WEST_LINES = {
   yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
   campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
   hang: ['버티기 장인 🤠', '악력 실화예요?'],
+  tech: ['기술 깔끔하다 🤠', '오 그 무브 교과서다!', '발 쓰는 거 보소 👍'],
   sit: ['쉬는 것도 훈련이에요~ 🤠', '천천히 쉬어요, 벽은 안 도망가요'],
   enter: ['어서와요~ 무호 무섭죠? ㅎㅎ 🤠', '입장 축하해요! 오늘 재밌게 놀아요'],
   chalk: ['초크 바르는 폼이 프로네 🤠', '그 박수 소리 좋다 ㅋㅋ'],
@@ -2328,7 +2493,7 @@ function renderRecords() {
     PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.level - b.level).forEach((p) => {
       const row = document.createElement('div'); row.className = 'prob';
       const sent = d.sends[p.id] || 0;
-      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.dyno ? '<span class="tag">다이노</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
+      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '안내';
       b.addEventListener('click', () => { setGuide(p); $('#records').close(); toast(`${problemLabel(p)} — 깃발과 미니맵 ★을 따라가세요`, 2600); });
       row.appendChild(b);
@@ -2359,7 +2524,7 @@ function renderRecords() {
   });
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회 · 더블다이노 ${d.doubles || 0}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
 }
 
 // =================================================================
@@ -2454,7 +2619,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2494,6 +2659,7 @@ const Net = {
     p.st = Number.isFinite(+d.st) ? +d.st : 0;
     p.av.setClimbing(p.mode === 'c');
     p.av.sitting = d.a === 's'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
+    p.av.tech = d.a === 'tf' ? 'flag' : d.a === 'ti' ? 'inside' : d.a === 'to' ? 'outside' : null;
   },
   onEvent(p, d) {
     if (!p) return;
@@ -2542,6 +2708,7 @@ function updateHud(dt) {
   hudT += dt;
   const jb = $('#btn-jump');
   jb.style.setProperty('--charge', pl.charging ? pl.charge.toFixed(2) : 0);
+  updateGauge();
   if (hudT < 0.1) return;
   hudT = 0;
   const status = $('#status'), title = $('#status-title'), prompt = $('#prompt');
@@ -2552,6 +2719,7 @@ function updateHud(dt) {
     const p = pl.problem;
     title.innerHTML = p ? `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span>${p.dyno ? ' 🔥' : ''}<small>${pl.topped ? '완등! 곧 내려와요' : 'TOP 홀드까지 같은 색만!'}</small>`
       : `자유 등반<small>${pl.strip.sec.name} · 아무 홀드나 OK</small>`;
+    if (pl.holdName) title.innerHTML += `<small>✊ ${pl.holdName}${pl.tech ? ` · ${TECHS[pl.tech].icon} ${TECHS[pl.tech].n}` : ''}</small>`;
     if (pl.hanging) title.innerHTML += `<small style="color:#9fe0ff">🙌 매달리기 ${pl.hangT.toFixed(1)}초 · 최고 ${(Store.data.bestHang || 0).toFixed(1)}초</small>`;
     else if (me.campus) title.innerHTML += `<small style="color:#ffb26b">🦍 캠퍼싱 중 — 펌핑 ×2${pl.problem ? (pl.usedFeet ? ' (발 이미 씀)' : ' · 발 안 씀 유지!') : ''}</small>`;
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고 — ${ety.near.start < (pl.climbStart || 0) ? '상대가 선출발' : '내가 선출발'}</small>`;
@@ -2590,6 +2758,33 @@ function updateHud(dt) {
     $('#jump-label').innerHTML = touch ? '점프' : '점프 <kbd>Space</kbd>';
   }
   drawMinimap();
+}
+
+// 다이노 게이지 (농구 3점슛 게이지 느낌)
+function updateGauge() {
+  const g = $('#gauge');
+  const climbingNow = pl.mode === 'climb' || pl.mode === 'air';
+  document.body.classList.toggle('climbing', climbingNow);
+  document.querySelectorAll('[data-tech]').forEach((b) => b.setAttribute('aria-pressed', pl.tech === b.dataset.tech ? 'true' : 'false'));
+  if (pl.charging) {
+    g.hidden = false; g.classList.remove('double');
+    const plan = pl.plan;
+    const zone = $('#g-zone'), perf = $('#g-perfect');
+    if (plan) {
+      zone.style.display = perf.style.display = 'block';
+      zone.style.left = ((plan.center - plan.width / 2) * 100) + '%'; zone.style.width = (plan.width * 100) + '%';
+      perf.style.left = ((plan.center - plan.width * 0.22) * 100) + '%'; perf.style.width = (plan.width * 44) + '%';
+      $('#g-label').textContent = `다이노 — 초록 칸에서 떼요! (${plan.h.tap ? '터치 홀드 TAP' : plan.h.type.n})`;
+    } else { zone.style.display = perf.style.display = 'none'; $('#g-label').textContent = '다이노 — 방향에 잡을 홀드가 없어요'; }
+    $('#g-mark').style.left = (pl.charge * 100) + '%';
+    return;
+  }
+  if (pl.mode === 'air' && !pl.doubleUsed) {
+    const st = pl.strip;
+    const tap = st.holds.find((h) => h.tap && (!pl.problem || h.problem === pl.problem) && uvDist(st, h.u, h.v, pl.u, pl.v) < 0.55);
+    if (tap) { g.hidden = false; g.classList.add('double'); $('#g-label').textContent = '더블다이노 — 지금 Space!'; return; }
+  }
+  g.hidden = true;
 }
 
 // =================================================================
