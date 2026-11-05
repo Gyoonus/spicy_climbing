@@ -2541,7 +2541,6 @@ function setupPay() {
   }));
 }
 function staffCatch() {
-  westPraise('console', 3200);
   pl.vel.set(0, 0, 0); pl.runToggle = false; pl.stunT = 1.3;
   staffSay('잡았다~ 뛰지 말랬잖아요. 다친 데는 없죠? 걱정한 건 아니고요 🐯', 2800);
   setTimeout(() => me.say('죄송합니다…', 1600), 700);
@@ -2557,7 +2556,6 @@ function onChalkUsed() {
   if (watch.chalks.length >= 5 && paidToday() && (staff.state === 'patrol' || staff.state === 'thanks') && staffMayNag(1)) {
     staff.state = 'scold'; staff.replan = 0; staff.scoldT = 0;
     staffSay(STAFF_LINES.chalk[Math.min(watch.chalkNag++, STAFF_LINES.chalk.length - 1)], 3000);
-    westPraise('console', 3400);
     watch.chalks = [];
   }
 }
@@ -2622,7 +2620,7 @@ function updateStaff(dt, now) {
 }
 
 // =================================================================
-// 🤠 웨스트 — 무호K와 정반대. 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
+// 🤠 웨스트 — 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
 // =================================================================
 const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [], lastPhoto: -1e9 };
 const WEST_COOLDOWN = 180000; // 사진은 3분에 한 번만
@@ -2632,7 +2630,6 @@ const WEST_LINES = {
   top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
   climb: ['가보자고~!! 🤠', '발 좋다 발 좋다!', '자세 너무 좋아요!', '거의 다 왔어요!', '호흡 천천히~ 할 수 있어!'],
   fall: ['괜찮아요! 떨어지는 것도 등반이에요 🤠', '방금 무브 진짜 좋았는데!', '다음엔 무조건 돼요!', '시도한 게 멋있는 거예요 👍'],
-  console: ['무호 원래 잔소리 많은 츤데레예요 ㅎㅎ 다 걱정돼서 그래요 🤠', '무호 말투만 저래요~ 속은 엄청 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
   dyno: ['다이노 미쳤다!!! 🤠', '날았다!! 슈퍼맨인 줄', '저 점프력 뭐예요?!'],
   yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
   campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
@@ -2640,7 +2637,7 @@ const WEST_LINES = {
   gear: ['그 신발 뭐예요?! 부럽다 🤠', '새 장비 개시! 오늘 날아다니겠는데요?', '장비빨도 실력이에요 😎'],
   tech: ['기술 깔끔하다 🤠', '오 그 무브 교과서다!', '발 쓰는 거 보소 👍'],
   sit: ['쉬는 것도 훈련이에요~ 🤠', '천천히 쉬어요, 벽은 안 도망가요'],
-  enter: ['어서와요~ 무호 무섭죠? ㅎㅎ 🤠', '입장 축하해요! 오늘 재밌게 놀아요'],
+  enter: ['어서와요~ 오늘 재밌게 놀아요 🤠', '입장 축하해요! 오늘 폼 좋아 보이는데요?'],
   chalk: ['초크 바르는 폼이 프로네 🤠', '그 박수 소리 좋다 ㅋㅋ'],
 };
 function westSay(text, ms = 2600, important = false) {
@@ -2648,7 +2645,7 @@ function westSay(text, ms = 2600, important = false) {
   west.av.say(text, ms);
   if (important && me && west.av.group.position.distanceTo(me.group.position) > 9) toast(`🤠 웨스트: ${text}`, 2200);
 }
-function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo' && (kind === 'console' || kind === 'top' || Math.random() < 0.6)) setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600, kind === 'console'), delay); }
+function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo' && WEST_LINES[kind] && (kind === 'top' || Math.random() < 0.6)) setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600), delay); }
 function westGo(pt, speed) { const g = west.av.group; west.path = planPath([g.position.x, g.position.z], pt); west.speed = speed; }
 function makeWest() {
   west.av = new Avatar('웨스트', '#3d7bd9', { cowboy: true });
