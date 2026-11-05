@@ -238,7 +238,7 @@ const LINES = {
 // 사운드 / 음악
 // =================================================================
 const Sound = {
-    on: false, ctx: null,
+    on: true, ctx: null, // 기본 켜짐 (버튼으로 끄기)
     ensure() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); return this.ctx; },
     tone(freq, dur = 0.08, type = 'sine', vol = 0.15, when = 0, slide = 0) {
       if (!this.on) return;
@@ -255,6 +255,29 @@ const Sound = {
     fall() { this.tone(500, 0.45, 'sine', 0.14, 0, -380); this.tone(90, 0.18, 'square', 0.08, 0.42); },
     top() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.14, i * 0.09)); },
   };
+// 🗣️ 외치기 음성 (브라우저 TTS) — 특정 배우 목소리는 아니고, 낮고 굵은 영화 예고편 톤
+const Voice = {
+  voices: [],
+  load() { try { this.voices = speechSynthesis.getVoices(); } catch (e) { this.voices = []; } },
+  pick(lang) {
+    if (!this.voices.length) this.load();
+    const vs = this.voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith(lang));
+    const male = /male|daniel|alex|fred|david|mark|james|george|arthur|aaron|ralph|reed|rocko|grandpa|minsu|injoon|남/i;
+    return vs.find((v) => male.test(v.name) && !/female/i.test(v.name)) || vs[0] || null;
+  },
+  shout(text, { lang = 'en', pitch = 0.2, rate = 0.82 } = {}) {
+    if (!Sound.on || !('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const v = this.pick(lang); if (v) u.voice = v;
+      u.lang = v ? v.lang : (lang === 'en' ? 'en-US' : 'ko-KR');
+      u.pitch = pitch; u.rate = rate; u.volume = 1;
+      speechSynthesis.speak(u);
+    } catch (e) { /* TTS 없음 */ }
+  },
+};
+if ('speechSynthesis' in window) { Voice.load(); try { speechSynthesis.onvoiceschanged = () => Voice.load(); } catch (e) { /* 무시 */ } }
 const Music = {
     on: false, timer: null, nextT: 0, step: 0, bpm: 84,
     chords: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]], // Fmaj7 Em7 Dm7 Cmaj7
@@ -3264,7 +3287,7 @@ const Net = {
     if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'shoulder' && d.to === this.id) { knockBack({ position: pl.pos }, p.av.group.position); me.squash(); popText('💥', me.group.position.clone().add(new V3(0, 1.8, 0)), 0.3); toast(`💥 ${p.name}님이 어깨빵했어요!`, 2200); me.say(pick(['아야!', '뭐야?!']), 1600); }
     if (d.type === 'tripod') { const pr = PROBLEMS.find((x) => x.id === d.pid); if (pr) placeTripod(pr, 'peer:' + p.id, p.name); }
-    if (d.type === 'tripodfall') { const dir = d.x != null ? new V3(+d.x || 0, 0, +d.z || 0) : null; if (dir && dir.lengthSq() < 1e-4) dir.set(0, 0, 1); p.av.kickT = 0.9; shoutText('THIS IS SPICY!!!', p.av.group.position.clone().add(new V3(0, 2.2, 0)), 0.4); if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true, dir); toast(`🦵 ${p.name}님이 내 삼각대를 걷어찼어요! THIS IS SPICY!!!`, 2600); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true, dir); } }
+    if (d.type === 'tripodfall') { const dir = d.x != null ? new V3(+d.x || 0, 0, +d.z || 0) : null; if (dir && dir.lengthSq() < 1e-4) dir.set(0, 0, 1); p.av.kickT = 0.9; shoutText('THIS IS SPICY!!!', p.av.group.position.clone().add(new V3(0, 2.2, 0)), 0.4); if (p.av.group.position.distanceTo(me.group.position) < 12) Voice.shout('This! Is! SPICY!!!', { lang: 'en', pitch: 0.1, rate: 0.78 }); if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true, dir); toast(`🦵 ${p.name}님이 내 삼각대를 걷어찼어요! THIS IS SPICY!!!`, 2600); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true, dir); } }
     if (d.type === 'ceremony') { p.av.ceremony = ['turn', 'flex', 'gorilla', 'kiss'].includes(d.c) ? d.c : 'turn'; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
     if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
     if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
@@ -3716,6 +3739,7 @@ function knockTripod(t, remote, dir) {
   t.kicking = true;
   me.kickT = 0.9;
   shoutText('THIS IS SPICY!!!', mp.clone().add(new V3(0, 2.2, 0)), 0.4);
+  Voice.shout('This! Is! SPICY!!!', { lang: 'en', pitch: 0.1, rate: 0.78 });
   Sound.tone(98, 0.5, 'sawtooth', 0.07, 0, -30); Sound.tone(147, 0.45, 'square', 0.04, 0.05, -20);
   setTimeout(() => {
     t.kicking = false;
@@ -3796,7 +3820,7 @@ function chalkThrow() {
     const out = new V3(-Math.sin(ry), 0, -Math.cos(ry)).applyAxisAngle(new V3(0, 1, 0), (Math.random() - 0.5) * 1.2);
     const hand = me.group.position.clone().add(new V3(0, 1.25, 0)).addScaledVector(out, 0.15);
     me.throwT = 0.55; Sound.chalk();
-    shoutText('초크투척!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.45);
+    shoutText('초크투척!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.45); Voice.shout('초크 투척!', { lang: 'ko', pitch: 0.4, rate: 1.1 });
     setTimeout(() => chalkScatter(me.group.position.clone().add(new V3(0, 1.25, 0)).addScaledVector(out, 0.15), out), 260);
     Net.event('chalkscatter', { x: +out.x.toFixed(2), z: +out.z.toFixed(2) });
     const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
@@ -3806,7 +3830,7 @@ function chalkThrow() {
   }
   me.throwT = 0.55; Sound.chalk();
   const tp = t.group.position, mp = me.group.position;
-  shoutText('초크투척!', mp.clone().add(new V3(0, 2.1, 0)), 0.45);
+  shoutText('초크투척!', mp.clone().add(new V3(0, 2.1, 0)), 0.45); Voice.shout('초크 투척!', { lang: 'ko', pitch: 0.4, rate: 1.1 });
   const out = new V3(tp.x - mp.x, 0, tp.z - mp.z);
   me.group.rotation.y = Math.atan2(out.x, out.z); pl.yaw = me.group.rotation.y;
   chalkScatter(mp.clone().add(new V3(0, 1.1, 0)).addScaledVector(out.clone().normalize(), 0.2), out, 30);
@@ -5368,6 +5392,10 @@ function setupIntro() {
 }
 
 async function enterGym(name, color) {
+  // 입장 버튼 클릭 = 사용자 동작 → 이때 오디오를 깨워 둠 (기본 소리 켜짐)
+  Sound.on = !Store.data.soundOff;
+  if (Sound.on) { try { Sound.ensure().resume?.(); } catch (e) { /* 무시 */ } }
+  $('#btn-sound').textContent = Sound.on ? '🔊' : '🔈';
   $('#intro').hidden = true;
   $('#game').hidden = false;
   try { await document.fonts.ready; } catch (e) { /* 무시 */ }
@@ -5425,11 +5453,13 @@ async function enterGym(name, color) {
     e.currentTarget.setAttribute('aria-pressed', on ? 'true' : 'false');
     toast(on ? '🎵 암장 BGM 재생 중' : '음악을 껐어요', 1400);
   });
+  $('#btn-sound').textContent = Sound.on ? '🔊' : '🔈';
   $('#btn-sound').addEventListener('click', (e) => {
     Sound.on = !Sound.on;
-    if (Sound.on) Sound.ensure().resume?.();
+    Store.data.soundOff = !Sound.on; Store.save();
+    if (Sound.on) Sound.ensure().resume?.(); else try { speechSynthesis.cancel(); } catch (er) { /* 무시 */ }
     e.currentTarget.textContent = Sound.on ? '🔊' : '🔈';
-    toast(Sound.on ? '효과음을 켰어요' : '효과음을 껐어요', 1200);
+    toast(Sound.on ? '소리를 켰어요 (효과음·외치기)' : '소리를 껐어요', 1200);
   });
   $('#btn-records').addEventListener('click', () => { renderRecords(); $('#records').showModal(); });
   $('#btn-reset').addEventListener('click', () => {
