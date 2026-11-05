@@ -1281,6 +1281,9 @@ class Avatar {
     const [la, ra, ll, rl] = this.limbs;
     this.rig.position.y = 0; this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
     if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
+    if (this.throwT > 0) this.throwT = Math.max(0, this.throwT - dt);
+    // 🤍 초크 투척: 팔을 뒤로 뺐다가 앞위로 휙
+    const thr = this.throwT > 0 ? (() => { const k = 1 - this.throwT / 0.55; return k < 0.35 ? -1.1 * (k / 0.35) : -1.1 + 3.3 * Math.min(1, (k - 0.35) / 0.3); })() : null;
     const ck = this.chalkT > 0 ? this.chalkDur - this.chalkT : -1;
     if (this.chalkyT > 0) this.chalkyT -= dt;
     this.skin.color.set(this.skinBase).lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
@@ -1290,7 +1293,7 @@ class Avatar {
       if (this.swing) this.rig.rotation.z = this.swing;
       this.rig.updateMatrixWorld(true);
       this.limbTo(la, this.grips[0]);
-      if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
+      if (thr !== null) this.limbRot(ra, thr, 0.3); else if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
       if (this.ceremony) {
         const type = typeof this.ceremony === 'string' ? this.ceremony : 'turn';
         const f = Math.sin(this.t * 5) * 0.2;
@@ -1343,6 +1346,7 @@ class Avatar {
       this.rig.rotation.x = run * 0.2;
       this.head.rotation.z = Math.sin(this.phase) * 0.05 * Math.min(sp, 1);
     }
+    if (thr !== null && !(this.climbing && this.grips)) this.limbRot(ra, thr, 0.25);
     if (this.kickT > 0 && !this.climbing) {
       // 🦵 THIS IS SPICY 발차기: 무릎 당기기 → 앞으로 쭉
       this.kickT = Math.max(0, this.kickT - dt);
@@ -1482,7 +1486,7 @@ function chalkBurst(pos, n, power) {
     particles.push({ sp, vel: new V3((Math.random() - 0.5) * 0.6, 0.15 + Math.random() * 0.3, (Math.random() - 0.5) * 0.6), g: 0, drag: 0.8, life: 0, max: 2.2 + Math.random() * 1.3, grow: 0.3 * power, alpha: 0.42 });
   }
 }
-function popText(text, pos, h) {
+function popText(text, pos, h, max = 0.85) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const font = '64px "Black Han Sans", sans-serif';
@@ -1499,7 +1503,12 @@ function popText(text, pos, h) {
   const base = new V3((w / 90) * h, h, 1);
   sp.scale.copy(base);
   scene.add(sp);
-  particles.push({ sp, vel: new V3(0, 0.9, 0), g: 0, drag: 2, life: 0, max: 0.85, pop: true, base, alpha: 1 });
+  particles.push({ sp, vel: new V3(0, 0.9, 0), g: 0, drag: 2, life: 0, max, pop: true, base, alpha: 1 });
+}
+// 외치기: 말풍선 없이 등반 판정처럼 큰 글씨 이펙트만 (+ 충격파)
+function shoutText(text, pos, h = 0.5) {
+  popText(text, pos, h, 1.6);
+  shockRing(pos.clone().add(new V3(0, -0.15, 0)), 0.8);
 }
 function shockRing(pos, size) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false }));
@@ -3124,11 +3133,11 @@ const Net = {
     if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'shoulder' && d.to === this.id) { knockBack({ position: pl.pos }, p.av.group.position); me.squash(); popText('💥', me.group.position.clone().add(new V3(0, 1.8, 0)), 0.3); toast(`💥 ${p.name}님이 어깨빵했어요!`, 2200); me.say(pick(['아야!', '뭐야?!']), 1600); }
     if (d.type === 'tripod') { const pr = PROBLEMS.find((x) => x.id === d.pid); if (pr) placeTripod(pr, 'peer:' + p.id, p.name); }
-    if (d.type === 'tripodfall') { const dir = d.x != null ? new V3(+d.x || 0, 0, +d.z || 0) : null; if (dir && dir.lengthSq() < 1e-4) dir.set(0, 0, 1); p.av.kickT = 0.9; p.av.say('THIS IS SPICY!!! 🔥', 2200); if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true, dir); toast(`🦵 ${p.name}님이 내 삼각대를 걷어찼어요! THIS IS SPICY!!!`, 2600); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true, dir); } }
+    if (d.type === 'tripodfall') { const dir = d.x != null ? new V3(+d.x || 0, 0, +d.z || 0) : null; if (dir && dir.lengthSq() < 1e-4) dir.set(0, 0, 1); p.av.kickT = 0.9; shoutText('THIS IS SPICY!!!', p.av.group.position.clone().add(new V3(0, 2.2, 0)), 0.4); if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true, dir); toast(`🦵 ${p.name}님이 내 삼각대를 걷어찼어요! THIS IS SPICY!!!`, 2600); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true, dir); } }
     if (d.type === 'ceremony') { p.av.ceremony = ['turn', 'flex', 'gorilla', 'kiss'].includes(d.c) ? d.c : 'turn'; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
     if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
     if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
-    if (d.type === 'chalkscatter') { p.av.chalk(); chalkScatter(p.av.group.position.clone().add(new V3(0, d.g ? 1.1 : 1.25, 0)), new V3(+d.x || 0, 0, +d.z || 1)); }
+    if (d.type === 'chalkscatter') { p.av.throwT = 0.55; shoutText('초크투척!', p.av.group.position.clone().add(new V3(0, 2.1, 0)), 0.42); chalkScatter(p.av.group.position.clone().add(new V3(0, d.g ? 1.1 : 1.25, 0)), new V3(+d.x || 0, 0, +d.z || 1)); }
     if (d.type === 'vsay' && text) p.av.say(text, 2600);
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
@@ -3254,9 +3263,9 @@ const SKILLS = [
   { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼 → "THIS IS SPICY!!!" 외치며 앞차기로 뻥! 매너 온도 −2' },
   { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '홀드 위에서든 바닥에서든 한 줌 촤악 흩뿌리기 (바닥에선 옆사람 쪽으로). 초크 1회 소모, 매너 온도 −1' },
 ];
-// 🎉 스킬 60% 할인 행사 — 정가의 40%에 판매 (행사 끝나면 1로)
-const SKILL_SALE = 0.4;
-const skillPrice = (k) => Math.round((k.price * SKILL_SALE) / 1000) * 1000;
+// 🎉 스킬 95% 할인 행사 — 정가의 5%에 판매 (행사 끝나면 1로)
+const SKILL_SALE = 0.05;
+const skillPrice = (k) => Math.round((k.price * SKILL_SALE) / 100) * 100;
 function hasSkill(id) { return !!(Store.data.skills || {})[id]; }
 // 📷 아이템 (스킬 아님 — 한 번 사면 계속 들고 다녀요)
 const GEAR = [
@@ -3379,7 +3388,7 @@ function pvPose(id, t, dt) {
     tri.position.set(0.45 + e * 1.3, Math.sin(Math.PI * f) * 0.5, 1.4);
     tri.rotation.z = e * (1.45 + Math.PI * 2);
     tri.userData.rec.visible = f === 0 && Math.floor(t * 3) % 2 === 0;
-    if (t > 0.55 && t < 1.6) text = 'THIS IS SPICY!!! 🔥'; else if (t >= 1.6 && t < 2.8) text = '쾅!!';
+    if (t > 0.55 && t < 1.6) text = 'THIS IS SPICY!!!'; else if (t >= 1.6 && t < 2.8) text = '쾅!!';
     cam.position.set(0.2, 1.5, 4.4); cam.lookAt(0.1, 0.6, 1.3);
   } else if (id === 'chalkthrow') {
     pvClimb(A, -0.35, 1.3);
@@ -3395,8 +3404,8 @@ function pvPose(id, t, dt) {
       arr[i * 3] = -0.2 + r1 * 0.9 * sp * k; arr[i * 3 + 1] = 2.35 + (0.25 + r2 * 0.6) * sp * k - 1.2 * age * age; arr[i * 3 + 2] = 0.4 + (0.5 + r2 * 0.5) * sp * k;
     }
     chalk.geometry.attributes.position.needsUpdate = true;
-    if (t > 0.75 && t < 1.05) A.chalkT = A.chalkDur = 1.0;
-    if (t > 1.6) { B.chalkyT = 3; text = '콜록콜록 😵'; } else if (t > 0.9) text = '🤍 촤악~';
+    A.throwT = t > 0.75 && t < 1.3 ? 0.55 - (t - 0.75) : 0;
+    if (t > 1.7) { B.chalkyT = 3; text = '콜록콜록'; } else if (t > 0.6) text = '초크투척!';
     cam.position.set(0.9, 2.1, 4.8); cam.lookAt(0.05, 1.55, 0.5);
   } else if (id === 'tripod') {
     tri.visible = true; tri.position.set(0.75, 0, 1.5); tri.rotation.y = Math.PI + 0.45;
@@ -3437,8 +3446,9 @@ function renderSkillPreviews(now) {
       g.drawImage(src, 0, src.height - h * pr, w * pr, h * pr, 0, 0, cv.width, cv.height);
       if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${o.flash})`; g.fillRect(0, 0, cv.width, cv.height); }
       if (o.text) {
-        g.font = `900 ${Math.round(15 * pr)}px "Noto Sans KR", sans-serif`; g.textAlign = 'center';
-        g.lineWidth = 4 * pr; g.strokeStyle = 'rgba(0,0,0,.75)'; g.fillStyle = '#ffcf4a';
+        // 등반 판정 글씨처럼: 흰 글씨 + 빨간 테두리
+        g.font = `${Math.round(22 * pr)}px "Black Han Sans", sans-serif`; g.textAlign = 'center'; g.lineJoin = 'round';
+        g.lineWidth = 6 * pr; g.strokeStyle = '#e3262b'; g.fillStyle = '#fff';
         const ty = cv.height - 10 * pr; g.strokeText(o.text, cv.width / 2, ty); g.fillText(o.text, cv.width / 2, ty);
       }
       drew = true;
@@ -3565,8 +3575,7 @@ function knockTripod(t, remote, dir) {
   me.group.rotation.y = Math.atan2(d.x, d.z); pl.yaw = me.group.rotation.y;
   t.kicking = true;
   me.kickT = 0.9;
-  me.say('THIS IS SPICY!!! 🔥', 2400);
-  popText('THIS IS SPICY!!!', mp.clone().add(new V3(0, 2.25, 0)), 0.42);
+  shoutText('THIS IS SPICY!!!', mp.clone().add(new V3(0, 2.2, 0)), 0.4);
   Sound.tone(98, 0.5, 'sawtooth', 0.07, 0, -30); Sound.tone(147, 0.45, 'square', 0.04, 0.05, -20);
   setTimeout(() => {
     t.kicking = false;
@@ -3645,23 +3654,23 @@ function chalkThrow() {
     // 홀드 위에서 등 뒤(벽 바깥)로 촤악 흩뿌리기
     const out = new V3(-Math.sin(ry), 0, -Math.cos(ry)).applyAxisAngle(new V3(0, 1, 0), (Math.random() - 0.5) * 1.2);
     const hand = me.group.position.clone().add(new V3(0, 1.25, 0)).addScaledVector(out, 0.15);
-    me.chalk(); Sound.chalk();
-    chalkScatter(hand, out); Net.event('chalkscatter', { x: +out.x.toFixed(2), z: +out.z.toFixed(2) });
-    popText('촤악~ 💨', hand.clone().add(new V3(0, 0.5, 0)), 0.26);
-    me.say(pick(['초크 서비스 촤악~ 💨', '받아라 초크!!', '흩날려라 초크~']), 2000);
+    me.throwT = 0.55; Sound.chalk();
+    shoutText('초크투척!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.45);
+    setTimeout(() => chalkScatter(me.group.position.clone().add(new V3(0, 1.25, 0)).addScaledVector(out, 0.15), out), 260);
+    Net.event('chalkscatter', { x: +out.x.toFixed(2), z: +out.z.toFixed(2) });
     const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
     below.slice(0, 2).forEach((a, k) => setTimeout(() => a.say(pick(['콜록… 위에서 초크 내려와요!', '앞이 안 보여 ㅋㅋㅋ', '눈에 들어갔어!!']), 2200), 900 + k * 500));
     if (below.length) Manner.add(-1, '초크 흩뿌리기 💨');
     return;
   }
-  me.chalk(); Sound.chalk();
+  me.throwT = 0.55; Sound.chalk();
   const tp = t.group.position, mp = me.group.position;
+  shoutText('초크투척!', mp.clone().add(new V3(0, 2.1, 0)), 0.45);
   const out = new V3(tp.x - mp.x, 0, tp.z - mp.z);
   me.group.rotation.y = Math.atan2(out.x, out.z); pl.yaw = me.group.rotation.y;
   chalkScatter(mp.clone().add(new V3(0, 1.1, 0)).addScaledVector(out.clone().normalize(), 0.2), out, 30);
   Net.event('chalkscatter', { x: +out.normalize().x.toFixed(2), z: +out.z.toFixed(2), g: 1 });
   setTimeout(() => chalkBurst(t.group.position.clone().add(new V3(0, 1.3, 0)), 18, 1.1), 250);
-  popText('촤악! 💨', t.group.position.clone().add(new V3(0, 1.9, 0)), 0.3);
   setTimeout(() => t.say(pick(['콜록콜록!!', '아 초크 던지지 마요 ㅋㅋㅋ', '눈에 들어갔어!', '뭐야 하얘졌잖아']), 2200), 400);
   t.chalkyT = 25;
   Manner.add(-1, '초크 투척 💨');
