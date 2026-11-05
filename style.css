@@ -109,12 +109,12 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .online[data-state="connecting"]::before { background: #ffc21a; }
 
 .minimap {
-  position: absolute; right: 12px; top: 64px; width: 120px; height: 166px;
+  position: absolute; right: 12px; top: var(--hud-off, 64px); width: 120px; height: 166px;
   border-radius: 12px; background: rgba(14,14,16,.7); border: 1px solid var(--line); pointer-events: none;
 }
 
 .status {
-  position: absolute; left: 50%; top: 64px; transform: translateX(-50%);
+  position: absolute; left: 50%; top: var(--hud-off, 64px); transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px;
   min-width: 220px; text-align: center; pointer-events: none; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   transition: opacity .2s;
@@ -175,7 +175,7 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .inst { position: absolute; inset: 0; }
 .inst-cv { position: absolute; inset: 0; touch-action: none; display: block; }
 .inst-panel {
-  position: absolute; left: 12px; top: 64px; width: min(300px, calc(100% - 150px));
+  position: absolute; left: 12px; top: var(--hud-off, 64px); width: min(300px, calc(100% - 150px));
   background: rgba(14,14,16,.78); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; pointer-events: none;
 }
 .inst-title { font-family: "Black Han Sans", sans-serif; font-size: 1.05rem; }
@@ -192,7 +192,7 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .inst-checks .ok { color: #8be0a8; }
 .inst-checks .no { color: #ffb3b3; }
 .inst-checks .warn { color: #ffcf4a; font-weight: 900; animation: blink .4s infinite; }
-.inst-side { position: absolute; right: 12px; top: 64px; width: 120px; height: 150px; border-radius: 12px; border: 1px solid var(--line); pointer-events: none; }
+.inst-side { position: absolute; right: 12px; top: var(--hud-off, 64px); width: 120px; height: 150px; border-radius: 12px; border: 1px solid var(--line); pointer-events: none; }
 .inst-msg {
   position: absolute; left: 50%; top: 38%; transform: translate(-50%, 8px); background: rgba(255,255,255,.95); color: #111;
   padding: 8px 16px; border-radius: 999px; font-weight: 800; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
@@ -224,7 +224,7 @@ body.route.touch .minimap { display: none; }
 body.route.touch #status { top: auto; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px); left: 10px; width: calc(100% - 250px); min-width: 0; padding: 6px 10px; text-align: left; transform: none; }
 body.route.touch #status .status-title small:not(:first-of-type) { display: none; }
 body.route.touch #status .status-title { font-size: .9rem; }
-body.route.touch .prompt { bottom: auto; top: 64px; font-size: .78rem; padding: 6px 12px; }
+body.route.touch .prompt { bottom: auto; top: var(--hud-off, 64px); font-size: .78rem; padding: 6px 12px; }
 body.route.touch .toast { top: auto; bottom: 128px; font-size: .78rem; padding: 7px 12px; max-width: 60%; }
 body.route.touch #status .status-title small { display: none; }
 body.route.touch .chatlog { display: none; }
@@ -322,7 +322,7 @@ body.touch .chatlog { bottom: 172px; width: calc(100% - 150px); max-height: 8em;
 body.touch .only-touch { display: block; }
 body.touch #btn-chat { display: inline-block; }
 body.touch kbd { display: none; }
-body.touch .chat { display: none; top: 64px; bottom: auto; width: calc(100% - 24px); }
+body.touch .chat { display: none; top: var(--hud-off, 64px); bottom: auto; width: calc(100% - 24px); }
 body.touch .chat.open { display: flex; }
 body.touch .prompt { bottom: 175px; }
 
@@ -396,8 +396,7 @@ body.touch .prompt { bottom: 175px; }
 
 /* 지갑 / 상점 / 광고 */
 .wallet-btn { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.shop-btn { white-space: nowrap; border-color: rgba(227,38,43,.6); }
-.shop-btn.skill { border-color: rgba(184,115,44,.85); }
+.save-btn { white-space: nowrap; border-color: rgba(80,200,120,.85); font-weight: 800; }
 .wallet-btn .neg, #wallet.neg { color: #ff8a8a; }
 .shop .shop-wallet { margin: 8px 0 0; font-size: .95rem; }
 .shop .shop-wallet b { color: #ffcf4a; font-size: 1.1rem; }
@@ -419,7 +418,7 @@ body.touch .prompt { bottom: 175px; }
 .item-act .btn { padding: 7px 12px; font-size: .82rem; }
 .ad-link { text-decoration: none; background: #fff; color: #111; border-color: #fff; }
 .adcard {
-  position: absolute; left: 12px; top: 64px; width: min(300px, calc(100% - 150px)); background: #111; border: 1px solid #e3262b; border-radius: 14px;
+  position: absolute; left: 12px; top: var(--hud-off, 64px); width: min(300px, calc(100% - 150px)); background: #111; border: 1px solid #e3262b; border-radius: 14px;
   padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
 }
 .adcard.show { animation: drop .5s cubic-bezier(.2,1.4,.4,1); }
@@ -458,12 +457,15 @@ body.inst .adcard { display: none; }
 .pay-note { color: var(--muted); font-size: .74rem; margin: 12px 0 0; }
 
 @media (max-width: 640px) {
+  :root { --hud-off: 104px; }
+  .hud-top { align-items: flex-start; }
+  .top-actions { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
   .hide-sm { display: none; }
   .logo { font-size: 4.2rem; }
   .brand-name { display: none; }
   .brand { padding: 6px 8px; }
-  .minimap { width: 92px; height: 127px; top: 60px; right: 10px; }
-  .status { top: 60px; min-width: 0; width: calc(100% - 130px); left: 12px; transform: none; text-align: left; }
+  .minimap { width: 92px; height: 127px; top: calc(var(--hud-off) - 4px); right: 10px; }
+  .status { top: calc(var(--hud-off) - 4px); min-width: 0; width: calc(100% - 130px); left: 12px; transform: none; text-align: left; }
   .online { padding: 7px 9px; font-size: .74rem; }
   .icon-btn { padding: 7px 10px; }
   .chat { width: calc(100% - 24px); }
@@ -471,4 +473,11 @@ body.inst .adcard { display: none; }
   .hud-btn.big { width: 78px; height: 78px; }
   .hud-btn.small { width: 48px; height: 48px; }
   .hud-sub { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px); }
+}
+
+/* 아주 좁은 폰: 접속 표시는 점만 */
+@media (max-width: 360px) {
+  .online { font-size: 0; gap: 0; padding: 9px; }
+  .top-actions { gap: 5px; }
+  .icon-btn { padding: 7px 8px; }
 }

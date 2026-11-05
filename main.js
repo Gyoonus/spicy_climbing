@@ -5173,8 +5173,7 @@ async function enterGym(name, color) {
   updateWallet();
   updateChalkBadge();
   $('#btn-shop').addEventListener('click', openShop);
-  $('#btn-itemshop').addEventListener('click', () => openShop('items'));
-  $('#btn-skillshop').addEventListener('click', () => openShop('skills'));
+  $('#btn-save').addEventListener('click', openSaveCode);
   $('#btn-savecode').addEventListener('click', openSaveCode);
   document.querySelectorAll('#shop .shop-tab').forEach((b) => b.addEventListener('click', () => { setShopTab(b.dataset.tab); $('#shop').scrollTop = 0; }));
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
