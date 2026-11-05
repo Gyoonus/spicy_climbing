@@ -3472,11 +3472,14 @@ const tripods = [];
 function buildTripodMesh() {
   const g = new THREE.Group();
   const legMat = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.5 });
+  // 다리 3개: 바닥에서 넓게 벌어지고 위(카메라)에서 모임 — 정사면체 모양
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 6), legMat);
-    leg.position.set(Math.sin(a) * 0.16, 0.56, Math.cos(a) * 0.16);
-    leg.rotation.set(Math.cos(a) * 0.28, 0, -Math.sin(a) * 0.28);
+    const foot = new V3(Math.sin(a) * 0.32, 0, Math.cos(a) * 0.32), top = new V3(Math.sin(a) * 0.025, 1.11, Math.cos(a) * 0.025);
+    const dir = top.clone().sub(foot), len = dir.length();
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, len, 6), legMat);
+    leg.position.copy(foot).addScaledVector(dir, 0.5);
+    leg.quaternion.setFromUnitVectors(new V3(0, 1, 0), dir.normalize());
     g.add(leg);
   }
   const cam = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.08), new THREE.MeshStandardMaterial({ color: '#16161a' }));
