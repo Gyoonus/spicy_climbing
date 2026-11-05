@@ -257,6 +257,7 @@ body.route .hud-tech { display: none !important; }
 @media (max-width: 640px) { .rhythm { bottom: 150px; } }
 
 /* 상황 버튼 / 세레머니 선택 */
+.item .diff { color: #ffcf4a; letter-spacing: 1px; font-size: .8rem; margin-right: 4px; }
 .ctx-actions { position: absolute; left: 50%; bottom: 196px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
 .ctx-btn { background: rgba(22,22,25,.9); border-color: #ffcf4a; box-shadow: 0 0 0 3px rgba(255,207,74,.25); }
 .ctx-btn[hidden] { display: none; }

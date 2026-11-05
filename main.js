@@ -3293,20 +3293,21 @@ function updateHud(dt) {
 // =================================================================
 // 🎬 스킬 (각 30만원): 세레머니 4종, 어깨빵, 삼각대, 쓰러트리기
 // =================================================================
-const SKILL_PRICE = 300000;
+// 가격 = 구현 난이도 (★1~5), 최대 1,000,000원
+const diffStars = (price) => '★'.repeat(Math.max(1, Math.round(price / 200000))).padEnd(5, '☆');
 const SKILLS = [
-  { id: 'c_turn', cere: 'turn', n: '🙌 뒤돌아 번쩍', d: 'TOP에서 뒤돌아 한 팔 번쩍', pop: '🙌 가즈아!!' },
-  { id: 'c_flex', cere: 'flex', n: '💪 이두 자랑', d: 'TOP에서 알통 자랑', pop: '💪 이것이 매운맛!' },
-  { id: 'c_gorilla', cere: 'gorilla', n: '🦍 고릴라 가슴치기', d: 'TOP에서 쿵쿵쿵 가슴치기', pop: '🦍 우호호!!' },
-  { id: 'c_kiss', cere: 'kiss', n: '😘 손키스 투척', d: 'TOP에서 관객에게 손키스', pop: '😘 사랑해요 스파이시!' },
-  { id: 'bump', n: '💥 어깨빵', d: '지나갈 때 어깨빵 버튼이 떠요. 매너 온도 −2' },
-  { id: 'knock', n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
-  { id: 'chalkthrow', n: '🤍 초크 던지기', d: '벽 위에선 아래로 초크 비, 바닥에선 옆사람한테 초크 투척. 초크 1회 소모, 매너 온도 −1' },
+  { id: 'c_turn', price: 350000, cere: 'turn', n: '🙌 뒤돌아 번쩍', d: 'TOP에서 뒤돌아 한 팔 번쩍', pop: '🙌 가즈아!!' },
+  { id: 'c_flex', price: 150000, cere: 'flex', n: '💪 이두 자랑', d: 'TOP에서 알통 자랑', pop: '💪 이것이 매운맛!' },
+  { id: 'c_gorilla', price: 200000, cere: 'gorilla', n: '🦍 고릴라 가슴치기', d: 'TOP에서 쿵쿵쿵 가슴치기', pop: '🦍 우호호!!' },
+  { id: 'c_kiss', price: 250000, cere: 'kiss', n: '😘 손키스 투척', d: 'TOP에서 관객에게 손키스', pop: '😘 사랑해요 스파이시!' },
+  { id: 'bump', price: 450000, n: '💥 어깨빵', d: '지나갈 때 어깨빵 버튼이 떠요. 매너 온도 −2' },
+  { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
+  { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '벽 위에선 아래로 초크 비, 바닥에선 옆사람한테 초크 투척. 초크 1회 소모, 매너 온도 −1' },
 ];
 function hasSkill(id) { return !!(Store.data.skills || {})[id]; }
 // 📷 아이템 (스킬 아님 — 한 번 사면 계속 들고 다녀요)
 const GEAR = [
-  { id: 'tripod', n: '📷 삼각대', price: 50000, d: '문제 시작 앞에 설치하면 완등할 때 셀프캠 사진이 찍혀요' },
+  { id: 'tripod', n: '📷 삼각대', price: 800000, d: '문제 시작 앞에 설치하면 완등할 때 셀프캠 사진이 찍혀요' },
 ];
 function hasItem(id) { return !!(Store.data.owned || {})[id] || !!(Store.data.skills || {})[id]; } // 예전에 스킬로 산 삼각대도 인정
 function renderGear() {
@@ -3315,7 +3316,7 @@ function renderGear() {
   GEAR.forEach((it) => {
     const own = hasItem(it.id);
     const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
-    el.innerHTML = `<div class="item-head"><b>${it.n}</b><span class="price">${own ? '보유 중' : won(it.price)}</span></div><p>${it.d}</p>`;
+    el.innerHTML = `<div class="item-head"><b>${it.n}</b><span class="price">${own ? '보유 중' : won(it.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(it.price)}</span> ${it.d}</p>`;
     if (!own) {
       const act = document.createElement('div'); act.className = 'item-act';
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(it.price)}에 사기`;
@@ -3333,16 +3334,16 @@ function renderGear() {
 function renderSkills() {
   const box = $('#shop-skills'); if (!box) return;
   box.innerHTML = '';
-  SKILLS.forEach((k) => {
+  [...SKILLS].sort((a, b) => a.price - b.price).forEach((k) => {
     const own = hasSkill(k.id);
     const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
-    el.innerHTML = `<div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(SKILL_PRICE)}</span></div><p>${k.d}</p>`;
+    el.innerHTML = `<div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(k.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(k.price)}</span> ${k.d}</p>`;
     if (!own) {
       const act = document.createElement('div'); act.className = 'item-act';
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(SKILL_PRICE)}에 배우기`;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(k.price)}에 배우기`;
       b.addEventListener('click', () => {
-        if ((Store.data.wallet || 0) < SKILL_PRICE) { toast(`돈이 ${won(SKILL_PRICE - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
-        addMoney(-SKILL_PRICE, `${k.n} 스킬 습득`);
+        if ((Store.data.wallet || 0) < k.price) { toast(`돈이 ${won(k.price - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
+        addMoney(-k.price, `${k.n} 스킬 습득`);
         Store.data.skills = Store.data.skills || {}; Store.data.skills[k.id] = true; Store.save();
         Sound.top(); renderShop();
       });
