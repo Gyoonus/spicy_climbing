@@ -2344,7 +2344,7 @@ function npcUpdate(n, dt, now) {
           }
           n.waitT = 0;
           n.state = 'climb'; n.hold = 0; n.holdT = 0; n.av.setClimbing(true); n.climbStart = Date.now();
-          if (Math.random() < 0.35) placeTripod(n.problem, n, n.av.name);
+          if (Math.random() < 0.8) placeTripod(n.problem, n, n.av.name);
         }
         else { n.state = 'idle'; n.av.sitting = true; n.problem = null; n.next = now + 10000 + Math.random() * 14000; }
       }
@@ -3627,7 +3627,7 @@ function updateTripods(dt) {
       const axis = new V3(f.dir.z, 0, -f.dir.x);
       t.g.quaternion.setFromAxisAngle(axis, (Math.PI * 0.46 + Math.PI * 2) * e).multiply(f.q0);
     } else if (!t.up) { t.fallT = Math.min(1, t.fallT + dt * 3); t.g.rotation.z = t.fallDir * (Math.PI / 2) * (t.fallT * t.fallT); t.g.position.y = groundY(t.g.position.x, t.g.position.z) + 0.05 * t.fallT; }
-    const life = t.owner === 'me' ? 240000 : 90000;
+    const life = t.owner === 'me' ? 240000 : 150000;
     if (now - t.born > life || (!t.up && t.fallT >= 1 && now - t.born > 20000 && t.owner !== 'me')) { scene.remove(t.g); tripods.splice(i, 1); }
   }
 }
