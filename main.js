@@ -3687,7 +3687,13 @@ function buyOrEquip(it, kind) {
   renderShop();
   logChat('', '', `👟 ${Store.data.name}님이 ${it.n} ${kind === 'shoe' ? '신었어요' : '입었어요'}`, 'sys');
 }
-function openShop() { renderShop(); const d = $('#shop'); if (!d.open) d.showModal(); }
+let shopTab = 'items';
+function setShopTab(tab) {
+  shopTab = tab;
+  document.querySelectorAll('#shop .shop-tab').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'));
+  document.querySelectorAll('#shop .shop-panel').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+}
+function openShop(tab) { renderShop(); setShopTab(typeof tab === 'string' ? tab : shopTab); const d = $('#shop'); if (!d.open) d.showModal(); }
 let adIdx = 0, adTimer;
 function showAd(i = adIdx++ % ADS.length, prefix = '') {
   if (pl.mode === 'inst' || pl.mode === 'route' || document.querySelector('dialog[open]')) return;
@@ -5087,6 +5093,7 @@ async function enterGym(name, color) {
   updateWallet();
   updateChalkBadge();
   $('#btn-shop').addEventListener('click', openShop);
+  document.querySelectorAll('#shop .shop-tab').forEach((b) => b.addEventListener('click', () => { setShopTab(b.dataset.tab); $('#shop').scrollTop = 0; }));
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
   $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
   setupPay();
