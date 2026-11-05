@@ -1747,10 +1747,8 @@ const shiftDown = () => keys.has('ShiftLeft') || keys.has('ShiftRight');
 function isCampus() { return pl.mode === 'climb' && !pl.hanging && !pl.tech && (shiftDown() || pl.campusToggle); }
 function isRunning() { return shiftDown() || pl.runToggle; }
 function toggleSit() {
-  if (pl.mode !== 'walk') { toast('앉기는 매트 밖 바닥에서만! 벽에서는 H로 매달리기'); return; }
+  if (pl.mode !== 'walk') { toast('앉기는 바닥에서! 벽에서는 H로 매달리기'); return; }
   if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.01) return;
-  // 🚫 매트 위에서는 앉기·눕기 금지 — 떨어지는 사람한테 깔려요
-  if (!pl.sitting && isMat(pl.pos.x, pl.pos.z)) { matRestRefused(); return; }
   // 서기 → 앉기 → 대자로 눕기 → 일어나기
   if (pl.lying) { standUp(); return; }
   if (pl.sitting) { lieDown(); return; }
@@ -1764,17 +1762,44 @@ function toggleSit() {
   }
   Net.sync(true);
 }
-let matRefuseAt = -1e9;
-function matRestRefused() {
-  const now = performance.now();
-  // 바로 또 누르면 "눕기" 시도로 봄
-  const lie = now - matRefuseAt < 5000;
-  matRefuseAt = now;
-  const line = lie ? '매트는 침대가 아니에요! 눕는 건 집에 가서요 🐯' : '매트는 쇼파가 아니에요~ 위험해요! 떨어지는 사람한테 깔려요 🐯';
-  if (staff.av) { staff.av.say(line, 3200); toast(`🐯 무호K: ${line}`, 2600); }
-  else toast(line, 2600);
-  me.squash();
-  Sound.tone(330, 0.08, 'square', 0.05); Sound.tone(250, 0.12, 'square', 0.05, 0.1);
+// 🚨 매트 위에서 앉거나 누워 있으면 → 잠시 뒤 가까운 관리자(무호K·웨스트)가 와서 일으켜 세움
+const matCop = { t: 0, who: null };
+const MAT_LINES = {
+  muho: { sit: '매트는 쇼파가 아니에요~ 위험해요! 떨어지는 사람한테 깔려요. 일어나요 🐯', lie: '매트는 침대가 아니에요! 눕는 건 집에 가서요. 일어나요 🐯' },
+  west: { sit: '매트는 쇼파가 아니에요~ 위험해요! 저쪽 바닥에서 쉬어요 🤠', lie: '매트는 침대가 아니에요 ㅋㅋ 다쳐요, 일어나요~ 🤠' },
+};
+function updateMatCop(dt) {
+  const onMat = pl.mode === 'walk' && pl.sitting && isMat(pl.pos.x, pl.pos.z);
+  if (!onMat) { matCop.t = 0; return; }
+  matCop.t += dt;
+  if (matCop.who || matCop.t < 6) return;
+  // 가까운 관리자 고르기 (바쁜 사람 제외)
+  const mp = me.group.position;
+  const cands = [];
+  if (staff.av && !['collect', 'rush', 'chase', 'summon'].includes(staff.state)) cands.push({ key: 'muho', av: staff.av });
+  if (west.av && west.state !== 'summon') cands.push({ key: 'west', av: west.av });
+  if (!cands.length) return;
+  cands.sort((a, b) => a.av.group.position.distanceTo(mp) - b.av.group.position.distanceTo(mp));
+  const c = cands[0], g = c.av.group;
+  matCop.who = c.key;
+  const dir = new V3(g.position.x - mp.x, 0, g.position.z - mp.z); if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0); dir.normalize();
+  let pt = [mp.x + dir.x * 1.0, mp.z + dir.z * 1.0];
+  if (!walkable(pt[0], pt[1], 0.2)) pt = [mp.x + 0.8, mp.z + 0.8];
+  if (!walkable(pt[0], pt[1], 0.2)) pt = [mp.x, mp.z + 1];
+  const arrive = () => {
+    matCop.who = null;
+    g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
+    if (!(pl.sitting && isMat(pl.pos.x, pl.pos.z))) { c.av.say(c.key === 'muho' ? '…일어났네요. 다음엔 바닥에서 쉬어요 🐯' : '오 일어났네요! 최고 🤠', 2400); return; }
+    const line = MAT_LINES[c.key][pl.lying ? 'lie' : 'sit'];
+    c.av.say(line, 3600);
+    toast(`${c.key === 'muho' ? '🐯 무호K' : '🤠 웨스트'}: ${line}`, 2800);
+    standUp(); me.squash(); matCop.t = 0;
+    Sound.tone(330, 0.08, 'square', 0.05); Sound.tone(250, 0.12, 'square', 0.05, 0.1);
+    if (c.key === 'muho') staffLastNag = performance.now();
+  };
+  c.av.say(c.key === 'muho' ? '잠깐만요~ 거기 매트예요! 🐯💨' : '어어 거기 매트예요~ 🤠💨', 1800);
+  if (c.key === 'muho') { staffGo(pt, 6.5); staff.state = 'summon'; staff.onArrive = arrive; }
+  else { westGo(pt, 6); west.state = 'summon'; west.onArrive = arrive; }
 }
 function lieDown() {
   if (!pl.sitting) { pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3; }
@@ -2879,7 +2904,7 @@ function showPolaroid(url, label, by = '📷 내 삼각대가 찍음') {
 // =================================================================
 const VILLAIN_LINES = {
   beta: ['그거 발 바꿔서 하면 돼요~', '제가 하면 한 번에 되는데…', '그 홀드 사이드로 잡아요 사이드로', '아 그거 그렇게 하는 거 아닌데', '저 그거 플래시했어요 ㅎ'],
-  mat: ['(매트에 누우려다 막힘)', '여기 내 자리임', '5분만 눕고 싶다…', '매트가 제일 편한데', '벽은 보는 거지 오르는 게 아님'],
+  mat: ['(매트에 대자로 누움)', '여기 내 자리임', '5분만 더 누워있을게요…', '매트가 제일 편해', '벽은 보는 거지 오르는 게 아님'],
   chalk: ['초크 팡팡 한 번 더~ 💨', '초크는 많을수록 좋지!', '바닥 하얗게 만들어주마', '공기 중에 초크 농도 올리는 중'],
   shirtless: ['더워서 벗었어요 💪', '등근육 보이죠?', '이게 진짜 클라이밍 복장이지', '바람 시원하다~'],
 };
@@ -2911,7 +2936,7 @@ function updateVillain(now) {
   me.say(line, 2600);
   Net.event('vsay', { text: line });
   if (v === 'chalk' && pl.chalkReady && chalkLeft() > 0) useChalk();
-  if (v === 'mat' && !pl.sitting && isMat(pl.pos.x, pl.pos.z) && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01) matRestRefused(); // 매트 점령자도 무호K한테 막힘
+  if (v === 'mat' && !pl.lying && isMat(pl.pos.x, pl.pos.z) && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01) lieDown(); // 매트 점령자는 대자로 (곧 관리자 출동)
   const near = npcs.filter((n) => n.state === 'idle' && n.av.group.position.distanceTo(me.group.position) < 7);
   if (near.length) setTimeout(() => pick(near).av.say(pick(VILLAIN_REACT[v]), 2400), 1400);
   if (staffMayNag(0.3)) setTimeout(() => staffSay(STAFF_VILLAIN[v], 3000), 3200);
@@ -5240,6 +5265,7 @@ function loop() {
   Net.update(dt);
   updateEtiquette(dt);
   updateSitNag(dt);
+  updateMatCop(dt);
   updateStaff(dt, now);
   updateVillain(now);
   updateKnocks(dt);
