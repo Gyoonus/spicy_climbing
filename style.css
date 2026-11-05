@@ -214,6 +214,8 @@ body.inst .chat { bottom: 34px; }
 
 /* 등반 모드 */
 .up-btn { display: none !important; }
+.cere-btn[hidden] { display: none !important; }
+.cere-btn { border-color: #ffcf4a; box-shadow: 0 0 0 3px rgba(255,207,74,.35); animation: blink .6s infinite; }
 body.route .up-btn { display: grid !important; }
 body.route #btn-jump { display: none; }
 body.route .gauge ~ .hud-buttons #btn-jump { display: none; }

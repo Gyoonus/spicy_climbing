@@ -1289,7 +1289,17 @@ class Avatar {
       this.rig.updateMatrixWorld(true);
       this.limbTo(la, this.grips[0]);
       if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
-      if (this.tech === 'flag' && !this.hanging) {
+      if (this.ceremony) {
+        // 뒤돌아서 한 손은 TOP, 다른 팔 번쩍
+        this.rig.rotation.y = Math.PI * 0.85;
+        this.rig.updateMatrixWorld(true);
+        this.limbTo(la, this.grips[0]);
+        const pump = Math.sin(this.t * 10) * 0.06;
+        this.solve(ra, new V3(0.22, BODY.shY + 0.4 + pump, 0.05));
+        const f = Math.sin(this.t * 5) * 0.2;
+        this.limbRot(ll, 0.3 + f, -0.15); this.limbRot(rl, 0.3 - f, 0.15);
+        this.head.rotation.z = Math.sin(this.t * 6) * 0.08;
+      } else if (this.tech === 'flag' && !this.hanging) {
         const fs = this.flagSide || 1, fl = fs > 0 ? ll : rl, other = fs > 0 ? rl : ll;
         this.limbTo(other, this.grips[fs > 0 ? 3 : 2]);
         this.solve(fl, fl.root.clone().add(new V3(fs * 0.55, -0.32, -0.05)));
@@ -1622,6 +1632,7 @@ function setupInput() {
   $('#inst-hip').addEventListener('click', instToggleHip);
   $('#qte').addEventListener('click', () => { if (R.mash) mashTap(); else if (R.qte) qteResult(true); });
   $('#btn-up').addEventListener('click', routeAuto);
+  $('#btn-cere').addEventListener('click', startCeremony);
   // 박자 게임: 화면 어디든 누르는 순간 판정 (반응 빠르게 pointerdown)
   window.addEventListener('pointerdown', (e) => { if (R.rhythm) { rhythmTap(); e.preventDefault(); e.stopPropagation(); } }, true);
   $('#inst-flag').addEventListener('click', instFlag);
@@ -2826,7 +2837,18 @@ const STAFF_VILLAIN = {
 const vil = { next: performance.now() + 20000 };
 function updateVillain(now) {
   const v = me && me.villain;
-  if (!v || pl.mode !== 'walk' || !paidToday() || now < vil.next) return;
+  if (!v || !paidToday() || now < vil.next) return;
+  // 초크 빌런은 벽 위에서 아래로 초크를 뿌림
+  if (v === 'chalk' && pl.mode === 'route' && R.on && !R.anim) {
+    vil.next = now + 14000 + Math.random() * 10000;
+    const hand = me.group.position.clone().add(new V3(0, 1.5, 0));
+    chalkRain(hand); Net.event('chalkrain');
+    me.say(pick(['초크 비 내려갑니다~ 💨', '아래 계신 분들 초크 서비스!', '팡팡 공중 버전 ㅋㅋ']), 2200);
+    const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
+    below.slice(0, 2).forEach((a, k) => setTimeout(() => a.say(pick(['콜록… 위에서 초크 내려와요!', '앞이 안 보여 ㅋㅋㅋ', '눈에 들어갔어!!']), 2200), 900 + k * 500));
+    return;
+  }
+  if (pl.mode !== 'walk') return;
   vil.next = now + 22000 + Math.random() * 18000;
   const line = pick(VILLAIN_LINES[v]);
   me.say(line, 2600);
@@ -3143,6 +3165,9 @@ const Net = {
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
     if (d.type === 'say' && text) { p.av.chat(text); logChat(p.name, p.av.color, text); }
     if (d.type === 'chalk') p.av.chalk();
+    if (d.type === 'ceremony') { p.av.ceremony = true; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
+    if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
+    if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
     if (d.type === 'vsay' && text) p.av.say(text, 2600);
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
@@ -3201,9 +3226,11 @@ function updateHud(dt) {
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고</small>`;
     const v = Math.round(pl.pump);
     $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
-    prompt.textContent = R.anim || R.done ? '' : touch ? '링을 탭하거나 ⬆️ 버튼!' : '링 클릭 또는 W(⬆️)로 올라가기 · C 초크 · E 내려오기';
+    prompt.textContent = R.atTop || R.done ? (touch ? '🙌 버튼으로 세레머니! (3초 버틴 뒤에 하세요)' : 'V 세레머니 · 3초 버틴 뒤에 하세요 · E 내려오기') : R.anim ? '' : touch ? '링을 탭하거나 ⬆️ 버튼!' : '링 클릭 또는 W(⬆️)로 올라가기 · C 초크 · E 내려오기';
     $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
     $('#jump-label').innerHTML = touch ? '다이노' : '다이노 <kbd>Space</kbd>';
+    $('#btn-cere').hidden = !(R.atTop || R.done) || !!R.ceremony;
+    if (R.atTop && !R.done) title.innerHTML += `<small style="color:#ffcf4a">⏱️ TOP 홀드 ${Math.min(3, R.topHold).toFixed(1)} / 3초</small>`;
     drawMinimap();
     return;
   }
@@ -4032,7 +4059,7 @@ function classifyRaw(h) {
 }
 
 function enterRoute(p, st) {
-  R.on = true; R.mash = null; R.rhythm = null; R.zoneHit = false; R.missStreak = 0; R.backs = 0; R.visited = new Set([p.start]); R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
+  R.on = true; R.atTop = false; R.ceremony = null; R.topHold = 0; me.ceremony = false; R.mash = null; R.rhythm = null; R.zoneHit = false; R.missStreak = 0; R.backs = 0; R.visited = new Set([p.start]); R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
   R.lh = p.start; R.rh = p.start;
   R.body = solveBody(R.lh, R.rh) || { u: p.start.u, v: Math.max(MAT_H, p.start.v - BODY.shY - 0.4) };
   [R.lf, R.rf] = pickFeet(R.body);
@@ -4051,7 +4078,7 @@ function endRoute() {
   document.body.classList.remove('route');
   routeRings.forEach((r) => (r.visible = false));
   $('#qte').hidden = true; $('#gauge').hidden = true;
-  me.tech = null; me.footless = false; me.swing = 0;
+  me.tech = null; me.footless = false; me.swing = 0; me.ceremony = false;
   me.setHeadAlpha(1);
 }
 // 현재 자세 (u,v)를 한 덩어리로
@@ -4231,7 +4258,7 @@ function finishRhythm() {
 
 // ⬆️ 버튼: 제일 높이 갈 수 있는 홀드로 (닿는 것 우선, 없으면 데드포인트, 그다음 다이노)
 function routeAuto() {
-  if (!R.on || R.anim || R.done) return;
+  if (!R.on || R.anim || R.done || R.atTop) return;
   if (R.rhythm) return;
   if (R.mash) { mashTap(); return; }
   if (R.gauge) { routeFireGauge(); return; }
@@ -4289,7 +4316,11 @@ function routeStep(dt) {
     pl.pump = clamp(pl.pump + (restful ? -0.8 : rate) * dt, 0, 100);
     if (R.slipT > 0) { R.slipT -= dt; if (R.slipT <= 0) { me.footless = false; [R.lf, R.rf] = pickFeet(R.body); R.cur = routeSnapshot(); } }
   }
-  if (pl.pump >= 100 && !R.done) { toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return; }
+  if (pl.pump >= 100 && (!R.done || R.ceremony)) {
+    if (R.ceremony && !R.done) { ceremonyFail(); return; }
+    if (R.ceremony && R.done) { popText('세레머니 하다 펌핑!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.28); letGo('pump'); setTimeout(() => teaseNear(['ㅋㅋㅋ 그래도 완등은 했네', '세레머니 과했다 ㅋㅋ', '멋있었는데 마무리가 ㅋㅋ']), 900); return; }
+    toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return;
+  }
   updateRhythm(dt);
   if (R.mash) {
     R.mash.t -= dt; pl.pump += dt * 4;
@@ -4313,7 +4344,23 @@ function routeStep(dt) {
     $('#g-mark').style.left = (pos * 100) + '%';
     $('#g-label').textContent = `다이노 — 초록 칸에서 탭! (${R.gauge.h.tap ? '터치 홀드 TAP' : R.gauge.h.type.n})`;
   }
-  if (R.done) { R.doneT += dt; if (R.doneT > (pl.topHoldMax || 3) + 0.4) { letGo('down'); return; } }
+  // TOP 3초 홀드 카운트 (세레머니 중이면 멈춤)
+  if (R.atTop && !R.done && !R.ceremony) {
+    R.topHold += dt;
+    const left = 3 - Math.floor(R.topHold);
+    if (left < R.topCount && left > 0) { R.topCount = left; popText(String(left), me.group.position.clone().add(new V3(0, 2.1, 0)), 0.34); Sound.tone(660, 0.06, 'triangle', 0.05); }
+    if (R.topHold >= 3) {
+      R.done = true; R.doneT = 0; R.atTop = false;
+      popText('완등!!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.38);
+      sendProblem(R.p);
+    }
+  }
+  if (R.ceremony) {
+    R.ceremony.t += dt;
+    pl.pump += dt * 16; // 세레머니는 펌핑을 엄청 씀
+    if (R.ceremony.t > 2.2) { R.ceremony = null; me.ceremony = false; if (R.atTop) { R.topHold = 0; R.topCount = 3; } }
+  }
+  if (R.done) { R.doneT += dt; if (R.doneT > 7 && !R.ceremony) { letGo('down'); return; } }
   routeSync(dt);
 }
 function lerpPose(A, Bp, t, k, kind) {
@@ -4376,9 +4423,9 @@ function afterMove(a) {
       R.anim = { t: 0, dur: 0.6, from: prev, to: routeSnapshot(), k, kind: 'reach' };
       return;
     }
-    R.done = true; R.doneT = 0;
-    popText('TOP 매칭!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.34);
-    sendProblem(p);
+    // IFSC처럼: TOP 매칭 후 3초 버텨야 완등 인정
+    R.topHold = 0; R.topCount = 3; R.atTop = true;
+    popText('TOP! 3초 버텨요', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.3);
     return;
   }
   const lv = p.level, ang = R.st.sec.angle || 0, g = gear();
@@ -4429,9 +4476,48 @@ function qteResult(ok) {
     Sound.tone(160, 0.2, 'square', 0.06);
   }
 }
+// 🙌 세레머니: TOP에서 뒤돌아 한 팔 번쩍. 펌핑을 엄청 씀
+function startCeremony() {
+  if (!R.on || !(R.atTop || R.done) || R.ceremony || R.anim) return;
+  R.ceremony = { t: 0, early: !R.done };
+  me.ceremony = true;
+  pl.pump += 22;
+  popText(pick(['🙌 가즈아!!', '🔥 세레머니!', '💪 이것이 매운맛!']), me.group.position.clone().add(new V3(0, 2.2, 0)), 0.34);
+  fireConfetti(me.group.position.clone().add(new V3(0, 1.8, 0)), 14);
+  Sound.top();
+  Net.event('ceremony');
+  if (!R.done) toast('⚠️ 아직 3초 안 지났어요! 성급한 세레머니…', 1800);
+}
+// 😈 초크 빌런: 벽 위에서 아래로 초크 뿌리기
+function chalkRain(pos, n = 28) {
+  for (let i = 0; i < n; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false }));
+    sp.position.copy(pos).add(new V3((Math.random() - 0.5) * 0.4, Math.random() * 0.2, (Math.random() - 0.5) * 0.4));
+    sp.scale.setScalar(0.06 + Math.random() * 0.08);
+    scene.add(sp);
+    particles.push({ sp, vel: new V3((Math.random() - 0.5) * 0.6, -0.3 - Math.random() * 0.6, (Math.random() - 0.5) * 0.6), g: -1.6, drag: 0.6, life: 0, max: 2 + Math.random() * 1.2, grow: 0.12, alpha: 0.9 });
+  }
+}
+function teaseNear(lines) {
+  const pos = me.group.position;
+  const near = npcs.filter((n) => n.state !== 'climb' && n.av.group.position.distanceTo(pos) < 16);
+  near.slice(0, 2).forEach((n, k) => setTimeout(() => n.av.say(pick(lines), 2400), k * 600));
+}
+function ceremonyFail() {
+  R.ceremony = null; me.ceremony = false;
+  popText('성급한 세레머니…', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.3);
+  toast('😵 3초 버티기 전에 세레머니하다 떨어졌어요 — 완등 인정 안 됨!', 2800);
+  logChat('', '', `😵 ${Store.data.name}님 성급한 세레머니로 추락…`, 'sys');
+  Net.event('ceremonyfail');
+  letGo('pump');
+  setTimeout(() => teaseNear(['풋 ㅋ', '세레머니 먼저 하더니 ㅋㅋㅋ', '3초는 버티고 해야지 ㅋㅋ', '아 ㅋㅋㅋㅋ 다 왔는데', '세레머니 장인 ㅋㅋ']), 700);
+  if (staffMayNag(0.5)) setTimeout(() => staffSay('그러니까 3초는 버티라고 했잖아요~ 안 다쳤죠? 🐯', 2800), 2200);
+  setTimeout(() => westSay(pick(['괜찮아요! 세레머니는 진짜 멋졌어요 🤠', '다음엔 3초 버티고 해요! 폼은 최고였어요'])), 2800);
+}
 function routeKey(code) {
   if (code === 'Space') { if (R.rhythm) rhythmTap(); else if (R.mash) mashTap(); else if (R.gauge) routeFireGauge(); return true; }
   if (code === 'KeyE') { grabToggle(); return true; }
+  if (code === 'KeyV') { startCeremony(); return true; }
   if (code === 'KeyW' || code === 'ArrowUp') { routeAuto(); return true; }
   const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
   if (map[code]) { if (R.qte) qteResult(R.qte.kind === map[code]); return true; }
@@ -4700,7 +4786,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { vil, R, rhythmTap, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
