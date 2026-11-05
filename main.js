@@ -2787,7 +2787,7 @@ const vil = { next: performance.now() + 20000 };
 function updateVillain(now) {
   const v = me && me.villain;
   if (!v || !paidToday() || now < vil.next) return;
-  // 초크 빌런은 벽 위에서 아래로 초크를 뿌림
+  // 초크 빌런은 벽 위에서 초크를 흩뿌림
   if (v === 'chalk' && pl.mode === 'route' && R.on && !R.anim && hasSkill('chalkthrow') && chalkLeft() > 0) {
     vil.next = now + 14000 + Math.random() * 10000;
     chalkThrow();
@@ -3116,6 +3116,7 @@ const Net = {
     if (d.type === 'ceremony') { p.av.ceremony = ['turn', 'flex', 'gorilla', 'kiss'].includes(d.c) ? d.c : 'turn'; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
     if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
     if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
+    if (d.type === 'chalkscatter') { p.av.chalk(); chalkScatter(p.av.group.position.clone().add(new V3(0, d.g ? 1.1 : 1.25, 0)), new V3(+d.x || 0, 0, +d.z || 1)); }
     if (d.type === 'vsay' && text) p.av.say(text, 2600);
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
@@ -3239,7 +3240,7 @@ const SKILLS = [
   { id: 'c_kiss', price: 250000, cere: 'kiss', n: '😘 손키스 투척', d: 'TOP에서 관객에게 손키스', pop: '😘 사랑해요 스파이시!' },
   { id: 'bump', price: 450000, n: '💥 어깨빵', d: '지나갈 때 어깨빵 버튼이 떠요. 매너 온도 −2' },
   { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
-  { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '벽 위에선 아래로 초크 비, 바닥에선 옆사람한테 초크 투척. 초크 1회 소모, 매너 온도 −1' },
+  { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '홀드 위에서든 바닥에서든 한 줌 촤악 흩뿌리기 (바닥에선 옆사람 쪽으로). 초크 1회 소모, 매너 온도 −1' },
 ];
 function hasSkill(id) { return !!(Store.data.skills || {})[id]; }
 // 📷 아이템 (스킬 아님 — 한 번 사면 계속 들고 다녀요)
@@ -3314,7 +3315,8 @@ function previewSetup() {
   PV.tri = buildTripodMesh(); scene.add(PV.tri);
   const pos = new Float32Array(PV_N * 3);
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  PV.chalk = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#ffffff', size: 0.07, transparent: true, opacity: 0.9 }));
+  PV.chalk = new THREE.Points(geo, new THREE.PointsMaterial({ map: dotTex, color: '#ffffff', size: 0.09, transparent: true, opacity: 0.95, depthWrite: false }));
+  PV.chalk.frustumCulled = false; // 위치가 매 프레임 바뀌어서 컬링 끔
   scene.add(PV.chalk);
   scene = keep;
   PV.cam = new THREE.PerspectiveCamera(40, 4 / 3, 0.1, 30);
@@ -3368,13 +3370,16 @@ function pvPose(id, t, dt) {
     chalk.visible = true;
     const arr = chalk.geometry.attributes.position.array;
     for (let i = 0; i < PV_N; i++) {
-      const born = 0.4 + (i / PV_N) * 1.8, age = t - born;
-      const r1 = Math.sin(i * 12.9898) * 0.5, r2 = Math.sin(i * 78.233) * 0.5;
-      if (age < 0 || age > 1.3) { arr[i * 3 + 1] = -5; continue; }
-      arr[i * 3] = -0.15 + (0.6 + r1 * 0.5) * age; arr[i * 3 + 1] = 2.2 - 1.3 * age * age; arr[i * 3 + 2] = 0.35 + (0.6 + r2 * 0.4) * age;
+      // 한 줌 촤악: 거의 동시에 부채꼴로 퍼짐
+      const born = 0.9 + (i / PV_N) * 0.15, age = t - born;
+      const r1 = Math.sin(i * 12.9898), r2 = (Math.sin(i * 78.233) + 1) / 2, r3 = (Math.sin(i * 39.425) + 1) / 2;
+      if (age < 0 || age > 1.6) { arr[i * 3 + 1] = -5; continue; }
+      const sp = 1.8 + r3 * 1.6, k = (1 - Math.exp(-age * 1.4)) / 1.4;
+      arr[i * 3] = -0.2 + r1 * 0.9 * sp * k; arr[i * 3 + 1] = 2.35 + (0.25 + r2 * 0.6) * sp * k - 1.2 * age * age; arr[i * 3 + 2] = 0.4 + (0.5 + r2 * 0.5) * sp * k;
     }
     chalk.geometry.attributes.position.needsUpdate = true;
-    if (t > 1.3) { B.chalkyT = 3; text = '콜록콜록 😵'; } else text = '🤍 초크 비~';
+    if (t > 0.75 && t < 1.05) A.chalkT = A.chalkDur = 1.0;
+    if (t > 1.6) { B.chalkyT = 3; text = '콜록콜록 😵'; } else if (t > 0.9) text = '🤍 촤악~';
     cam.position.set(0.9, 2.1, 4.8); cam.lookAt(0.05, 1.55, 0.5);
   } else if (id === 'tripod') {
     tri.visible = true; tri.position.set(0.75, 0, 1.5); tri.rotation.y = Math.PI + 0.45;
@@ -3583,7 +3588,7 @@ function tripodShot(p) {
 // ----- 🤍 초크 던지기 -----
 function chalkThrowTarget() {
   if (!hasSkill('chalkthrow') || chalkLeft() <= 0) return null;
-  if (pl.mode === 'route' && R.on && !R.anim && !R.rhythm) return 'rain';
+  if (pl.mode === 'route' && R.on && !R.anim && !R.rhythm) return 'wall';
   if (pl.mode !== 'walk') return null;
   const pos = me.group.position;
   const list = [...npcs.map((n) => n.av), staff.av, west.av, ...[...Net.peers.values()].map((p) => p.av)].filter(Boolean);
@@ -3595,18 +3600,28 @@ function chalkThrow() {
   const t = chalkThrowTarget(); if (!t) return;
   if ((Store.data.liquid || 0) > 0) Store.data.liquid--; else Store.data.chalk--;
   Store.save(); updateChalkBadge();
-  if (t === 'rain') {
-    chalkRain(me.group.position.clone().add(new V3(0, 1.5, 0))); Net.event('chalkrain');
-    me.say(pick(['초크 비 내려갑니다~ 💨', '아래 계신 분들 초크 서비스!']), 2000);
+  const ry = me.group.rotation.y;
+  if (t === 'wall') {
+    // 홀드 위에서 등 뒤(벽 바깥)로 촤악 흩뿌리기
+    const out = new V3(-Math.sin(ry), 0, -Math.cos(ry)).applyAxisAngle(new V3(0, 1, 0), (Math.random() - 0.5) * 1.2);
+    const hand = me.group.position.clone().add(new V3(0, 1.25, 0)).addScaledVector(out, 0.15);
+    me.chalk(); Sound.chalk();
+    chalkScatter(hand, out); Net.event('chalkscatter', { x: +out.x.toFixed(2), z: +out.z.toFixed(2) });
+    popText('촤악~ 💨', hand.clone().add(new V3(0, 0.5, 0)), 0.26);
+    me.say(pick(['초크 서비스 촤악~ 💨', '받아라 초크!!', '흩날려라 초크~']), 2000);
     const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
     below.slice(0, 2).forEach((a, k) => setTimeout(() => a.say(pick(['콜록… 위에서 초크 내려와요!', '앞이 안 보여 ㅋㅋㅋ', '눈에 들어갔어!!']), 2200), 900 + k * 500));
-    if (below.length) Manner.add(-1, '초크 비 💨');
+    if (below.length) Manner.add(-1, '초크 흩뿌리기 💨');
     return;
   }
-  me.chalk();
-  chalkBurst(t.group.position.clone().add(new V3(0, 1.3, 0)), 26, 1.4);
-  popText('퍽! 💨', t.group.position.clone().add(new V3(0, 1.9, 0)), 0.3);
-  Sound.chalk();
+  me.chalk(); Sound.chalk();
+  const tp = t.group.position, mp = me.group.position;
+  const out = new V3(tp.x - mp.x, 0, tp.z - mp.z);
+  me.group.rotation.y = Math.atan2(out.x, out.z); pl.yaw = me.group.rotation.y;
+  chalkScatter(mp.clone().add(new V3(0, 1.1, 0)).addScaledVector(out.clone().normalize(), 0.2), out, 30);
+  Net.event('chalkscatter', { x: +out.normalize().x.toFixed(2), z: +out.z.toFixed(2), g: 1 });
+  setTimeout(() => chalkBurst(t.group.position.clone().add(new V3(0, 1.3, 0)), 18, 1.1), 250);
+  popText('촤악! 💨', t.group.position.clone().add(new V3(0, 1.9, 0)), 0.3);
   setTimeout(() => t.say(pick(['콜록콜록!!', '아 초크 던지지 마요 ㅋㅋㅋ', '눈에 들어갔어!', '뭐야 하얘졌잖아']), 2200), 400);
   t.chalkyT = 25;
   Manner.add(-1, '초크 투척 💨');
@@ -3627,7 +3642,7 @@ function updateCtxButtons() {
 }
 
 // =================================================================
-// 🛒 무호K 프로샵 + 📢 광고
+// 🐯 무호K 템샵 / 🤠 웨스턴 스킬샵 + 📢 광고
 // =================================================================
 function statBar(label, v) { return `<div class="stat"><span>${label}</span><i><b style="width:${Math.round(v * 100)}%"></b></i></div>`; }
 function renderShop() {
@@ -3692,7 +3707,7 @@ function setShopTab(tab) {
   shopTab = tab;
   document.querySelectorAll('#shop .shop-tab').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'));
   document.querySelectorAll('#shop .shop-panel').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
-  $('#shop-title').textContent = tab === 'skills' ? '🤠 웨스턴 스킬샵' : '🐯 무호K 프로샵';
+  $('#shop-title').textContent = tab === 'skills' ? '🤠 웨스턴 스킬샵' : '🐯 무호K 템샵';
 }
 // ----- 💾 저장 코드 (로그인 없이 기기 옮기기) -----
 function codeHash(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36).padStart(7, '0').slice(-7); }
@@ -3761,7 +3776,7 @@ function buildBillboards() {
     g.fillStyle = accent; g.font = '110px "Sedgwick Ave Display", cursive'; g.fillText(lines[0], 256, 230);
     g.fillStyle = fg; g.font = '900 64px "Black Han Sans", sans-serif'; g.fillText(lines[1], 256, 340);
     g.font = '700 34px "Noto Sans KR"'; lines.slice(2).forEach((t, i) => g.fillText(t, 256, 440 + i * 56));
-    g.fillStyle = accent; g.fillRect(96, 610, 320, 70); g.fillStyle = bg; g.font = '900 34px "Noto Sans KR"'; g.fillText('🛒 프로샵에서 보기', 256, 657);
+    g.fillStyle = accent; g.fillRect(96, 610, 320, 70); g.fillStyle = bg; g.font = '900 34px "Noto Sans KR"'; g.fillText('🐯 템샵에서 보기', 256, 657);
   });
   const add = (px, pz, rotY, tex, item) => {
     const [x, z] = m([px, pz]);
@@ -4888,6 +4903,26 @@ function startCeremony(type) {
   Net.event('ceremony', { c: sk.cere });
   if (!R.done) toast('⚠️ 아직 3초 안 지났어요! 성급한 세레머니…', 1800);
 }
+// 🤍 초크 흩뿌리기: 손에서 부채꼴로 촤악 — out = 던지는 방향(수평)
+function chalkScatter(pos, out, n = 36) {
+  const o = new V3(out.x, 0, out.z); if (o.lengthSq() < 1e-4) o.set(0, 0, 1); o.normalize();
+  const side = new V3(-o.z, 0, o.x);
+  for (let i = 0; i < n; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false }));
+    sp.position.copy(pos);
+    sp.scale.setScalar(0.05 + Math.random() * 0.09);
+    scene.add(sp);
+    const d = o.clone().multiplyScalar(0.7 + Math.random() * 0.6).addScaledVector(side, (Math.random() - 0.5) * 1.8).add(new V3(0, 0.15 + Math.random() * 0.7, 0)).normalize();
+    particles.push({ sp, vel: d.multiplyScalar(2.2 + Math.random() * 2.6), g: -2.4, drag: 1.3, life: 0, max: 1.6 + Math.random() * 1.0, grow: 0.25, alpha: 0.95 });
+  }
+  for (let i = 0; i < 7; i++) { // 뒤에 남는 초크 구름
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false }));
+    sp.position.copy(pos).addScaledVector(o, 0.3 + Math.random() * 0.9).addScaledVector(side, (Math.random() - 0.5) * 0.9);
+    sp.scale.setScalar(0.25 + Math.random() * 0.3);
+    scene.add(sp);
+    particles.push({ sp, vel: o.clone().multiplyScalar(0.4).add(new V3(0, 0.1, 0)), g: -0.1, drag: 0.8, life: 0, max: 2.2 + Math.random() * 1.2, grow: 0.35, alpha: 0.4 });
+  }
+}
 // 😈 초크 빌런: 벽 위에서 아래로 초크 뿌리기
 function chalkRain(pos, n = 28) {
   for (let i = 0; i < n; i++) {
@@ -5138,6 +5173,8 @@ async function enterGym(name, color) {
   updateWallet();
   updateChalkBadge();
   $('#btn-shop').addEventListener('click', openShop);
+  $('#btn-itemshop').addEventListener('click', () => openShop('items'));
+  $('#btn-skillshop').addEventListener('click', () => openShop('skills'));
   $('#btn-savecode').addEventListener('click', openSaveCode);
   document.querySelectorAll('#shop .shop-tab').forEach((b) => b.addEventListener('click', () => { setShopTab(b.dataset.tab); $('#shop').scrollTop = 0; }));
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));

@@ -105,7 +105,9 @@
       </div>
       <div class="top-actions">
         <span id="online" class="online" data-state="connecting">연결 중…</span>
-        <button id="btn-shop" class="icon-btn wallet-btn" type="button" aria-label="지갑과 상점">💰 <span id="wallet">0원</span></button>
+        <button id="btn-shop" class="icon-btn wallet-btn" type="button" aria-label="지갑">💰 <span id="wallet">0원</span></button>
+        <button id="btn-itemshop" class="icon-btn shop-btn" type="button" aria-label="무호K 템샵 (아이템 구매)">🐯 <span class="hide-sm">무호K 템샵</span></button>
+        <button id="btn-skillshop" class="icon-btn shop-btn skill" type="button" aria-label="웨스턴 스킬샵 (스킬 배우기)">🤠 <span class="hide-sm">웨스턴 스킬샵</span></button>
         <button id="btn-chat" class="icon-btn only-touch" type="button" aria-label="말하기">💬</button>
         <button id="btn-music" class="icon-btn" type="button" aria-label="배경음악">🎵</button>
         <button id="btn-sound" class="icon-btn" type="button" aria-label="효과음">🔈</button>
@@ -239,14 +241,14 @@
 
   <dialog id="shop" class="records shop">
     <form method="dialog" class="records-inner">
-      <div class="rec-head"><h2 id="shop-title">🐯 무호K 프로샵</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
+      <div class="rec-head"><h2 id="shop-title">🐯 무호K 템샵</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
       <a class="visit-card" href="https://naver.me/xllIiJrK" target="_blank" rel="noopener">
         <b>📍 스파이시클라이밍 오프라인 방문하기 ↗</b>
         <span>경기 군포시 엘에스로 153-8 111호 · 네이버지도</span>
       </a>
       <p class="shop-wallet">💰 지갑 <b id="shop-wallet"></b> <small>게임 머니 · 완등하면 벌어요 (어려울수록, 첫 완등은 2배)</small></p>
       <div class="shop-tabs" role="tablist">
-        <button type="button" class="shop-tab" role="tab" data-tab="items" aria-selected="true">🐯 무호K 프로샵<small>아이템 구매</small></button>
+        <button type="button" class="shop-tab" role="tab" data-tab="items" aria-selected="true">🐯 무호K 템샵<small>아이템 구매</small></button>
         <button type="button" class="shop-tab" role="tab" data-tab="skills" aria-selected="false">🤠 웨스턴 스킬샵<small>스킬 배우기</small></button>
       </div>
       <div class="shop-panel" data-panel="items" role="tabpanel">

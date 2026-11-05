@@ -396,6 +396,8 @@ body.touch .prompt { bottom: 175px; }
 
 /* 지갑 / 상점 / 광고 */
 .wallet-btn { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shop-btn { white-space: nowrap; border-color: rgba(227,38,43,.6); }
+.shop-btn.skill { border-color: rgba(184,115,44,.85); }
 .wallet-btn .neg, #wallet.neg { color: #ff8a8a; }
 .shop .shop-wallet { margin: 8px 0 0; font-size: .95rem; }
 .shop .shop-wallet b { color: #ffcf4a; font-size: 1.1rem; }
