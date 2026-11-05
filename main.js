@@ -1343,6 +1343,15 @@ class Avatar {
       this.rig.rotation.x = run * 0.2;
       this.head.rotation.z = Math.sin(this.phase) * 0.05 * Math.min(sp, 1);
     }
+    if (this.kickT > 0 && !this.climbing) {
+      // 🦵 THIS IS SPICY 발차기: 무릎 당기기 → 앞으로 쭉
+      this.kickT = Math.max(0, this.kickT - dt);
+      const k = 1 - this.kickT / 0.9;
+      if (k < 0.4) { this.solve(rl, rl.root.clone().add(new V3(0, -0.22, 0.2))); this.rig.rotation.x = -0.12; }
+      else { this.solve(rl, rl.root.clone().add(new V3(0, -0.06, 0.52))); this.rig.rotation.x = -0.32; }
+      this.solve(ll, ll.root.clone().add(new V3(0, -ll.len * 0.97, -0.06)));
+      this.limbRot(la, -0.7, -0.5); this.limbRot(ra, -0.7, 0.5);
+    }
     if (this.photoPose) {
       this.solve(la, new V3(-0.1, BODY.shY + 0.28, 0.42)); this.solve(ra, new V3(0.1, BODY.shY + 0.28, 0.42));
     }
@@ -3115,7 +3124,7 @@ const Net = {
     if (d.type === 'chalk') p.av.chalk();
     if (d.type === 'shoulder' && d.to === this.id) { knockBack({ position: pl.pos }, p.av.group.position); me.squash(); popText('💥', me.group.position.clone().add(new V3(0, 1.8, 0)), 0.3); toast(`💥 ${p.name}님이 어깨빵했어요!`, 2200); me.say(pick(['아야!', '뭐야?!']), 1600); }
     if (d.type === 'tripod') { const pr = PROBLEMS.find((x) => x.id === d.pid); if (pr) placeTripod(pr, 'peer:' + p.id, p.name); }
-    if (d.type === 'tripodfall') { if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true); toast(`🦵 ${p.name}님이 내 삼각대를 쓰러뜨렸어요!`, 2400); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true); } }
+    if (d.type === 'tripodfall') { const dir = d.x != null ? new V3(+d.x || 0, 0, +d.z || 0) : null; if (dir && dir.lengthSq() < 1e-4) dir.set(0, 0, 1); p.av.kickT = 0.9; p.av.say('THIS IS SPICY!!! 🔥', 2200); if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true, dir); toast(`🦵 ${p.name}님이 내 삼각대를 걷어찼어요! THIS IS SPICY!!!`, 2600); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true, dir); } }
     if (d.type === 'ceremony') { p.av.ceremony = ['turn', 'flex', 'gorilla', 'kiss'].includes(d.c) ? d.c : 'turn'; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
     if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
     if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
@@ -3242,7 +3251,7 @@ const SKILLS = [
   { id: 'c_gorilla', price: 200000, cere: 'gorilla', n: '🦍 고릴라 가슴치기', d: 'TOP에서 쿵쿵쿵 가슴치기', pop: '🦍 우호호!!' },
   { id: 'c_kiss', price: 250000, cere: 'kiss', n: '😘 손키스 투척', d: 'TOP에서 관객에게 손키스', pop: '😘 사랑해요 스파이시!' },
   { id: 'bump', price: 450000, n: '💥 어깨빵', d: '지나갈 때 어깨빵 버튼이 떠요. 매너 온도 −2' },
-  { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
+  { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼 → "THIS IS SPICY!!!" 외치며 앞차기로 뻥! 매너 온도 −2' },
   { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '홀드 위에서든 바닥에서든 한 줌 촤악 흩뿌리기 (바닥에선 옆사람 쪽으로). 초크 1회 소모, 매너 온도 −1' },
 ];
 // 🎉 스킬 60% 할인 행사 — 정가의 40%에 판매 (행사 끝나면 1로)
@@ -3299,7 +3308,7 @@ function renderSkills() {
 
 // ----- 🎬 상점 미리보기 박스: 배우기 전에 모션을 보여줌 (메인 렌더러로 작은 장면을 그려서 카드에 복사) -----
 const PV = { scene: null, cam: null, A: null, B: null, tri: null, chalk: null, last: 0, prevT: 0 };
-const PV_LEN = { c_turn: 4, c_flex: 4, c_gorilla: 4, c_kiss: 4, bump: 3.2, knock: 3.4, chalkthrow: 3.6, tripod: 4.4 };
+const PV_LEN = { c_turn: 4, c_flex: 4, c_gorilla: 4, c_kiss: 4, bump: 3.2, knock: 3.8, chalkthrow: 3.6, tripod: 4.4 };
 const PV_N = 70;
 function previewSetup() {
   if (PV.scene) return;
@@ -3364,11 +3373,13 @@ function pvPose(id, t, dt) {
   } else if (id === 'knock') {
     const k = Math.min(t / 1.1, 1);
     pvWalk(A, -1.3 + k * 1.05, 1.4, Math.PI / 2, dt, t < 1.1);
-    tri.visible = true; tri.position.set(0.45, 0, 1.4); tri.rotation.y = Math.PI;
-    const f = clamp((t - 1.35) / 0.45, 0, 1);
-    tri.rotation.z = f * f * 1.45;
+    tri.visible = true; tri.rotation.y = Math.PI;
+    A.kickT = t > 1.05 && t < 1.95 ? 0.9 - (t - 1.05) : 0;
+    const f = clamp((t - 1.45) / 0.65, 0, 1), e = 1 - (1 - f) ** 2;
+    tri.position.set(0.45 + e * 1.3, Math.sin(Math.PI * f) * 0.5, 1.4);
+    tri.rotation.z = e * (1.45 + Math.PI * 2);
     tri.userData.rec.visible = f === 0 && Math.floor(t * 3) % 2 === 0;
-    if (t > 1.8 && t < 2.9) text = '쿵!';
+    if (t > 0.55 && t < 1.6) text = 'THIS IS SPICY!!! 🔥'; else if (t >= 1.6 && t < 2.8) text = '쾅!!';
     cam.position.set(0.2, 1.5, 4.4); cam.lookAt(0.1, 0.6, 1.3);
   } else if (id === 'chalkthrow') {
     pvClimb(A, -0.35, 1.3);
@@ -3395,9 +3406,6 @@ function pvPose(id, t, dt) {
     cam.position.set(-1.0, 2.0, 4.8); cam.lookAt(0.25, 1.5, 0.6);
   }
   A.t = t; A.update(dt); if (B.group.visible) B.update(dt);
-  if (id === 'knock' && t > 1.05 && t < 1.55) { // 발로 툭
-    const [, , , rl] = A.limbs; A.solve(rl, rl.root.clone().add(new V3(0, -0.3, 0.42)));
-  }
   if (id === 'bump' && t > 1.0 && t < 1.5) A.rig.rotation.y = -0.5;
   return { text, flash };
 }
@@ -3542,15 +3550,33 @@ function nearbyKnockTarget() {
   tripods.forEach((t) => { if (!t.up || t.owner === 'me') return; const d = t.g.position.distanceTo(pos); if (d < bd) { bd = d; best = t; } });
   return best;
 }
-function knockTripod(t, remote) {
-  if (!t || !t.up) return;
+// 삼각대를 dir 방향으로 날려보냄 (dir 없으면 그냥 쓰러짐)
+function tripodFall(t, dir) {
   t.up = false; t.fallT = 0; t.fallDir = Math.random() < 0.5 ? -1 : 1;
+  if (dir) { const d = new V3(dir.x, 0, dir.z).normalize(); t.fly = { from: t.g.position.clone(), dir: d, q0: t.g.quaternion.clone() }; }
   Sound.tone(220, 0.08, 'square', 0.06); Sound.tone(120, 0.25, 'triangle', 0.08, 0.15);
-  if (remote) return;
-  me.squash();
-  popText('쿵!', t.g.position.clone().add(new V3(0, 1.3, 0)), 0.3);
-  Manner.add(-2, '삼각대 쓰러뜨림 🦵');
-  if (typeof t.owner === 'string' && t.owner.startsWith('peer:')) Net.event('tripodfall', { owner: t.owner.slice(5) });
+}
+function knockTripod(t, remote, dir) {
+  if (!t || !t.up || t.kicking) return;
+  if (remote) { tripodFall(t, dir); return; }
+  // ⚔️ THIS IS SPICY!!! — 영화 패러디 앞차기
+  const tp = t.g.position, mp = me.group.position;
+  const d = new V3(tp.x - mp.x, 0, tp.z - mp.z); if (d.lengthSq() < 1e-4) d.set(0, 0, 1); d.normalize();
+  me.group.rotation.y = Math.atan2(d.x, d.z); pl.yaw = me.group.rotation.y;
+  t.kicking = true;
+  me.kickT = 0.9;
+  me.say('THIS IS SPICY!!! 🔥', 2400);
+  popText('THIS IS SPICY!!!', mp.clone().add(new V3(0, 2.25, 0)), 0.42);
+  Sound.tone(98, 0.5, 'sawtooth', 0.07, 0, -30); Sound.tone(147, 0.45, 'square', 0.04, 0.05, -20);
+  setTimeout(() => {
+    t.kicking = false;
+    tripodFall(t, d);
+    camCtl.shake = 0.18;
+    popText('쾅!!', t.g.position.clone().add(new V3(0, 1.3, 0)), 0.34);
+    Sound.tone(70, 0.35, 'triangle', 0.12, 0, -40);
+    if (typeof t.owner === 'string' && t.owner.startsWith('peer:')) Net.event('tripodfall', { owner: t.owner.slice(5), x: +d.x.toFixed(2), z: +d.z.toFixed(2) });
+  }, 420);
+  Manner.add(-2, '삼각대 걷어참 🦵');
   const ownerNpc = npcs.find((n) => n === t.owner);
   const sayer = ownerNpc ? ownerNpc.av : null;
   if (sayer) setTimeout(() => sayer.say(pick(['아 내 삼각대!!', '왜 쓰러뜨려요?!', '찍고 있었는데…']), 2400), 500);
@@ -3562,7 +3588,15 @@ function updateTripods(dt) {
   for (let i = tripods.length - 1; i >= 0; i--) {
     const t = tripods[i];
     if (t.g.userData.rec) t.g.userData.rec.visible = t.up && Math.floor(now / 500) % 2 === 0;
-    if (!t.up) { t.fallT = Math.min(1, t.fallT + dt * 3); t.g.rotation.z = t.fallDir * (Math.PI / 2) * (t.fallT * t.fallT); t.g.position.y = groundY(t.g.position.x, t.g.position.z) + 0.05 * t.fallT; }
+    if (!t.up && t.fly) {
+      // 걷어차여 날아감: 포물선 + 한 바퀴 반 돌고 눕기
+      t.fallT = Math.min(1, t.fallT + dt * 1.6);
+      const e = 1 - (1 - t.fallT) ** 2, f = t.fly;
+      const x = f.from.x + f.dir.x * 2.4 * e, z = f.from.z + f.dir.z * 2.4 * e;
+      t.g.position.set(x, groundY(x, z) + Math.sin(Math.PI * t.fallT) * 0.7 + 0.05 * t.fallT, z);
+      const axis = new V3(f.dir.z, 0, -f.dir.x);
+      t.g.quaternion.setFromAxisAngle(axis, (Math.PI * 0.46 + Math.PI * 2) * e).multiply(f.q0);
+    } else if (!t.up) { t.fallT = Math.min(1, t.fallT + dt * 3); t.g.rotation.z = t.fallDir * (Math.PI / 2) * (t.fallT * t.fallT); t.g.position.y = groundY(t.g.position.x, t.g.position.z) + 0.05 * t.fallT; }
     const life = t.owner === 'me' ? 240000 : 90000;
     if (now - t.born > life || (!t.up && t.fallT >= 1 && now - t.born > 20000 && t.owner !== 'me')) { scene.remove(t.g); tripods.splice(i, 1); }
   }
