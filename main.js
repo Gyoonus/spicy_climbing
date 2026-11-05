@@ -3253,7 +3253,7 @@ function renderGear() {
   GEAR.forEach((it) => {
     const own = hasItem(it.id);
     const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
-    el.innerHTML = `<div class="item-head"><b>${it.n}</b><span class="price">${own ? '보유 중' : won(it.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(it.price)}</span> ${it.d}</p>`;
+    el.innerHTML = `<canvas class="skill-pv" data-pv="${it.id}" aria-label="${it.n} 미리보기"></canvas><div class="item-head"><b>${it.n}</b><span class="price">${own ? '보유 중' : won(it.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(it.price)}</span> ${it.d}</p>`;
     if (!own) {
       const act = document.createElement('div'); act.className = 'item-act';
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(it.price)}에 사기`;
@@ -3274,7 +3274,7 @@ function renderSkills() {
   [...SKILLS].sort((a, b) => a.price - b.price).forEach((k) => {
     const own = hasSkill(k.id);
     const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
-    el.innerHTML = `<div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(k.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(k.price)}</span> ${k.d}</p>`;
+    el.innerHTML = `<canvas class="skill-pv" data-pv="${k.id}" aria-label="${k.n} 미리보기"></canvas><div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(k.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(k.price)}</span> ${k.d}</p>`;
     if (!own) {
       const act = document.createElement('div'); act.className = 'item-act';
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(k.price)}에 배우기`;
@@ -3288,6 +3288,144 @@ function renderSkills() {
     }
     box.appendChild(el);
   });
+}
+
+// ----- 🎬 상점 미리보기 박스: 배우기 전에 모션을 보여줌 (메인 렌더러로 작은 장면을 그려서 카드에 복사) -----
+const PV = { scene: null, cam: null, A: null, B: null, tri: null, chalk: null, last: 0, prevT: 0 };
+const PV_LEN = { c_turn: 4, c_flex: 4, c_gorilla: 4, c_kiss: 4, bump: 3.2, knock: 3.4, chalkthrow: 3.6, tripod: 4.4 };
+const PV_N = 70;
+function previewSetup() {
+  if (PV.scene) return;
+  const keep = scene; scene = PV.scene = new THREE.Scene();
+  scene.background = new THREE.Color('#25252b');
+  scene.add(new THREE.HemisphereLight(0xfff4e2, 0x4a4a52, 2.4));
+  const dl = new THREE.DirectionalLight(0xffffff, 1.3); dl.position.set(2, 4, 5); scene.add(dl);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(3.6, 3.4, 0.1), new THREE.MeshStandardMaterial({ color: '#d8b98c', roughness: 0.9 }));
+  wall.position.set(0, 1.7, -0.05); scene.add(wall);
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 3.2), new THREE.MeshStandardMaterial({ color: '#5a5f68', roughness: 0.95 }));
+  mat.position.set(0, -0.06, 1.6); scene.add(mat);
+  const holdMat = new THREE.MeshStandardMaterial({ color: '#ff5fa2', roughness: 0.7 });
+  [[-0.2, 2.67], [0.2, 2.67], [-0.3, 1.9], [0.25, 1.55], [-0.2, 1.1], [0.2, 0.75], [-0.15, 0.35], [0.2, 0.2]].forEach(([x, y]) => {
+    const h = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), holdMat); h.position.set(x, y, 0.02); h.scale.z = 0.6; scene.add(h);
+  });
+  PV.A = new Avatar('', Store.data.color || '#e3262b', { look: Store.data.look });
+  PV.B = new Avatar('', '#ff8a2a');
+  [PV.A, PV.B].forEach((a) => { a.tag.visible = false; a.shadow.visible = false; });
+  PV.tri = buildTripodMesh(); scene.add(PV.tri);
+  const pos = new Float32Array(PV_N * 3);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  PV.chalk = new THREE.Points(geo, new THREE.PointsMaterial({ color: '#ffffff', size: 0.07, transparent: true, opacity: 0.9 }));
+  scene.add(PV.chalk);
+  scene = keep;
+  PV.cam = new THREE.PerspectiveCamera(40, 4 / 3, 0.1, 30);
+}
+// 벽에 붙은 자세: y0 = 발 높이, x0 = 좌우
+function pvClimb(a, x0, y0) {
+  a.setClimbing(true);
+  a.group.position.set(x0, y0, 0.3); a.group.rotation.y = Math.PI;
+  a.grips = [new V3(x0 - 0.2, y0 + 1.1, 0.02), new V3(x0 + 0.2, y0 + 1.1, 0.02), new V3(x0 - 0.15, y0 + 0.12, 0.02), new V3(x0 + 0.17, y0 + 0.1, 0.02)];
+}
+function pvWalk(a, x, z, rotY, dt, moving) {
+  a.setClimbing(false); a.ceremony = false; a.sitting = false;
+  const v = moving ? 1.3 : 0;
+  a.group.position.set(x, 0, z); a.group.rotation.y = rotY;
+  a.prev.set(x - Math.sin(rotY) * v * dt, 0, z - Math.cos(rotY) * v * dt); a.speed = v;
+}
+// 데모 한 장면 세팅 → 위에 덧그릴 글자 반환
+function pvPose(id, t, dt) {
+  const { A, B, tri, chalk, cam } = PV;
+  A.ceremony = false; A.chalkyT = 0; B.chalkyT = 0; A.squashT = 0; B.squashT = 0;
+  B.group.visible = false; tri.visible = false; chalk.visible = false; A.group.visible = true;
+  tri.rotation.set(0, 0, 0); tri.userData.rec.visible = true;
+  let text = '', flash = 0;
+  const sk = SKILLS.find((k) => k.id === id);
+  if (sk && sk.cere) {
+    pvClimb(A, 0, 1.55);
+    if (t > 1.2) { A.ceremony = sk.cere; text = sk.pop; }
+    else text = '3초 버티고…';
+    cam.position.set(0.9, 2.55, 2.9); cam.lookAt(0, 2.3, 0.3);
+  } else if (id === 'bump') {
+    const k = Math.min(t / 1.2, 1);
+    pvWalk(A, -1.3 + k * 1.12, 1.2, Math.PI / 2, dt, t < 1.2);
+    B.group.visible = true;
+    const push = t > 1.2 ? 0.9 * (1 - Math.exp(-(t - 1.2) * 6)) : 0;
+    pvWalk(B, (t < 1.2 ? 1.3 - k * 1.12 : 0.18) + push, 1.2, -Math.PI / 2, dt, t < 1.2);
+    if (t > 1.2 && t < 1.3) B.squashT = 0.45;
+    if (t > 1.2 && t < 2.4) text = '💥 퍽!';
+    cam.position.set(0, 1.5, 4.3); cam.lookAt(0, 0.7, 1.2);
+  } else if (id === 'knock') {
+    const k = Math.min(t / 1.1, 1);
+    pvWalk(A, -1.3 + k * 1.05, 1.4, Math.PI / 2, dt, t < 1.1);
+    tri.visible = true; tri.position.set(0.45, 0, 1.4); tri.rotation.y = Math.PI;
+    const f = clamp((t - 1.35) / 0.45, 0, 1);
+    tri.rotation.z = f * f * 1.45;
+    tri.userData.rec.visible = f === 0 && Math.floor(t * 3) % 2 === 0;
+    if (t > 1.8 && t < 2.9) text = '쿵!';
+    cam.position.set(0.2, 1.5, 4.4); cam.lookAt(0.1, 0.6, 1.3);
+  } else if (id === 'chalkthrow') {
+    pvClimb(A, -0.35, 1.3);
+    B.group.visible = true; pvWalk(B, 0.55, 1.0, -0.2, dt, false);
+    chalk.visible = true;
+    const arr = chalk.geometry.attributes.position.array;
+    for (let i = 0; i < PV_N; i++) {
+      const born = 0.4 + (i / PV_N) * 1.8, age = t - born;
+      const r1 = Math.sin(i * 12.9898) * 0.5, r2 = Math.sin(i * 78.233) * 0.5;
+      if (age < 0 || age > 1.3) { arr[i * 3 + 1] = -5; continue; }
+      arr[i * 3] = -0.15 + (0.6 + r1 * 0.5) * age; arr[i * 3 + 1] = 2.2 - 1.3 * age * age; arr[i * 3 + 2] = 0.35 + (0.6 + r2 * 0.4) * age;
+    }
+    chalk.geometry.attributes.position.needsUpdate = true;
+    if (t > 1.3) { B.chalkyT = 3; text = '콜록콜록 😵'; } else text = '🤍 초크 비~';
+    cam.position.set(0.9, 2.1, 4.8); cam.lookAt(0.05, 1.55, 0.5);
+  } else if (id === 'tripod') {
+    tri.visible = true; tri.position.set(0.75, 0, 1.5); tri.rotation.y = Math.PI + 0.45;
+    tri.userData.rec.visible = Math.floor(t * 3) % 2 === 0;
+    pvClimb(A, 0, Math.min(t / 2.4, 1) * 1.55);
+    if (t > 2.9) { const d = t - 2.9; flash = Math.max(0, 1 - d * 2.5); text = '📷 찰칵! 셀프캠'; }
+    cam.position.set(-1.0, 2.0, 4.8); cam.lookAt(0.25, 1.5, 0.6);
+  }
+  A.t = t; A.update(dt); if (B.group.visible) B.update(dt);
+  if (id === 'knock' && t > 1.05 && t < 1.55) { // 발로 툭
+    const [, , , rl] = A.limbs; A.solve(rl, rl.root.clone().add(new V3(0, -0.3, 0.42)));
+  }
+  if (id === 'bump' && t > 1.0 && t < 1.5) A.rig.rotation.y = -0.5;
+  return { text, flash };
+}
+function renderSkillPreviews(now) {
+  const dlg = $('#shop'); if (!dlg || !dlg.open) return;
+  if (now - PV.last < 66) return;
+  const dt = Math.min(0.1, (now - (PV.prevT || now)) / 1000) || 0.066; PV.last = now; PV.prevT = now;
+  const cvs = [...dlg.querySelectorAll('canvas.skill-pv')];
+  if (!cvs.length) return;
+  try {
+    previewSetup();
+    const vr = dlg.getBoundingClientRect();
+    const pr = renderer.getPixelRatio(), src = renderer.domElement;
+    const size = renderer.getSize(new THREE.Vector2());
+    let drew = false;
+    cvs.forEach((cv, i) => {
+      const r = cv.getBoundingClientRect();
+      if (r.bottom < vr.top || r.top > vr.bottom || r.width < 4) return;
+      const sc = Math.min(1, 360 / r.width, 200 / r.height), w = Math.round(r.width * sc), h = Math.round(r.height * sc);
+      if (w * pr > src.width || h * pr > src.height) return;
+      if (cv.width !== Math.round(w * pr)) { cv.width = Math.round(w * pr); cv.height = Math.round(h * pr); }
+      const id = cv.dataset.pv, L = PV_LEN[id] || 4;
+      const t = ((now / 1000) + i * 0.7) % L;
+      const o = pvPose(id, t, dt);
+      PV.cam.aspect = w / h; PV.cam.updateProjectionMatrix();
+      renderer.setViewport(0, 0, w, h); renderer.setScissor(0, 0, w, h); renderer.setScissorTest(true);
+      renderer.render(PV.scene, PV.cam);
+      const g = cv.getContext('2d');
+      g.drawImage(src, 0, src.height - h * pr, w * pr, h * pr, 0, 0, cv.width, cv.height);
+      if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${o.flash})`; g.fillRect(0, 0, cv.width, cv.height); }
+      if (o.text) {
+        g.font = `900 ${Math.round(15 * pr)}px "Noto Sans KR", sans-serif`; g.textAlign = 'center';
+        g.lineWidth = 4 * pr; g.strokeStyle = 'rgba(0,0,0,.75)'; g.fillStyle = '#ffcf4a';
+        const ty = cv.height - 10 * pr; g.strokeText(o.text, cv.width / 2, ty); g.fillText(o.text, cv.width / 2, ty);
+      }
+      drew = true;
+    });
+    if (drew) { renderer.setScissorTest(false); renderer.setViewport(0, 0, size.x, size.y); }
+  } catch (e) { renderer.setScissorTest(false); }
 }
 
 // ----- 💥 어깨빵 -----
@@ -4851,7 +4989,7 @@ function loop() {
   updateCamera(dt);
   updateHud(dt);
   Net.sync(false);
-  if (!inst.on) renderer.render(scene, camera);
+  if (!inst.on) { renderSkillPreviews(now); renderer.render(scene, camera); }
   requestAnimationFrame(loop);
 }
 let chatNext = performance.now() + 5000;
