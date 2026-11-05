@@ -2076,8 +2076,7 @@ function sendProblem(p) {
   }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
   const firstSend = Store.data.sends[p.id] === 1;
-  if ((firstSend ? westCanShoot() : p.rank >= 6 && westCanShoot(0.5))) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
-  else { pl.topHoldMax = 3; westPraise('top', 600); }
+  pl.topHoldMax = 3; westPraise('top', 600);
   if (staff.av && staff.av.group.position.distanceTo(me.group.position) < 14 && staffMayNag(0.2)) setTimeout(() => staffSay(pick(STAFF_LINES.praise), 2600), 3500);
   checkFestival();
 }
@@ -2361,8 +2360,7 @@ function npcUpdate(n, dt, now) {
         n.av.say(pick(LINES.npcTop), 1800);
         npcs.forEach((o) => { if (o !== n && o.state === 'idle' && Math.random() < 0.7) setTimeout(() => o.av.say(pick(LINES.cheer)), 400 + Math.random() * 600); });
         n.holdT = -3.5; n.topPose = true;
-        if (westCanShoot(0.05)) westPhoto(n.av, `${n.av.name} — ${problemLabel(p)} 완등!`, s.n3);
-        else westPraise('top', 500);
+        westPraise('top', 500);
       } else if (n.topPose) {
         n.topPose = false;
         n.state = 'drop'; n.vy = 1.2; n.dropT = 0;
@@ -2408,7 +2406,7 @@ function npcApiUrl() {
 const NPC_KEYS = { 하바네로: 'habanero', 청양이: 'cheongyang', 떡볶이: 'tteokbokki' };
 const NPC_FALLBACK = {
   muho: ['…네? 듣고 있었어요. 진짜로요 🐯', '물은 마셨어요? 그것부터 해요. 그냥 물어본 거예요', '다치지만 마요. 걱정한 건 아니고요 🐯'],
-  west: ['오 좋아요 좋아!! 🤠', '오늘 폼 미쳤던데요?', '완등하면 사진 찍어줄게요 📸'],
+  west: ['오 좋아요 좋아!! 🤠', '오늘 폼 미쳤던데요?', '오늘 컨디션 최고죠? 🤠'],
   habanero: ['가자가자!!', '오늘 다이노 각이다 🔥', '한 판 더 붙자!'],
   cheongyang: ['천천히 해도 돼요.', '그 문제 발이 핵심이에요.', '쉬었다 가요.'],
   tteokbokki: ['ㅋㅋㅋ 배고프다', '나 좀만 더 쉬고 갈래~', '떡볶이 먹고 싶다 ㅋㅋ'],
@@ -2454,7 +2452,6 @@ function summonTo(t) {
       if (['collect', 'rush'].includes(staff.state)) { finish(); return; }
       staffGo(pt, 7); staff.state = 'summon'; staff.onArrive = finish;
     } else if (t.key === 'west') {
-      if (west.state === 'photo') { finish(); return; }
       westGo(pt, 6.5); west.state = 'summon'; west.onArrive = finish;
     } else if (t.npc && ['idle', 'rest', 'return', 'walk'].includes(t.npc.state)) {
       const n = t.npc;
@@ -2499,8 +2496,6 @@ async function npcTalk(text) {
   if (hist.length > 12) hist.splice(0, hist.length - 12);
   t.av.say(reply, 5200);
   logChat(t.name, t.key === 'muho' ? '#f39a2b' : t.key === 'west' ? '#ffd166' : t.av.color, reply);
-  // 웨스트한테 사진 부탁하면 진짜 찍어줌
-  if (t.key === 'west' && /사진|찍어|📸|셀카/.test(text) && west.state !== 'photo') setTimeout(() => { west.lastPhoto = -1e9; westPhoto(me, `${Store.data.name} 기념샷`); }, 1200);
   npcTalkState.busy = false;
 }
 
@@ -2698,13 +2693,10 @@ function updateStaff(dt, now) {
 }
 
 // =================================================================
-// 🤠 웨스트 — 잔소리 0%, 칭찬 100%, 완등하면 달려와서 찰칵 📸
+// 🤠 웨스트 — 잔소리 0%, 칭찬 100%
 // =================================================================
-const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, shotT: 0, cheerT: 0, photos: [], lastPhoto: -1e9 };
-const WEST_COOLDOWN = 180000; // 사진은 3분에 한 번만
-function westCanShoot(chance = 1) { return west.av && west.state !== 'photo' && performance.now() - west.lastPhoto > WEST_COOLDOWN && Math.random() < chance; }
+const west = { av: null, state: 'roam', path: [], speed: 1.6, next: 0, target: null, cheerT: 0, photos: [] }; // photos = 앨범 (삼각대 셀프캠)
 const WEST_LINES = {
-  photo: ['찰칵! 📸 인생샷 건졌다 🤠', '이 각도 미쳤다 📸', '프로필 사진 각이에요!', '완등 기념샷 찰칵~ 🤠'],
   top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
   climb: ['가보자고~!! 🤠', '발 좋다 발 좋다!', '자세 너무 좋아요!', '거의 다 왔어요!', '호흡 천천히~ 할 수 있어!'],
   fall: ['괜찮아요! 떨어지는 것도 등반이에요 🤠', '방금 무브 진짜 좋았는데!', '다음엔 무조건 돼요!', '시도한 게 멋있는 거예요 👍'],
@@ -2723,26 +2715,12 @@ function westSay(text, ms = 2600, important = false) {
   west.av.say(text, ms);
   if (important && me && west.av.group.position.distanceTo(me.group.position) > 9) toast(`🤠 웨스트: ${text}`, 2200);
 }
-function westPraise(kind, delay = 900) { if (west.av && west.state !== 'photo' && WEST_LINES[kind] && (kind === 'top' || Math.random() < 0.6)) setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600), delay); }
+function westPraise(kind, delay = 900) { if (west.av && WEST_LINES[kind] && (kind === 'top' || Math.random() < 0.6)) setTimeout(() => westSay(pick(WEST_LINES[kind]), 2600), delay); }
 function westGo(pt, speed) { const g = west.av.group; west.path = planPath([g.position.x, g.position.z], pt); west.speed = speed; }
 function makeWest() {
   west.av = new Avatar('웨스트', '#3d7bd9', { cowboy: true });
   const st = m([420, 820]);
   west.av.group.position.set(st[0], groundY(st[0], st[1]), st[1]);
-}
-// 완등한 사람(av)을 찍으러 달려감. normal: 벽 바깥 방향
-function westPhoto(av, label, normal) {
-  if (!west.av || west.state === 'photo') return;
-  west.lastPhoto = performance.now();
-  const P = av.group.position;
-  let dir = normal ? new V3(normal.x, 0, normal.z) : new V3(west.av.group.position.x - P.x, 0, west.av.group.position.z - P.z);
-  if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
-  dir.normalize();
-  let tx = P.x + dir.x * 3.0, tz = P.z + dir.z * 3.0;
-  for (let k = 0; k < 20 && !walkable(tx, tz); k++) { tx -= dir.x * 0.15; tz -= dir.z * 0.15; }
-  westGo([tx, tz], 7);
-  west.state = 'photo'; west.subject = av; west.label = label; west.shotT = 0;
-  westSay(pick(['잠깐!! 사진 찍어줄게요 📸', '그대로 멈춰요~ 📸', '완등샷 각!! 🤠']), 1800);
 }
 function updateWest(dt, now) {
   if (!west.av) return;
@@ -2767,58 +2745,18 @@ function updateWest(dt, now) {
     }
   } else if (west.state === 'summon') {
     if (!west.path.length) { west.state = 'roam'; west.next = now + 8000; const f = west.onArrive; west.onArrive = null; if (f) f(); }
-  } else if (west.state === 'photo') {
-    west.shotT += dt;
-    const S = west.subject.group.position;
-    const arrived = !west.path.length;
-    if (arrived || west.shotT > 2.2) {
-      west.path = [];
-      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(S.x - g.position.x, S.z - g.position.z), damp(10, dt));
-      west.av.photoPose = true;
-      if (!west.posedAt) west.posedAt = now;
-      if (now - west.posedAt > 600 && !west.shotPending && !west.shotDone) west.shotPending = true;
-      if (west.shotDone && now - west.posedAt > 2200) {
-        west.av.photoPose = false; west.posedAt = 0; west.shotDone = false;
-        west.state = 'roam'; west.next = now + 1500;
-      }
-    }
   }
   west.av.update(dt);
 }
-// 렌더 직후 호출: 웨스트 시점으로 한 장 찍기
+// 삼각대 셀프캠용 카메라
 const photoCam = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-function takeWestShot() {
-  west.shotPending = false; west.shotDone = true;
-  const S = west.subject.group.position;
-  const from = west.av.group.position.clone().add(new V3(0, 1.3, 0));
-  const look = S.clone().add(new V3(0, 0.8, 0));
-  photoCam.aspect = renderer.domElement.width / renderer.domElement.height;
-  photoCam.position.copy(from); photoCam.lookAt(look); photoCam.updateProjectionMatrix();
-  const vis = west.av.group.visible;
-  west.av.group.visible = false;
-  renderer.render(scene, photoCam);
-  west.av.group.visible = vis;
-  const src = renderer.domElement;
-  const H = src.height, W = Math.round(H * 0.8);
-  const c = document.createElement('canvas'); c.width = 480; c.height = 600;
-  c.getContext('2d').drawImage(src, (src.width - W) / 2, 0, W, H, 0, 0, 480, 600);
-  const url = c.toDataURL('image/jpeg', 0.85);
-  renderer.render(scene, camera);
-  // 플래시 + 셔터
-  const fl = $('#flash'); fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on');
-  Sound.tone(2600, 0.04, 'square', 0.05); Sound.tone(1200, 0.06, 'square', 0.04, 0.06);
-  westSay(pick(WEST_LINES.photo), 2600, true);
-  west.photos.unshift({ url, label: west.label, t: Date.now() });
-  if (west.photos.length > 8) west.photos.length = 8;
-  showPolaroid(url, west.label);
-}
 let polaroidT;
-function showPolaroid(url, label, by = '🤠 웨스트가 찍어줌') {
+function showPolaroid(url, label, by = '📷 내 삼각대가 찍음') {
   const el = $('#polaroid');
   el.querySelector('.pol-by').textContent = by;
   el.querySelector('img').src = url;
   el.querySelector('.pol-cap').textContent = label;
-  const a = el.querySelector('a'); a.href = url; a.download = `spicy-west-${Date.now()}.jpg`;
+  const a = el.querySelector('a'); a.href = url; a.download = `spicy-selfcam-${Date.now()}.jpg`;
   el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(polaroidT);
   polaroidT = setTimeout(() => { if (!el.matches(':hover')) el.hidden = true; }, 9000);
@@ -3015,9 +2953,9 @@ function renderRecords() {
     });
   }
   const alb = $('#album');
-  alb.innerHTML = west.photos.length ? '' : '<p class="empty">완등하면 웨스트가 달려와서 찍어줘요 🤠📸</p>';
+  alb.innerHTML = west.photos.length ? '' : '<p class="empty">📷 삼각대를 설치하고 완등하면 셀프캠 사진이 여기 모여요</p>';
   west.photos.forEach((ph) => {
-    const a = document.createElement('a'); a.href = ph.url; a.download = `spicy-west-${ph.t}.jpg`; a.className = 'album-item';
+    const a = document.createElement('a'); a.href = ph.url; a.download = `spicy-selfcam-${ph.t}.jpg`; a.className = 'album-item';
     const img = document.createElement('img'); img.src = ph.url; img.alt = ph.label;
     const cap = document.createElement('span'); cap.textContent = ph.label;
     a.append(img, cap); alb.appendChild(a);
@@ -3188,8 +3126,7 @@ const Net = {
       addFeed(p.name, prob, false);
       logChat('', '', `🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 'sys');
       toast(`🔥 ${p.name}님 ${problemLabel(prob)} 완등!`, 2200);
-      if (westCanShoot(0.2)) westPhoto(p.av, `${p.name} — ${problemLabel(prob)} 완등!`, segAt(prob.strip, prob.top.u)[0].n3);
-      else westPraise('top', 900);
+      westPraise('top', 900);
       npcs.forEach((n, k) => { if (n.state === 'idle' && Math.random() < 0.6) setTimeout(() => n.av.say(pick(LINES.cheer)), 400 + k * 400); });
     }
     if (d.type === 'bump' && d.to === this.id) { p.av.say('💥 앗 죄송해요!', 2200); toast(`${p.name}님과 부딪혔어요! 선출발자인 당신은 무사 😎`, 2400); }
@@ -3497,7 +3434,8 @@ function tripodShot(p) {
     renderer.render(scene, camera);
     const label = `📷 삼각대 셀프캠 — ${problemLabel(p)} 완등`;
     west.photos.unshift({ url, label, t: Date.now() }); if (west.photos.length > 8) west.photos.length = 8;
-    showPolaroid(url, label, '📷 내 삼각대가 찍음');
+    showPolaroid(url, label);
+    const fl = $('#flash'); fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on');
     Sound.tone(2600, 0.04, 'square', 0.05);
   }, 600);
 }
@@ -4914,7 +4852,6 @@ function loop() {
   updateHud(dt);
   Net.sync(false);
   if (!inst.on) renderer.render(scene, camera);
-  if (west.shotPending) takeWestShot();
   requestAnimationFrame(loop);
 }
 let chatNext = performance.now() + 5000;
@@ -5062,7 +4999,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
