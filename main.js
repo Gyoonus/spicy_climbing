@@ -3242,6 +3242,9 @@ const SKILLS = [
   { id: 'knock', price: 650000, n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
   { id: 'chalkthrow', price: 1000000, n: '🤍 초크 던지기', d: '홀드 위에서든 바닥에서든 한 줌 촤악 흩뿌리기 (바닥에선 옆사람 쪽으로). 초크 1회 소모, 매너 온도 −1' },
 ];
+// 🎉 스킬 60% 할인 행사 — 정가의 40%에 판매 (행사 끝나면 1로)
+const SKILL_SALE = 0.4;
+const skillPrice = (k) => Math.round((k.price * SKILL_SALE) / 1000) * 1000;
 function hasSkill(id) { return !!(Store.data.skills || {})[id]; }
 // 📷 아이템 (스킬 아님 — 한 번 사면 계속 들고 다녀요)
 const GEAR = [
@@ -3275,13 +3278,13 @@ function renderSkills() {
   [...SKILLS].sort((a, b) => a.price - b.price).forEach((k) => {
     const own = hasSkill(k.id);
     const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
-    el.innerHTML = `<canvas class="skill-pv" data-pv="${k.id}" aria-label="${k.n} 미리보기"></canvas><div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(k.price)}</span></div><p><span class="diff" title="구현 난이도">${diffStars(k.price)}</span> ${k.d}</p>`;
+    el.innerHTML = `<canvas class="skill-pv" data-pv="${k.id}" aria-label="${k.n} 미리보기"></canvas><div class="item-head"><b>${k.n}</b>${own || SKILL_SALE >= 1 ? '' : `<span class="sale-tag">-${Math.round((1 - SKILL_SALE) * 100)}%</span>`}<span class="price">${own ? '보유 중' : `${SKILL_SALE < 1 ? `<s>${won(k.price)}</s> ` : ''}${won(skillPrice(k))}`}</span></div><p><span class="diff" title="구현 난이도">${diffStars(k.price)}</span> ${k.d}</p>`;
     if (!own) {
       const act = document.createElement('div'); act.className = 'item-act';
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(k.price)}에 배우기`;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(skillPrice(k))}에 배우기`;
       b.addEventListener('click', () => {
-        if ((Store.data.wallet || 0) < k.price) { toast(`돈이 ${won(k.price - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
-        addMoney(-k.price, `${k.n} 스킬 습득`);
+        if ((Store.data.wallet || 0) < skillPrice(k)) { toast(`돈이 ${won(skillPrice(k) - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
+        addMoney(-skillPrice(k), `${k.n} 스킬 습득`);
         Store.data.skills = Store.data.skills || {}; Store.data.skills[k.id] = true; Store.save();
         Sound.top(); renderShop();
       });
