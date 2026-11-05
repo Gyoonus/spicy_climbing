@@ -2009,7 +2009,7 @@ function useChalk() {
     if (Store.data.chalkGift !== todayStr()) {
       Store.data.chalkGift = todayStr(); Store.data.chalk = 3; Store.save(); updateChalkBadge();
       staffSay('…초크 없어요? 제 거 조금 쓰세요. 오늘만이에요 🐯', 3000);
-    } else { toast('🤍 초크가 다 떨어졌어요 — 💰 프로샵에서 사요', 2200); if (pl.mode === 'walk') setTimeout(openShop, 600); return; }
+    } else { toast('🤍 초크가 다 떨어졌어요', 1800); return; }
   }
   const liquid = (Store.data.liquid || 0) > 0;
   if (liquid) Store.data.liquid--; else Store.data.chalk--;
@@ -2043,7 +2043,6 @@ function sendProblem(p) {
   const first = Store.data.sends[p.id] === 1;
   const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1);
   setTimeout(() => addMoney(reward, first ? '첫 완등 보너스 ×2' : '완등 보상'), 1200);
-  if (first && Math.random() < 0.6) setTimeout(() => showAd(Math.random() < 0.7 ? 0 : 1, '완등 축하! '), 9000);
   Net.event('top', { pid: p.id, text: line });
   addFeed(Store.data.name, p, true);
   logChat('', '', `🔥 ${Store.data.name}님 ${problemLabel(p)} 완등!`, 'sys');
@@ -2361,6 +2360,73 @@ function npcUpdate(n, dt, now) {
     n.restT -= dt;
     if (n.restT <= 0) { n.path = planPath([g.position.x, g.position.z], n.spot); n.state = 'return'; }
   }
+}
+
+// =================================================================
+// 🗣️ NPC와 대화 — Vercel 서버 함수(/api/npc)가 Claude Haiku로 대답
+// =================================================================
+// GitHub Pages에서 열면 Vercel 주소로 요청 (Vercel 배포 후 주소를 여기에)
+const NPC_API_REMOTE = '';
+function npcApiUrl() {
+  const q = new URLSearchParams(location.search).get('npcapi');
+  if (q) return q;
+  if (location.hostname.endsWith('github.io')) return NPC_API_REMOTE ? NPC_API_REMOTE.replace(/\/$/, '') + '/api/npc' : '';
+  return '/api/npc';
+}
+const NPC_KEYS = { 하바네로: 'habanero', 청양이: 'cheongyang', 떡볶이: 'tteokbokki' };
+const NPC_FALLBACK = {
+  muho: ['…네? 아, 듣고 있었어요. 진짜로요 🐯', '오늘도 다치지 말고요. 걱정돼서 그런 거 아님 🐯', '물 마시고 해요~ 🐯'],
+  west: ['오 좋아요 좋아!! 🤠', '오늘 폼 미쳤던데요?', '완등하면 사진 찍어줄게요 📸'],
+  habanero: ['가자가자!!', '오늘 다이노 각이다 🔥', '한 판 더 붙자!'],
+  cheongyang: ['천천히 해도 돼요.', '그 문제 발이 핵심이에요.', '쉬었다 가요.'],
+  tteokbokki: ['ㅋㅋㅋ 배고프다', '나 좀만 더 쉬고 갈래~', '떡볶이 먹고 싶다 ㅋㅋ'],
+};
+const npcTalkState = { last: 0, hist: {}, busy: false };
+function npcTargets() {
+  const list = npcs.map((n) => ({ key: NPC_KEYS[n.av.name], av: n.av, name: n.av.name, npc: n }));
+  if (staff.av) list.push({ key: 'muho', av: staff.av, name: '무호K' });
+  if (west.av) list.push({ key: 'west', av: west.av, name: '웨스트' });
+  return list.filter((t) => t.key);
+}
+function pickTalkTarget(text) {
+  const all = npcTargets();
+  const byName = all.find((t) => text.includes(t.name.replace('K', '')) || (t.key === 'muho' && /무호|호랑/.test(text)) || (t.key === 'west' && /웨스트|카우보이/.test(text)));
+  if (byName) return byName;
+  const pos = me.group.position;
+  const near = all.map((t) => ({ t, d: t.av.group.position.distanceTo(pos) })).filter((x) => x.d < 4.5).sort((a, b) => a.d - b.d)[0];
+  return near ? near.t : null;
+}
+async function npcTalk(text) {
+  const t = pickTalkTarget(text);
+  if (!t) return;
+  const now = Date.now();
+  if (npcTalkState.busy || now - npcTalkState.last < 2500) return;
+  npcTalkState.last = now; npcTalkState.busy = true;
+  const g = t.av.group;
+  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
+  if (t.npc && t.npc.state === 'idle') { t.npc.next = Math.max(t.npc.next, performance.now() + 8000); }
+  t.av.say('…', 6000);
+  const hist = (npcTalkState.hist[t.key] = npcTalkState.hist[t.key] || []);
+  const doing = pl.mode === 'route' && pl.problem ? `${problemLabel(pl.problem)} 등반 중` : pl.sitting ? '매트에 앉아 쉬는 중' : '암장을 돌아다니는 중';
+  let reply = '';
+  const url = npcApiUrl();
+  if (url) {
+    try {
+      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
+      const r = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+        body: JSON.stringify({ npc: t.key, text, history: hist.slice(-6), ctx: { name: Store.data.name, doing, sends: Object.values(Store.data.sends).reduce((a, b) => a + b, 0) } }),
+      });
+      clearTimeout(to);
+      if (r.ok) reply = ((await r.json()).reply || '').trim();
+    } catch (e) { /* 서버 없음/시간 초과 → 기본 대사 */ }
+  }
+  if (!reply) reply = pick(NPC_FALLBACK[t.key]);
+  hist.push({ role: 'user', text }, { role: 'npc', text: reply });
+  if (hist.length > 12) hist.splice(0, hist.length - 12);
+  t.av.say(reply, 5200);
+  logChat(t.name, t.key === 'muho' ? '#f39a2b' : t.key === 'west' ? '#ffd166' : t.av.color, reply);
+  npcTalkState.busy = false;
 }
 
 // =================================================================
@@ -3074,7 +3140,7 @@ function updateHud(dt) {
     status.classList.add('climbing');
     const p = pl.problem;
     const holdN = R.lh.v >= R.rh.v ? R.lh.type.n : R.rh.type.n;
-    title.innerHTML = `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span>${p.double ? ' 🔥🔥' : p.dyno ? ' 🔥' : ''}<small>${R.done ? '완등! 곧 내려와요' : R.gauge ? '다이노 — 초록 칸에서 탭!' : R.qte ? '버튼을 눌러요!' : '초록 = 손 닿음 · 노랑 = 데드포인트 · 주황 = 다이노'}</small><small>✊ ${holdN} · 👟 ${gear().shoe.n}${R.hipIn ? ' · 🍑' : ''}${me.tech === 'flag' ? ' · 🦵 플래깅' : me.tech === 'heel' ? ' · 👟 힐훅' : ''}</small>`;
+    title.innerHTML = `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span>${p.double ? ' 🔥🔥' : p.dyno ? ' 🔥' : ''}<small>${R.done ? '완등! 곧 내려와요' : R.gauge ? '다이노 — 초록 칸에서 탭!' : R.qte ? '버튼을 눌러요!' : '초록 = 손 닿음 · 노랑 = 데드포인트 · 주황 = 다이노'}</small><small>✊ ${holdN}${R.hipIn ? ' · 🍑' : ''}${me.tech === 'flag' ? ' · 🦵 플래깅' : me.tech === 'heel' ? ' · 👟 힐훅' : ''}</small>`;
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고</small>`;
     const v = Math.round(pl.pump);
     $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
@@ -3181,8 +3247,6 @@ function buyOrEquip(it, kind) {
     addMoney(-it.price, `${it.n} 구매`);
     Store.data.owned[it.id] = true;
     Sound.top();
-    setTimeout(() => staffSay(it.id === 'him' ? '힘 에디션…? 잘 어울리네요. 진짜로요 🐯' : '…잘 샀어요. 오래 신어요 🐯', 2800), 600);
-    westPraise('gear', 1600);
   }
   if (kind === 'shoe') Store.data.equip.shoe = it.id; else Store.data.equip.pants = Store.data.equip.pants === it.id && owned ? '' : it.id;
   Store.save();
@@ -4011,7 +4075,7 @@ function mashFail() {
   popText('미끄덩!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.32);
   Sound.tone(160, 0.2, 'square', 0.06);
   pl.pump += 18;
-  toast(`💪 ${m.n}/${m.need} — 조금만 더 꽉! (${m.c.h.lock.short} 있으면 연타 없이 잡혀요)`, 2600);
+  toast(`💪 ${m.n}/${m.need} — 조금만 더 꽉!`, 2200);
   refreshRings();
 }
 
@@ -4103,7 +4167,7 @@ function finishRhythm() {
   } else {
     popText('미끄덩!', head, 0.32); Sound.tone(160, 0.2, 'square', 0.06);
     pl.pump += 16;
-    toast(`🥁 ${r.hits}/${r.need} — 박자 다시! (${r.c.h.lock.short} 있으면 그냥 잡혀요)`, 2600);
+    toast(`🥁 ${r.hits}/${r.need} — 박자 다시!`, 2200);
     refreshRings();
   }
 }
@@ -4528,7 +4592,6 @@ async function enterGym(name, color) {
   $('#btn-shop').addEventListener('click', openShop);
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
   $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
-  scheduleAds();
   setupPay();
   $('#polaroid .pol-close').addEventListener('click', () => { $('#polaroid').hidden = true; });
   setTimeout(() => { toast('🐯 무호K가 누구보다 빠르게 입구로 달려오는 중…', 2200); staffRushToEntry(staffArrivedForPlayer); }, 900);
@@ -4539,7 +4602,7 @@ async function enterGym(name, color) {
   Net.start(name, color);
   logChat('', '', '💬 Enter(모바일은 💬)로 채팅해요. 같은 링크로 들어온 사람들과 대화할 수 있어요', 'sys');
   setTimeout(() => me.say(`안녕하세요! ${name}예요`, 2400), 600);
-  setTimeout(() => npcs[0].av.say('어서 와요~ 신발 벗고 들어와요', 2600), 1700);
+  setTimeout(() => npcs[0].av.say('어서 와요~ 오늘 컨디션 어때요?', 2600), 1700);
 
 
   $('#chat-form').addEventListener('submit', (e) => {
@@ -4552,6 +4615,7 @@ async function enterGym(name, color) {
     logChat(Store.data.name, me.color, v);
     Net.event('say', { text: v });
     inp.value = '';
+    npcTalk(v);
     tryApology(v);
     if (/나이스|가자|화이팅|파이팅|안녕/.test(v)) {
       const idle = npcs.filter((x) => x.state === 'idle');

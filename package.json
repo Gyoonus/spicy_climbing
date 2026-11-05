@@ -1,0 +1,9 @@
+{
+  "name": "spicy-climbing",
+  "private": true,
+  "type": "module",
+  "description": "스파이시 클라이밍 3D 온라인 암장 (정적 사이트 + Vercel NPC 대화 함수)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0"
+  }
+}

@@ -86,6 +86,23 @@
 - **🎵 BGM**: 브라우저에서 즉석으로 만드는 로파이 음악이에요
 - 기록과 매너 온도는 브라우저에만 저장돼요
 
+## 🗣️ NPC와 대화 (Claude Haiku)
+- 채팅에 NPC 이름(무호, 웨스트, 하바네로, 청양이, 떡볶이)을 넣거나, NPC 근처(4.5m)에서 채팅하면 그 캐릭터 말투로 대답해요
+- 서버 함수 `api/npc.js`가 Claude Haiku(`claude-haiku-5-5`)를 불러요. **API 키는 Vercel 환경 변수에만** 있고 브라우저나 저장소에는 없어요
+- 안전장치: 허용된 사이트 주소에서 온 요청만, IP당 1분 12회, 짧은 답(최대 90자), 최근 대화 6턴만 전송
+- 캐릭터는 장비·상점·가격 얘기를 하지 않아요
+- 서버가 없거나 실패하면 미리 써둔 대사로 대답해요
+
+## 🚀 Vercel 배포 (NPC 대화 포함)
+1. https://vercel.com 에 **GitHub로 로그인**
+2. **Add New → Project** → `spicy_climbing` 저장소 **Import**
+3. Framework Preset: **Other**, Build Command / Output Directory는 비워 두기 → **Deploy**
+4. 배포 후 **Settings → Environment Variables** 에 추가 → 다시 배포(Deployments → … → Redeploy)
+   - `ANTHROPIC_API_KEY` = Claude API 키 (Production, Preview 체크)
+   - (선택) `ALLOWED_ORIGINS` = 직접 연결한 도메인이 있으면 `https://내도메인.com` (쉼표로 여러 개). `*.vercel.app`과 `gyoonus.github.io`는 기본 허용
+5. **Settings → Git → Production Branch** 를 이 작업 브랜치로 바꾸면 푸시할 때마다 자동 배포
+6. 이제 `https://프로젝트이름.vercel.app` 이 새 주소예요. GitHub Pages 주소에서도 대화가 되게 하려면 `main.js`의 `NPC_API_REMOTE`에 Vercel 주소를 넣으면 돼요
+
 ## 실행 / 배포
 빌드 없이 정적 파일만으로 동작합니다.
 ```bash
