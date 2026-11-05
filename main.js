@@ -843,7 +843,7 @@ function buildHolds(rand) {
   });
   // S / TOP 테이프
   PROBLEMS.forEach((p) => {
-    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP']), ...(p.crux ? [[p.crux, '🔒']] : [])].forEach(([h, txt]) => {
+    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP']), ...(p.crux ? [[p.crux, '💪']] : [])].forEach(([h, txt]) => {
       const st = p.strip;
       const [s] = segAt(st, h.u);
       const dark = DARK_TAPE.includes(p.color);
@@ -1587,7 +1587,7 @@ function setupInput() {
   icv.addEventListener('pointerup', instPointerUp);
   icv.addEventListener('pointercancel', instPointerUp);
   $('#inst-hip').addEventListener('click', instToggleHip);
-  $('#qte').addEventListener('click', () => { if (R.qte) qteResult(true); });
+  $('#qte').addEventListener('click', () => { if (R.mash) mashTap(); else if (R.qte) qteResult(true); });
   $('#btn-up').addEventListener('click', routeAuto);
   $('#inst-flag').addEventListener('click', instFlag);
   $('#inst-auto').addEventListener('click', instToggleAuto);
@@ -2796,7 +2796,7 @@ function renderRecords() {
     PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.rank - b.rank).forEach((p) => {
       const row = document.createElement('div'); row.className = 'prob';
       const sent = d.sends[p.id] || 0;
-      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.lock ? `<span class="tag lock${p.lock.test() ? ' ok' : ''}">${p.lock.test() ? '🔓' : '🔒'} ${p.lock.short}</span>` : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
+      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.lock ? `<span class="tag lock${p.lock.test() ? ' ok' : ''}">💪 크럭스 꽉잡기${p.lock.test() ? ' (장비 OK)' : ''}</span>` : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '안내';
       b.addEventListener('click', () => { setGuide(p); $('#records').close(); toast(`${problemLabel(p)} — 깃발과 미니맵 ★을 따라가세요`, 2600); });
       row.appendChild(b);
@@ -3827,7 +3827,7 @@ function classify(h) {
     const top = Math.max(lh.v, rh.v);
     // 잠긴 크럭스를 건너뛰는 다이노도 막음
     if (h !== cx && h.v > cx.v + 0.05 && top < cx.v - 0.05) return null;
-    if (h === cx) { const r = classifyRaw(h); return r ? { ...r, kind: 'locked' } : null; }
+    if (h === cx) { const r = classifyRaw(h); return r ? { ...r, kind: 'locked', raw: r.kind } : null; }
   }
   return classifyRaw(h);
 }
@@ -3849,7 +3849,7 @@ function classifyRaw(h) {
 }
 
 function enterRoute(p, st) {
-  R.on = true; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
+  R.on = true; R.mash = null; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
   R.lh = p.start; R.rh = p.start;
   R.body = solveBody(R.lh, R.rh) || { u: p.start.u, v: Math.max(MAT_H, p.start.v - BODY.shY - 0.4) };
   [R.lf, R.rf] = pickFeet(R.body);
@@ -3860,11 +3860,11 @@ function enterRoute(p, st) {
   document.body.classList.add('route');
   refreshRings();
   routeSync(1);
-  toast(p.lock && !p.lock.test() ? `${problemLabel(p)} — 🔒 크럭스에 ${p.lock.short} 필요!` : `${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2800);
+  toast(p.lock && !p.lock.test() ? `${problemLabel(p)} — 💪 크럭스는 연타로 꽉 잡아요!` : `${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2800);
 }
 function endRoute() {
   if (!R.on) return;
-  R.on = false; R.qte = null; R.gauge = null;
+  R.on = false; R.qte = null; R.gauge = null; R.mash = null;
   document.body.classList.remove('route');
   routeRings.forEach((r) => (r.visible = false));
   $('#qte').hidden = true; $('#gauge').hidden = true;
@@ -3904,6 +3904,7 @@ function refreshRings() {
 // 화면 탭 → 가까운 후보 홀드
 function routeTap(cx, cy) {
   if (!R.on || R.anim || R.done) return false;
+  if (R.mash) { mashTap(); return true; }
   if (R.qte) qteResult(false);
   if (R.gauge) { routeFireGauge(); return true; }
   const r = renderer.domElement.getBoundingClientRect();
@@ -3918,9 +3919,43 @@ function routeTap(cx, cy) {
   routeMove(best);
   return true;
 }
+// 💪 크럭스: 장비 없으면 연타로 꽉 잡기 (장비 있으면 그냥 잡힘)
+function startMash(c) {
+  const need = Math.round(7 + R.p.rank * 0.85);
+  R.mash = { c, need, n: 0, t: 3.2, max: 3.2 };
+  routeRings.forEach((r) => (r.visible = false));
+  $('#qte-label').textContent = `💪 꽉 잡아! 0/${need}`; $('#qte-key').textContent = '연타';
+  const b = $('#qte'); b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  popText('꽉!!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.36);
+  if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['꽉 잡으면 돼요~ 🐯', '손가락에 힘! …응원한 거 아님 🐯', '크림프는 꽉이에요 꽉 🐯']), 2600), 500);
+}
+function mashTap() {
+  const m = R.mash; if (!m) return;
+  m.n++;
+  $('#qte-label').textContent = `💪 꽉 잡아! ${m.n}/${m.need}`;
+  Sound.tone(300 + m.n * 25, 0.04, 'square', 0.04);
+  me.squash();
+  if (m.n >= m.need) {
+    R.mash = null; $('#qte').hidden = true;
+    popText('버텼다!!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.34);
+    pl.pump += 6;
+    westPraise('tech', 700);
+    routeMove({ ...m.c, kind: m.c.raw || 'dead' });
+  }
+}
+function mashFail() {
+  const m = R.mash; R.mash = null; $('#qte').hidden = true;
+  popText('미끄덩!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.32);
+  Sound.tone(160, 0.2, 'square', 0.06);
+  pl.pump += 18;
+  toast(`💪 ${m.n}/${m.need} — 조금만 더 꽉! (${m.c.h.lock.short} 있으면 연타 없이 잡혀요)`, 2600);
+  refreshRings();
+}
+
 // ⬆️ 버튼: 제일 높이 갈 수 있는 홀드로 (닿는 것 우선, 없으면 데드포인트, 그다음 다이노)
 function routeAuto() {
   if (!R.on || R.anim || R.done) return;
+  if (R.mash) { mashTap(); return; }
   if (R.gauge) { routeFireGauge(); return; }
   if (R.qte) return;
   const c = R.cands || [];
@@ -3929,13 +3964,7 @@ function routeAuto() {
   if (best) routeMove(best); else toast('갈 수 있는 홀드가 없어요', 1400);
 }
 function routeMove(c) {
-  if (c.kind === 'locked') {
-    popText('🔒', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.4);
-    toast(`🔒 이 크럭스는 ${c.h.lock.n} 없이는 못 잡아요 — 프로샵에서!`, 3200);
-    Sound.tone(160, 0.2, 'square', 0.06);
-    if (staffMayNag(0.5)) setTimeout(() => staffSay(`그건 ${c.h.lock.short} 있어야 돼요… 프로샵 있어요. 그냥 알려주는 거예요 🐯`, 3200), 900);
-    return;
-  }
+  if (c.kind === 'locked') { startMash(c); return; }
   if (c.kind === 'dyno') { routeStartGauge(c); return; }
   const prev = routeSnapshot();
   if (c.k === 'lh') R.lh = c.h; else R.rh = c.h;
@@ -3974,6 +4003,11 @@ function routeStep(dt) {
     if (R.slipT > 0) { R.slipT -= dt; if (R.slipT <= 0) { me.footless = false; [R.lf, R.rf] = pickFeet(R.body); R.cur = routeSnapshot(); } }
   }
   if (pl.pump >= 100 && !R.done) { toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return; }
+  if (R.mash) {
+    R.mash.t -= dt; pl.pump += dt * 4;
+    $('#qte').style.setProperty('--t', clamp(R.mash.t / R.mash.max, 0, 1).toFixed(3));
+    if (R.mash.t <= 0) mashFail();
+  }
   // 버튼 이벤트 시간
   if (R.qte) {
     R.qte.t -= dt;
@@ -4101,7 +4135,7 @@ function qteResult(ok) {
   }
 }
 function routeKey(code) {
-  if (code === 'Space') { if (R.gauge) routeFireGauge(); return true; }
+  if (code === 'Space') { if (R.mash) mashTap(); else if (R.gauge) routeFireGauge(); return true; }
   if (code === 'KeyE') { grabToggle(); return true; }
   if (code === 'KeyW' || code === 'ArrowUp') { routeAuto(); return true; }
   const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
