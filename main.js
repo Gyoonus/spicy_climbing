@@ -797,7 +797,7 @@ function buildHolds(rand) {
     p.holds.push({ u: wrapU(st, dynoTop ? u : u + (rand() - 0.5) * 0.3), v: topV, top: true, dynoTarget: dynoTop });
     p.holds.forEach((h) => {
       h.strip = st; h.problem = p; h.hex = p.hex;
-      h.type = h.start ? HT.jug : h.top ? (level >= 5 ? HT.edge : HT.jug) : pickHoldType(level, rand);
+      h.type = h.start ? HT.jug : h.top ? (rank >= 8 ? HT.edge : HT.jug) : pickHoldType(Math.round(rank * 0.78), rand); // 검정은 크림프·슬로퍼 투성이
       h.q = h.type.q;
       h.size = h.top ? 0.13 : h.dynoTarget ? 0.12 : 0.085 + rand() * 0.04 - level * 0.004;
       st.holds.push(h); allHolds.push(h);
@@ -3966,7 +3966,7 @@ function routeStep(dt) {
   if (!R.done) {
     const ang = R.st.sec.angle || 0, g = gear();
     const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0) - (R.slipT > 0 ? 2 : 0);
-    let rate = (0.35 + R.p.level * 0.12) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
+    let rate = (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
     rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
     if (me.tech === 'flag') rate *= 0.7;
     const restful = R.lh.q >= 1 && R.rh.q >= 1 && feet >= 2 && !R.anim;
@@ -4056,18 +4056,24 @@ function afterMove(a) {
   const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0);
   const spread = Math.abs(rDu(R.lh.u, R.rh.u));
   const handsSide = Math.sign(rDu(R.lh.u, R.body.u) + rDu(R.rh.u, R.body.u));
-  if (lv >= 2 && (feet <= 1 || spread > 0.55) && Math.random() < 0.35 + lv * 0.08) {
+  const dif = p.rank / 10, qt = 1 - 0.35 * dif; // 검정일수록 버튼 시간 짧고 자주
+  if (p.rank >= 9 && Math.random() < 0.5) {
+    const kinds = [['flag', '🦵 플래깅!', 'F'], ['hip', '🍑 엉덩이 붙여!', 'H'], ['heel', '👟 힐훅!', 'G']];
+    const [k, l, key] = pick(kinds);
+    if (k === 'flag') R.flagSide = -(handsSide || 1);
+    startQte(k, l, key, (1.4 + g.f * 0.3) * qt);
+  } else if (lv >= 2 && (feet <= 1 || spread > 0.55) && Math.random() < 0.35 + lv * 0.08) {
     R.flagSide = -(handsSide || 1);
-    startQte('flag', '🦵 플래깅!', 'F', 1.9 - lv * 0.12 + g.f * 0.4);
+    startQte('flag', '🦵 플래깅!', 'F', (1.9 - lv * 0.12 + g.f * 0.4) * qt);
   } else if (lv >= 2 && ang >= 20 && Math.random() < 0.3 + lv * 0.05) {
-    startQte('hip', '🍑 엉덩이 붙여!', 'H', 1.8 - lv * 0.1 + g.h * 0.3);
+    startQte('hip', '🍑 엉덩이 붙여!', 'H', (1.8 - lv * 0.1 + g.h * 0.3) * qt);
   } else if (lv >= 4 && ang >= 30 && Math.random() < 0.4) {
-    startQte('heel', '👟 힐훅!', 'G', 1.5 - lv * 0.08 + g.h * 0.5);
+    startQte('heel', '👟 힐훅!', 'G', (1.5 - lv * 0.08 + g.h * 0.5) * qt);
   }
   refreshRings();
 }
 function startQte(kind, label, key, max) {
-  R.qte = { kind, t: Math.max(0.8, max), max: Math.max(0.8, max) };
+  R.qte = { kind, t: Math.max(0.6, max), max: Math.max(0.6, max) };
   $('#qte-label').textContent = label; $('#qte-key').textContent = key;
   const b = $('#qte'); b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
   Sound.tone(880, 0.08, 'square', 0.05);
@@ -4107,7 +4113,8 @@ function routeStartGauge(c) {
   const from = R.lh.v >= R.rh.v ? R.lh : R.rh;
   const q = Math.min(from.q, c.h.q);
   const dv = c.h.v - Math.max(R.lh.v, R.rh.v);
-  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.95 + (1 - q) * 0.6 + R.p.level * 0.04, center: clamp(0.2 + dv / 2.6 * 0.65, 0.15, 0.88), width: 0.12 + 0.26 * q };
+  const dif = R.p.rank / 10; // 0(핑크) ~ 1(검정)
+  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.9 + (1 - q) * 0.6 + dif * 0.7, center: clamp(0.2 + dv / 2.6 * 0.65, 0.15, 0.88), width: (0.12 + 0.26 * q) * (1 - 0.5 * dif) * (0.85 + 0.25 * gear().f) };
   routeRings.forEach((r) => (r.visible = false));
   toast('다이노! 초록 칸에서 탭 / Space', 1500);
 }
