@@ -2008,7 +2008,7 @@ function useChalk() {
   if (chalkLeft() <= 0) {
     if (Store.data.chalkGift !== todayStr()) {
       Store.data.chalkGift = todayStr(); Store.data.chalk = 3; Store.save(); updateChalkBadge();
-      staffSay('아이고 초크도 없이 다녀? 자, 이거 써. 다음엔 챙겨와~ 🐯', 3000);
+      staffSay('초크도 없이 다녀요? …제 거 조금 써요. 오늘만이에요, 다음엔 챙겨와요 🐯', 3000);
     } else { toast('🤍 초크가 다 떨어졌어요', 1800); return; }
   }
   const liquid = (Store.data.liquid || 0) > 0;
@@ -2090,7 +2090,7 @@ function updatePlayer(dt) {
       if (performance.now() - watch.gateMsg > 2500) {
         watch.gateMsg = performance.now();
         toast('🐯 2만원 내야 입장 가능! 무호K를 기다려요');
-        if (staff.state === 'collect') { staffSay('어딜 그냥 들어가~ 계산부터 해야지 🐯', 1800); setTimeout(openPay, 900); }
+        if (staff.state === 'collect') { staffSay('계산부터 하고 가요~ 그냥 들어가면 안 돼요 🐯', 1800); setTimeout(openPay, 900); }
       }
     }
     if (Math.hypot(mx, mz) > 0.1) pl.yaw = lerpAngle(pl.yaw, Math.atan2(mx, mz), damp(10, dt));
@@ -2375,7 +2375,7 @@ function npcApiUrl() {
 }
 const NPC_KEYS = { 하바네로: 'habanero', 청양이: 'cheongyang', 떡볶이: 'tteokbokki' };
 const NPC_FALLBACK = {
-  muho: ['아이고 또 뭐~ 말해봐 🐯', '물은 마셨어? 그것부터 해~', '내가 다 너 잘되라고 하는 소리야 🐯'],
+  muho: ['…네? 듣고 있었어요. 진짜로요 🐯', '물은 마셨어요? 그것부터 해요. 그냥 물어본 거예요', '다치지만 마요. 걱정한 건 아니고요 🐯'],
   west: ['오 좋아요 좋아!! 🤠', '오늘 폼 미쳤던데요?', '완등하면 사진 찍어줄게요 📸'],
   habanero: ['가자가자!!', '오늘 다이노 각이다 🔥', '한 판 더 붙자!'],
   cheongyang: ['천천히 해도 돼요.', '그 문제 발이 핵심이에요.', '쉬었다 가요.'],
@@ -2455,15 +2455,15 @@ const GATE_Z = (905 - 100) * S;
 const STAFF_PATROL = [[450, 460], [690, 470], [420, 820], [690, 800], [180, 440], [520, 300], [430, 950]].map(m);
 const staff = { av: null, state: 'patrol', path: [], speed: 2, next: 0, replan: 0, nagT: 0, dustT: 0, onArrive: null };
 const watch = { chalks: [], runT: 0, calmT: 0, chaseNag: 0, chalkNag: 0, gateMsg: 0 };
-// 무호K = 시어머니 잔소리 타입: 다 너 잘되라고 하는 소리, 한 번 시작하면 줄줄이
+// 무호K = 잔소리 많은 츤데레: 잔소리는 길게, 마지막엔 쑥스러운 한마디
 const STAFF_LINES = {
-  run: ['아이고 또 뛴다~ 내가 몇 번을 말해 🐯', '뛰지 말라니까~ 넘어지면 누가 속상해? 내가 속상해!', '어휴 요즘 애들은 왜 이렇게 급해~', '천천히 좀 다녀~ 벽이 어디 도망가니? 🐯', '거기 거기! 그렇게 뛰다 발목 나가면 어쩌려고~'],
-  chalk: ['아이고 초크를 그렇게 막 뿌리면 어떡해~ 옆사람 기침하잖아 🐯', '팡팡은 완등하고 해~ 내가 그거 하나 못 기다려? ', '손 좀 봐봐, 그렇게 바르는 거 아니야~ 얇게 얇게!', '어휴 또 팡팡이야… 내가 진짜 너 때문에 🐯'],
-  crash: ['아이고 둘 다 괜찮아?! 그러니까 내가 동선 보라 그랬지 🐯', '어휴 부딪히고 그러면 엄마가 알면 얼마나 속상하겠어~'],
-  cutin: ['저기~ 저 사람 먼저 붙었잖아~ 순서 좀 지켜 🐯', '아이고 기다릴 줄도 알아야지~ 클라이밍은 인내야 인내!'],
-  calm: ['그래 그렇게 천천히 다니면 얼마나 좋아 🐯', '진작 그렇게 하지~ 잘했어 잘했어', '봐봐 걸어 다니니까 예쁘잖아~'],
-  care: ['아이고 괜찮아? 어디 봐봐, 안 다쳤어? 🐯', '그러게 내가 무리하지 말랬지~ 물이라도 마셔', '떨어질 때 손 짚지 마~ 손목 나간다니까 🐯'],
-  praise: ['어머 잘했네~ 근데 발은 좀 더 조용히 놔봐 🐯', '완등했어? 잘했어~ 근데 밥은 먹고 다니니?', '그래 그거야~ 내가 그렇게 하라 그랬잖아 🐯'],
+  run: ['뛰지 말라고 했죠~ 넘어지면 어쩌려고요. …걱정한 건 아니고요 🐯', '천천히 좀 다녀요! 벽은 안 도망가요. 그냥 하는 말이에요', '또 뛰어요? 발목 나가면 저만 귀찮아져요. 진짜로요 🐯', '거기 거기! 뛰지 말고요~ 흥, 그래도 제가 더 빨라요 🐯💨', '몇 번째예요 이게… 다치면 속상하… 아 아무것도 아니에요'],
+  chalk: ['초크 그렇게 막 뿌리면 옆사람 콜록거려요~ 적당히! 🐯', '팡팡은 완등하고 해요. 그땐… 박수 정도는 쳐줄게요', '손에 얇게 바르는 거예요 얇게! 알려준 거 아니고 그냥 보여서요', '또 팡팡이에요? …그 소리 좀 좋긴 한데 그래도 적당히요 🐯'],
+  crash: ['둘 다 괜찮아요?! 그러니까 동선 보라고 했잖아요… 걱정한 건 아니고요 🐯', '부딪히고 그러면 안 돼요~ 먼저 붙은 사람 먼저! 다친 데는 없죠?'],
+  cutin: ['저분 먼저 붙었잖아요~ 순서 지켜요. 그래야 멋있… 아니 그냥요 🐯', '조금만 기다려요~ 클라이밍은 기다리는 것도 실력이에요'],
+  calm: ['그래요 그렇게 천천히~ 진작 그럴 것이지 🐯', '훨씬 낫네요. …칭찬한 거 맞아요, 한 번만 말해요', '봐요 걸어 다니니까 좋잖아요~'],
+  care: ['괜찮아요? 그러니까 무리하지 말랬잖아요… 걱정한 거 아니에요 🐯', '떨어질 때 손 짚지 마요, 손목 나가요. 그냥 알려주는 거예요', '물 좀 마시고 해요~ 쓰러지면 제가 귀찮아지니까요 🐯'],
+  praise: ['오… 좀 하네요? 근데 발은 좀 조용히 놔요. 칭찬은 아니고요 🐯', '완등했어요? 흥, 잘했어요. 오늘만 말해주는 거예요', '그래요 그거예요~ 제가 그렇게 하라고 했잖아요 🐯'],
 };
 const todayStr = () => new Date().toLocaleDateString('ko-KR');
 const STAFF_NAG_COOLDOWN = 45000; // 잔소리 한 번 하면 45초는 조용
@@ -2491,11 +2491,11 @@ function staffArrivedForPlayer() {
   const g = staff.av.group;
   g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
   if (paidToday()) {
-    staffSay('또 왔어? 어제 그렇게 하고 손가락은 괜찮고? 들어가~ 🐯', 3000);
+    staffSay('또 왔어요? 손가락은 괜찮고요? …반가운 건 아니고요. 들어가요 🐯', 3000);
     staff.state = 'thanks'; staff.next = performance.now() + 2200;
     return;
   }
-  staffSay('왔어? 일일이용 2만원~ 스트레칭은 하고 왔지? 🐯', 3200);
+  staffSay('왔어요? 일일이용 2만원이에요. 스트레칭은 하고 왔죠? 기다린 건 아니고요 🐯', 3200);
   staff.state = 'collect';
   setTimeout(openPay, 700);
 }
@@ -2508,7 +2508,7 @@ function openPay() {
 }
 function payDone(method) {
   Store.data.wallet = (Store.data.wallet || 0) - 20000; Store.save(); updateWallet();
-  if (Store.data.wallet < 0) setTimeout(() => staffSay('아이고 돈도 없이 왔어? 외상이야 외상! 이번만이다 🐯', 2800), 1400);
+  if (Store.data.wallet < 0) setTimeout(() => staffSay('돈도 없이 왔어요? …외상 달아둘게요. 이번만이에요 🐯', 2800), 1400);
   logChat('', '', '🐯 무호K: 고마워요~ 즐클해요! (일일이용권 결제)', 'sys');
   Store.data.paidDate = todayStr();
   Store.data.spent = (Store.data.spent || 0) + 20000;
@@ -2516,7 +2516,7 @@ function payDone(method) {
   $('#pay').close();
   Sound.tone(1800, 0.08, 'square', 0.06); Sound.tone(1800, 0.08, 'square', 0.06, 0.12);
   toast(`🧾 일일이용권 20,000원 결제 완료 (${method}) — 입장!`, 2600);
-  staffSay(pick(['다치지 말고~ 물 자주 마시고~ 무리하지 말고 🐯', '손톱은 깎고 왔어? 어휴 들어가~', '오늘은 몇 개 깰 건데? 욕심내지 말고 🐯']), 2800);
+  staffSay(pick(['다치지 말고, 물 자주 마시고, 무리하지 말고요. …잔소리 아니에요 🐯', '손톱은 깎고 왔죠? 그냥 물어본 거예요', '욕심내지 말고 하나씩 해요~ 응원한 거 아니고요 🐯']), 2800);
   setTimeout(() => me.say('들어갑니다~!', 1600), 600);
   westPraise('enter', 3000);
   staff.state = 'thanks'; staff.next = performance.now() + 2200;
@@ -2531,10 +2531,10 @@ function setupPay() {
     else if (k === 'member') {
       b.disabled = true;
       $('#pay-say').textContent = '"회원권이요? 특별히 조회해줄게요… 🔍"';
-      setTimeout(() => { $('#pay-say').innerHTML = '"명단에 없는데? 아이고~ 오늘은 <b>2만원</b>. 다음엔 회원권 끊어, 그게 훨씬 싸~"'; staffSay('명단에 없는데? 어디서 거짓말을~ 🐯', 2000); }, 1300);
+      setTimeout(() => { $('#pay-say').innerHTML = '"명단엔 없네요~ 오늘은 <b>2만원</b>이에요. 다음엔 회원권 만들어요… 그냥 하는 말이에요"'; staffSay('명단에 없는데요? 다음엔 회원권 만들어요~ 🐯', 2000); }, 1300);
     } else if (k === 'sneak') {
       d.close();
-      staffSay('어머 어딜 몰래~ 내가 다 보고 있어 🐯', 2200);
+      staffSay('어딜 몰래 가요~ 다 보여요. 계산하고 들어가요 🐯', 2200);
       me.say('헉 들켰다', 1400);
       setTimeout(openPay, 1800);
     }
@@ -2543,7 +2543,7 @@ function setupPay() {
 function staffCatch() {
   westPraise('console', 3200);
   pl.vel.set(0, 0, 0); pl.runToggle = false; pl.stunT = 1.3;
-  staffSay('잡았다! 내가 뛰지 말랬지~ 어디 다친 데는 없고? 🐯', 2800);
+  staffSay('잡았다~ 뛰지 말랬잖아요. 다친 데는 없죠? 걱정한 건 아니고요 🐯', 2800);
   setTimeout(() => me.say('죄송합니다…', 1600), 700);
   setTimeout(() => Manner.add(-0.3, '무호K한테 잡힘 🐯'), 1000);
   staff.state = 'thanks'; staff.next = performance.now() + 2500;
@@ -2607,7 +2607,7 @@ function updateStaff(dt, now) {
       if ((staff.nagT += dt) > 3.5) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
       if (toMe < 1.0 && pl.isRunningNow) staffCatch();
       else if (watch.calmT > 2.5 || pl.mode !== 'walk') {
-        staffSay(pl.mode !== 'walk' ? '벽에선 뛰는 거 아니니까 봐준다~ 조심해 🐯' : pick(STAFF_LINES.calm), 2400);
+        staffSay(pl.mode !== 'walk' ? '벽 위는 봐줄게요~ 조심해요. 진짜로요 🐯' : pick(STAFF_LINES.calm), 2400);
         staff.state = 'thanks'; staff.next = now + 1500; staff.path = [];
       }
       break;
@@ -2632,7 +2632,7 @@ const WEST_LINES = {
   top: ['나이스!!! 🤠', '와 완등 축하해요!!', '무브 진짜 예뻤어요', '오늘 폼 미쳤다 🔥'],
   climb: ['가보자고~!! 🤠', '발 좋다 발 좋다!', '자세 너무 좋아요!', '거의 다 왔어요!', '호흡 천천히~ 할 수 있어!'],
   fall: ['괜찮아요! 떨어지는 것도 등반이에요 🤠', '방금 무브 진짜 좋았는데!', '다음엔 무조건 돼요!', '시도한 게 멋있는 거예요 👍'],
-  console: ['무호 원래 시어머니 스타일이에요 ㅎㅎ 다 걱정돼서 그래요 🤠', '잔소리는 사랑이래요~ 무호 속은 엄청 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
+  console: ['무호 원래 잔소리 많은 츤데레예요 ㅎㅎ 다 걱정돼서 그래요 🤠', '무호 말투만 저래요~ 속은 엄청 착해요', '그래도 달리기 폼은 좋던데요? 😎'],
   dyno: ['다이노 미쳤다!!! 🤠', '날았다!! 슈퍼맨인 줄', '저 점프력 뭐예요?!'],
   yield: ['양보하는 거 진짜 멋있어요 👍', '매너 클라이머 인정 🤠'],
   campus: ['팔 힘 보소… 리스펙 🤠', '발 없이?! 진짜 고릴라다'],
@@ -2762,10 +2762,10 @@ const VILLAIN_REACT = {
   shirtless: ['옷 좀 입어요 ㅋㅋ', '눈 둘 곳이 없네', '감기 걸려요~'],
 };
 const STAFF_VILLAIN = {
-  beta: '아이고 묻지도 않은 걸 왜 알려줘~ 남의 베타는 남이 알아서 해 🐯',
-  mat: '거기 누우면 어떡해~ 낙하지점이잖아! 허리 아프면 쉼터 가서 쉬어 🐯',
-  chalk: '어휴 초크를 아주 밀가루 반죽하듯 쓰네~ 적당히 좀 🐯',
-  shirtless: '아이고 옷 입어 옷! 감기 걸리면 누가 고생해? 🐯',
+  beta: '안 물어본 베타는 알려주는 거 아니에요~ …열정은 인정하지만요 🐯',
+  mat: '거기 낙하지점이에요! 누울 거면 쉼터 가요. 걱정돼서 그러는 거 아니고요 🐯',
+  chalk: '초크를 무슨 밀가루처럼 써요~ 적당히요 적당히 🐯',
+  shirtless: '옷 입어요 옷! 감기 걸려요… 진짜 걱정돼서 하는 말 아니에요 🐯',
 };
 const vil = { next: performance.now() + 20000 };
 function updateVillain(now) {
@@ -3063,7 +3063,7 @@ const Net = {
       if (Date.now() - this.startedAt > 4000) {
         toast(`${name}님이 암장에 들어왔어요 👋`, 2000);
         logChat('', '', `👋 ${name}님이 들어왔어요`, 'sys');
-        if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name} 왔어? 일일이용 2만원~ 밥은 먹고 왔고? 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
+        if (staff.state === 'patrol') staffRushToEntry(() => { staffSay(`${name}님 왔어요? 일일이용 2만원이에요~ 기다린 건 아니고요 🐯`, 2600); staff.state = 'thanks'; staff.next = performance.now() + 2500; });
         const idle = npcs.filter((n) => n.state === 'idle');
         if (idle.length) setTimeout(() => pick(idle).av.say(`${name}님 어서 와요~`), 700);
       }
@@ -4055,7 +4055,7 @@ function startMash(c) {
   $('#qte-label').textContent = `💪 꽉 잡아! 0/${need}`; $('#qte-key').textContent = '연타';
   const b = $('#qte'); b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
   popText('꽉!!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.36);
-  if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['꽉 잡아 꽉! 그렇게 힘없이 잡으면 어떡해~ 🐯', '어깨 들지 말고! 손가락에 힘 줘 🐯', '아이고 보는 내가 다 손에 땀 나네 🐯']), 2600), 500);
+  if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['꽉 잡아요 꽉! 힘없이 잡으면 미끄러져요 🐯', '어깨 들지 말고 손가락에 힘! …응원한 거 아니고요 🐯', '보는 제가 다 손에 땀 나네요. 아 그냥요 🐯']), 2600), 500);
 }
 function mashTap() {
   const m = R.mash; if (!m) return;
@@ -4099,7 +4099,7 @@ function startRhythm(c, kind = 'crux') {
   $('#r-judge').textContent = '';
   if (kind === 'crux') {
     popText('크럭스!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.34);
-    if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['박자 박자! 내가 하나둘 세줘? 🐯', '아이고 리듬 좀 타~ 몸이 왜 이렇게 뻣뻣해 🐯']), 2600), 400);
+    if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['박자 맞춰요 박자! 하나둘 세줄까요? …농담이에요 🐯', '리듬 좀 타요~ 몸이 너무 뻣뻣해요. 걱정돼서 그런 거 아님 🐯']), 2600), 400);
   }
 }
 function rhythmLabel() {
