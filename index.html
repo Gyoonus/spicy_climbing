@@ -143,6 +143,13 @@
       <button class="hud-btn small" type="button" data-tech="inside"><i>↩️</i><span>인사이드 <kbd>2</kbd></span></button>
       <button class="hud-btn small" type="button" data-tech="outside"><i>↪️</i><span>아웃사이드 <kbd>3</kbd></span></button>
     </div>
+    <div class="ctx-actions" id="ctx-actions">
+      <button class="btn ctx-btn" id="ctx-bump" type="button" hidden>💥 어깨빵</button>
+      <button class="btn ctx-btn" id="ctx-knock" type="button" hidden>🦵 삼각대 쓰러트리기</button>
+      <button class="btn ctx-btn" id="ctx-tripod" type="button" hidden>📷 삼각대 설치</button>
+      <button class="btn ctx-btn" id="ctx-chalk" type="button" hidden>🤍 초크 던지기</button>
+    </div>
+    <div class="cere-picks" id="cere-picks" hidden></div>
     <div class="hud-sub">
       <button id="btn-act1" class="hud-btn small" type="button"><i id="act1-icon">🪑</i><span id="act1-label">앉아 쉬기 <kbd>R</kbd></span></button>
       <button id="btn-act2" class="hud-btn small" type="button"><i id="act2-icon">🏃</i><span id="act2-label">달리기 <kbd>Shift</kbd></span></button>
@@ -235,6 +242,10 @@
       <p class="shop-wallet">💰 지갑 <b id="shop-wallet"></b> <small>게임 머니 · 완등하면 벌어요 (어려울수록, 첫 완등은 2배)</small></p>
       <h3 class="rec-h">👟 암벽화 <small>마찰 = 발에 실리는 무게 · 엣지 = 작은 발홀드 · 오버행 = 가파른 벽에서 발</small></h3>
       <div id="shop-shoes" class="shop-list"></div>
+      <h3 class="rec-h">🎬 스킬 <small>각 300,000원 · 한 번 배우면 계속</small></h3>
+      <div id="shop-skills" class="shop-list"></div>
+      <h3 class="rec-h">📷 아이템 <small>한 번 사면 계속</small></h3>
+      <div id="shop-gear" class="shop-list"></div>
       <h3 class="rec-h">🤍 초크 <small id="chalk-have"></small></h3>
       <div id="shop-chalk" class="shop-list"></div>
       <h3 class="rec-h">👖 의류</h3>

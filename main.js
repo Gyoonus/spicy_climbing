@@ -329,7 +329,7 @@ const Music = {
 // =================================================================
 const Store = {
   key: 'spicy-climbing-3d-v1',
-  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5, wallet: 100000, owned: { rental: true }, equip: { shoe: 'rental', pants: '' }, chalk: 5, liquid: 0 },
+  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5, wallet: 100000, owned: { rental: true }, equip: { shoe: 'rental', pants: '' }, chalk: 5, liquid: 0, skills: {} },
   load() {
     try {
       const raw = localStorage.getItem(this.key);
@@ -1290,13 +1290,17 @@ class Avatar {
       this.limbTo(la, this.grips[0]);
       if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
       if (this.ceremony) {
-        // 뒤돌아서 한 손은 TOP, 다른 팔 번쩍
-        this.rig.rotation.y = Math.PI * 0.85;
-        this.rig.updateMatrixWorld(true);
-        this.limbTo(la, this.grips[0]);
-        const pump = Math.sin(this.t * 10) * 0.06;
-        this.solve(ra, new V3(0.22, BODY.shY + 0.4 + pump, 0.05));
+        const type = typeof this.ceremony === 'string' ? this.ceremony : 'turn';
         const f = Math.sin(this.t * 5) * 0.2;
+        if (type === 'turn') { this.rig.rotation.y = Math.PI * 0.85; }
+        else { this.rig.rotation.y = Math.PI * 0.45; }
+        this.rig.updateMatrixWorld(true);
+        this.limbTo(la, this.grips[0]); // 한 손은 TOP
+        const b = BODY.shY;
+        if (type === 'turn') this.solve(ra, new V3(0.22, b + 0.4 + Math.sin(this.t * 10) * 0.06, 0.05));
+        if (type === 'flex') { this.solve(ra, new V3(0.36, b + 0.1 + Math.sin(this.t * 7) * 0.03, 0.02)); this.head.rotation.y = -0.5; }
+        if (type === 'gorilla') this.solve(ra, new V3(0.04, b - 0.12, 0.2 + Math.abs(Math.sin(this.t * 14)) * 0.1));
+        if (type === 'kiss') { const k = (Math.sin(this.t * 3) + 1) / 2; this.solve(ra, new V3(0.06 + k * 0.35, b + 0.25 + k * 0.15, 0.28 + k * 0.1)); }
         this.limbRot(ll, 0.3 + f, -0.15); this.limbRot(rl, 0.3 - f, 0.15);
         this.head.rotation.z = Math.sin(this.t * 6) * 0.08;
       } else if (this.tech === 'flag' && !this.hanging) {
@@ -1632,7 +1636,11 @@ function setupInput() {
   $('#inst-hip').addEventListener('click', instToggleHip);
   $('#qte').addEventListener('click', () => { if (R.mash) mashTap(); else if (R.qte) qteResult(true); });
   $('#btn-up').addEventListener('click', routeAuto);
-  $('#btn-cere').addEventListener('click', startCeremony);
+  $('#btn-cere').addEventListener('click', () => startCeremony());
+  $('#ctx-bump').addEventListener('click', shoulderBump);
+  $('#ctx-tripod').addEventListener('click', setupMyTripod);
+  $('#ctx-knock').addEventListener('click', () => knockTripod(nearbyKnockTarget()));
+  $('#ctx-chalk').addEventListener('click', chalkThrow);
   // 박자 게임: 화면 어디든 누르는 순간 판정 (반응 빠르게 pointerdown)
   window.addEventListener('pointerdown', (e) => { if (R.rhythm) { rhythmTap(); e.preventDefault(); e.stopPropagation(); } }, true);
   $('#inst-flag').addEventListener('click', instFlag);
@@ -2051,6 +2059,7 @@ function sendProblem(p) {
   me.say(line, 2400);
   fireConfetti(surf(p.strip, p.top.u, p.top.v), 36);
   Store.addSend(p);
+  if (pl.mode === 'route') tripodShot(p);
   const first = Store.data.sends[p.id] === 1;
   const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1);
   setTimeout(() => addMoney(reward, first ? '첫 완등 보너스 ×2' : '완등 보상'), 1200);
@@ -2315,6 +2324,7 @@ function npcUpdate(n, dt, now) {
           }
           n.waitT = 0;
           n.state = 'climb'; n.hold = 0; n.holdT = 0; n.av.setClimbing(true); n.climbStart = Date.now();
+          if (Math.random() < 0.35) placeTripod(n.problem, n, n.av.name);
         }
         else { n.state = 'idle'; n.av.sitting = true; n.problem = null; n.next = now + 10000 + Math.random() * 14000; }
       }
@@ -2803,8 +2813,9 @@ function takeWestShot() {
   showPolaroid(url, west.label);
 }
 let polaroidT;
-function showPolaroid(url, label) {
+function showPolaroid(url, label, by = '🤠 웨스트가 찍어줌') {
   const el = $('#polaroid');
+  el.querySelector('.pol-by').textContent = by;
   el.querySelector('img').src = url;
   el.querySelector('.pol-cap').textContent = label;
   const a = el.querySelector('a'); a.href = url; a.download = `spicy-west-${Date.now()}.jpg`;
@@ -2839,13 +2850,9 @@ function updateVillain(now) {
   const v = me && me.villain;
   if (!v || !paidToday() || now < vil.next) return;
   // 초크 빌런은 벽 위에서 아래로 초크를 뿌림
-  if (v === 'chalk' && pl.mode === 'route' && R.on && !R.anim) {
+  if (v === 'chalk' && pl.mode === 'route' && R.on && !R.anim && hasSkill('chalkthrow') && chalkLeft() > 0) {
     vil.next = now + 14000 + Math.random() * 10000;
-    const hand = me.group.position.clone().add(new V3(0, 1.5, 0));
-    chalkRain(hand); Net.event('chalkrain');
-    me.say(pick(['초크 비 내려갑니다~ 💨', '아래 계신 분들 초크 서비스!', '팡팡 공중 버전 ㅋㅋ']), 2200);
-    const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
-    below.slice(0, 2).forEach((a, k) => setTimeout(() => a.say(pick(['콜록… 위에서 초크 내려와요!', '앞이 안 보여 ㅋㅋㅋ', '눈에 들어갔어!!']), 2200), 900 + k * 500));
+    chalkThrow();
     return;
   }
   if (pl.mode !== 'walk') return;
@@ -3135,7 +3142,7 @@ const Net = {
       const color = /^#[0-9a-f]{6}$/i.test(d.c) ? d.c : '#9a9aa2';
       const av = new Avatar(name, color, { visitor: true, look: lookFromStr(d.k) });
       av.group.position.set(x, y, z);
-      p = { av, name, target: new V3(x, y, z), r };
+      p = { id, av, name, target: new V3(x, y, z), r };
       this.peers.set(id, p);
       this.updateCount();
       if (Date.now() - this.startedAt > 4000) {
@@ -3165,7 +3172,10 @@ const Net = {
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
     if (d.type === 'say' && text) { p.av.chat(text); logChat(p.name, p.av.color, text); }
     if (d.type === 'chalk') p.av.chalk();
-    if (d.type === 'ceremony') { p.av.ceremony = true; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
+    if (d.type === 'shoulder' && d.to === this.id) { knockBack({ position: pl.pos }, p.av.group.position); me.squash(); popText('💥', me.group.position.clone().add(new V3(0, 1.8, 0)), 0.3); toast(`💥 ${p.name}님이 어깨빵했어요!`, 2200); me.say(pick(['아야!', '뭐야?!']), 1600); }
+    if (d.type === 'tripod') { const pr = PROBLEMS.find((x) => x.id === d.pid); if (pr) placeTripod(pr, 'peer:' + p.id, p.name); }
+    if (d.type === 'tripodfall') { if (d.owner === this.id) { const t = tripods.find((x) => x.owner === 'me'); if (t) knockTripod(t, true); toast(`🦵 ${p.name}님이 내 삼각대를 쓰러뜨렸어요!`, 2400); } else { const t = tripods.find((x) => x.owner === 'peer:' + d.owner); if (t) knockTripod(t, true); } }
+    if (d.type === 'ceremony') { p.av.ceremony = ['turn', 'flex', 'gorilla', 'kiss'].includes(d.c) ? d.c : 'turn'; fireConfetti(p.av.group.position.clone().add(new V3(0, 1.8, 0)), 10); setTimeout(() => { p.av.ceremony = false; }, 2200); }
     if (d.type === 'ceremonyfail') { p.av.ceremony = false; logChat('', '', `😵 ${p.name}님 성급한 세레머니로 추락… 풋 ㅋ`, 'sys'); }
     if (d.type === 'chalkrain') chalkRain(p.av.group.position.clone().add(new V3(0, 1.4, 0)));
     if (d.type === 'vsay' && text) p.av.say(text, 2600);
@@ -3226,10 +3236,10 @@ function updateHud(dt) {
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고</small>`;
     const v = Math.round(pl.pump);
     $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
-    prompt.textContent = R.atTop || R.done ? (touch ? '🙌 버튼으로 세레머니! (3초 버틴 뒤에 하세요)' : 'V 세레머니 · 3초 버틴 뒤에 하세요 · E 내려오기') : R.anim ? '' : touch ? '링을 탭하거나 ⬆️ 버튼!' : '링 클릭 또는 W(⬆️)로 올라가기 · C 초크 · E 내려오기';
+    prompt.textContent = R.atTop || R.done ? (SKILLS.some((k) => k.cere && hasSkill(k.id)) ? (touch ? '세레머니 골라요! (3초 버틴 뒤에)' : '1~4 세레머니 · 3초 버틴 뒤에 · E 내려오기') : (R.done ? '완등! E 내려오기' : '3초 버텨요!')) : R.anim ? '' : touch ? '링을 탭하거나 ⬆️ 버튼!' : '링 클릭 또는 W(⬆️)로 올라가기 · C 초크 · E 내려오기';
     $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
     $('#jump-label').innerHTML = touch ? '다이노' : '다이노 <kbd>Space</kbd>';
-    $('#btn-cere').hidden = !(R.atTop || R.done) || !!R.ceremony;
+    $('#btn-cere').hidden = true; // 세레머니는 스킬 선택 버튼(#cere-picks)으로
     if (R.atTop && !R.done) title.innerHTML += `<small style="color:#ffcf4a">⏱️ TOP 홀드 ${Math.min(3, R.topHold).toFixed(1)} / 3초</small>`;
     drawMinimap();
     return;
@@ -3281,6 +3291,262 @@ function updateHud(dt) {
 }
 
 // =================================================================
+// 🎬 스킬 (각 30만원): 세레머니 4종, 어깨빵, 삼각대, 쓰러트리기
+// =================================================================
+const SKILL_PRICE = 300000;
+const SKILLS = [
+  { id: 'c_turn', cere: 'turn', n: '🙌 뒤돌아 번쩍', d: 'TOP에서 뒤돌아 한 팔 번쩍', pop: '🙌 가즈아!!' },
+  { id: 'c_flex', cere: 'flex', n: '💪 이두 자랑', d: 'TOP에서 알통 자랑', pop: '💪 이것이 매운맛!' },
+  { id: 'c_gorilla', cere: 'gorilla', n: '🦍 고릴라 가슴치기', d: 'TOP에서 쿵쿵쿵 가슴치기', pop: '🦍 우호호!!' },
+  { id: 'c_kiss', cere: 'kiss', n: '😘 손키스 투척', d: 'TOP에서 관객에게 손키스', pop: '😘 사랑해요 스파이시!' },
+  { id: 'bump', n: '💥 어깨빵', d: '지나갈 때 어깨빵 버튼이 떠요. 매너 온도 −2' },
+  { id: 'knock', n: '🦵 쓰러트리기', d: '남의 삼각대 옆에서 버튼이 떠요. 매너 온도 −2' },
+  { id: 'chalkthrow', n: '🤍 초크 던지기', d: '벽 위에선 아래로 초크 비, 바닥에선 옆사람한테 초크 투척. 초크 1회 소모, 매너 온도 −1' },
+];
+function hasSkill(id) { return !!(Store.data.skills || {})[id]; }
+// 📷 아이템 (스킬 아님 — 한 번 사면 계속 들고 다녀요)
+const GEAR = [
+  { id: 'tripod', n: '📷 삼각대', price: 50000, d: '문제 시작 앞에 설치하면 완등할 때 셀프캠 사진이 찍혀요' },
+];
+function hasItem(id) { return !!(Store.data.owned || {})[id] || !!(Store.data.skills || {})[id]; } // 예전에 스킬로 산 삼각대도 인정
+function renderGear() {
+  const box = $('#shop-gear'); if (!box) return;
+  box.innerHTML = '';
+  GEAR.forEach((it) => {
+    const own = hasItem(it.id);
+    const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
+    el.innerHTML = `<div class="item-head"><b>${it.n}</b><span class="price">${own ? '보유 중' : won(it.price)}</span></div><p>${it.d}</p>`;
+    if (!own) {
+      const act = document.createElement('div'); act.className = 'item-act';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(it.price)}에 사기`;
+      b.addEventListener('click', () => {
+        if ((Store.data.wallet || 0) < it.price) { toast(`돈이 ${won(it.price - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
+        addMoney(-it.price, `${it.n} 구매`);
+        Store.data.owned[it.id] = true; Store.save();
+        Sound.top(); renderShop();
+      });
+      act.appendChild(b); el.appendChild(act);
+    }
+    box.appendChild(el);
+  });
+}
+function renderSkills() {
+  const box = $('#shop-skills'); if (!box) return;
+  box.innerHTML = '';
+  SKILLS.forEach((k) => {
+    const own = hasSkill(k.id);
+    const el = document.createElement('div'); el.className = 'item' + (own ? ' on' : '');
+    el.innerHTML = `<div class="item-head"><b>${k.n}</b><span class="price">${own ? '보유 중' : won(SKILL_PRICE)}</span></div><p>${k.d}</p>`;
+    if (!own) {
+      const act = document.createElement('div'); act.className = 'item-act';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(SKILL_PRICE)}에 배우기`;
+      b.addEventListener('click', () => {
+        if ((Store.data.wallet || 0) < SKILL_PRICE) { toast(`돈이 ${won(SKILL_PRICE - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
+        addMoney(-SKILL_PRICE, `${k.n} 스킬 습득`);
+        Store.data.skills = Store.data.skills || {}; Store.data.skills[k.id] = true; Store.save();
+        Sound.top(); renderShop();
+      });
+      act.appendChild(b); el.appendChild(act);
+    }
+    box.appendChild(el);
+  });
+}
+
+// ----- 💥 어깨빵 -----
+const knocks = [];
+function nearbyBumpTarget() {
+  if (!hasSkill('bump') || pl.mode !== 'walk' || pl.sitting) return null;
+  const pos = me.group.position;
+  const list = [...npcs.filter((n) => n.state !== 'climb').map((n) => ({ av: n.av, npc: n })), ...(staff.av ? [{ av: staff.av }] : []), ...(west.av ? [{ av: west.av }] : []),
+    ...[...Net.peers.entries()].filter(([, p]) => p.mode !== 'c').map(([id, p]) => ({ av: p.av, peer: id }))];
+  let best = null, bd = 1.5;
+  list.forEach((t) => { const d = t.av.group.position.distanceTo(pos); if (d < bd) { bd = d; best = t; } });
+  return best;
+}
+function knockBack(g, from, power = 2.6) { // g: {position} (아바타 group 또는 pl.pos 래퍼)
+  const dir = new V3(g.position.x - from.x, 0, g.position.z - from.z);
+  if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0);
+  dir.normalize();
+  knocks.push({ g, vx: dir.x * power, vz: dir.z * power, t: 0.35 });
+}
+function updateKnocks(dt) {
+  for (let i = knocks.length - 1; i >= 0; i--) {
+    const k = knocks[i]; k.t -= dt;
+    const nx = k.g.position.x + k.vx * dt, nz = k.g.position.z + k.vz * dt;
+    if (walkable(nx, nz, 0.2)) { k.g.position.x = nx; k.g.position.z = nz; }
+    k.vx *= 0.88; k.vz *= 0.88;
+    if (k.t <= 0) knocks.splice(i, 1);
+  }
+}
+function shoulderBump() {
+  const t = nearbyBumpTarget(); if (!t) return;
+  me.squash(); t.av.squash();
+  knockBack(t.av.group, me.group.position);
+  if (t.peer) Net.event('shoulder', { to: t.peer });
+  Sound.tone(110, 0.2, 'square', 0.1); Sound.tone(70, 0.2, 'sawtooth', 0.06, 0.04);
+  popText('💥 어깨빵!', t.av.group.position.clone().add(new V3(0, 1.8, 0)), 0.32);
+  t.av.say(pick(['아야!', '뭐야?!', '어깨빵 실화냐…', '저기요?!', '아 진짜…']), 2200);
+  Manner.add(-2, '어깨빵 💥');
+  ety.faultAt = Date.now(); ety.faultWith = { av: t.av };
+  if (staffMayNag(0.7)) setTimeout(() => staffSay('방금 어깨빵했어요?! 사과해요~ 다친 사람 없죠? 🐯', 2800), 900);
+}
+
+// ----- 📷 삼각대 / 🦵 쓰러트리기 -----
+const tripods = [];
+function buildTripodMesh() {
+  const g = new THREE.Group();
+  const legMat = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.5 });
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.15, 6), legMat);
+    leg.position.set(Math.sin(a) * 0.16, 0.56, Math.cos(a) * 0.16);
+    leg.rotation.set(Math.cos(a) * 0.28, 0, -Math.sin(a) * 0.28);
+    g.add(leg);
+  }
+  const cam = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.08), new THREE.MeshStandardMaterial({ color: '#16161a' }));
+  cam.position.y = 1.16; g.add(cam);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 12), new THREE.MeshStandardMaterial({ color: '#4a6fa5' }));
+  lens.rotation.x = Math.PI / 2; lens.position.set(0, 1.16, 0.06); g.add(lens);
+  const rec = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2d2d' }));
+  rec.position.set(0.06, 1.2, 0.042); g.add(rec);
+  g.userData.rec = rec;
+  return g;
+}
+function placeTripod(p, owner, label) {
+  removeTripod(owner);
+  const [s] = segAt(p.strip, p.start.u);
+  const f = surf(p.strip, p.start.u, 0).addScaledVector(s.n3, 2.6);
+  if (!walkable(f.x, f.z, 0.15)) f.copy(surf(p.strip, p.start.u, 0).addScaledVector(s.n3, 1.7));
+  const g = buildTripodMesh();
+  g.position.set(f.x, groundY(f.x, f.z), f.z);
+  g.rotation.y = Math.atan2(-s.n3.x, -s.n3.z);
+  scene.add(g);
+  const t = { g, owner, label, p, up: true, born: performance.now(), fallT: 0 };
+  tripods.push(t);
+  return t;
+}
+function removeTripod(owner) {
+  for (let i = tripods.length - 1; i >= 0; i--) if (tripods[i].owner === owner) { scene.remove(tripods[i].g); tripods.splice(i, 1); }
+}
+function myTripodCandidate() {
+  if (!hasItem('tripod') || pl.mode !== 'walk' || !pl.mountCand) return null;
+  const c = pl.mountCand;
+  const p = c.st.problems.find((q) => uvDist(c.st, q.start.u, q.start.v, c.u, 1.55) <= REACH * 1.6);
+  if (!p) return null;
+  const mine = tripods.find((t) => t.owner === 'me');
+  if (mine && mine.up && mine.p === p) return null;
+  return p;
+}
+function setupMyTripod() {
+  const p = myTripodCandidate(); if (!p) return;
+  placeTripod(p, 'me', Store.data.name);
+  const [s] = segAt(p.strip, p.start.u);
+  Net.event('tripod', { pid: p.id });
+  toast(`📷 삼각대 설치! ${problemLabel(p)} 완등하면 셀프캠이 찍혀요`, 2200);
+  Sound.tone(900, 0.05, 'square', 0.04); void s;
+}
+function nearbyKnockTarget() {
+  if (!hasSkill('knock') || pl.mode !== 'walk') return null;
+  const pos = me.group.position;
+  let best = null, bd = 1.4;
+  tripods.forEach((t) => { if (!t.up || t.owner === 'me') return; const d = t.g.position.distanceTo(pos); if (d < bd) { bd = d; best = t; } });
+  return best;
+}
+function knockTripod(t, remote) {
+  if (!t || !t.up) return;
+  t.up = false; t.fallT = 0; t.fallDir = Math.random() < 0.5 ? -1 : 1;
+  Sound.tone(220, 0.08, 'square', 0.06); Sound.tone(120, 0.25, 'triangle', 0.08, 0.15);
+  if (remote) return;
+  me.squash();
+  popText('쿵!', t.g.position.clone().add(new V3(0, 1.3, 0)), 0.3);
+  Manner.add(-2, '삼각대 쓰러뜨림 🦵');
+  if (typeof t.owner === 'string' && t.owner.startsWith('peer:')) Net.event('tripodfall', { owner: t.owner.slice(5) });
+  const ownerNpc = npcs.find((n) => n === t.owner);
+  const sayer = ownerNpc ? ownerNpc.av : null;
+  if (sayer) setTimeout(() => sayer.say(pick(['아 내 삼각대!!', '왜 쓰러뜨려요?!', '찍고 있었는데…']), 2400), 500);
+  ety.faultAt = Date.now(); ety.faultWith = sayer ? { av: sayer } : null;
+  if (staffMayNag(0.7)) setTimeout(() => staffSay('남의 삼각대는 왜 쓰러뜨려요~ 세워놓고 사과해요 🐯', 2800), 1100);
+}
+function updateTripods(dt) {
+  const now = performance.now();
+  for (let i = tripods.length - 1; i >= 0; i--) {
+    const t = tripods[i];
+    if (t.g.userData.rec) t.g.userData.rec.visible = t.up && Math.floor(now / 500) % 2 === 0;
+    if (!t.up) { t.fallT = Math.min(1, t.fallT + dt * 3); t.g.rotation.z = t.fallDir * (Math.PI / 2) * (t.fallT * t.fallT); t.g.position.y = groundY(t.g.position.x, t.g.position.z) + 0.05 * t.fallT; }
+    const life = t.owner === 'me' ? 240000 : 90000;
+    if (now - t.born > life || (!t.up && t.fallT >= 1 && now - t.born > 20000 && t.owner !== 'me')) { scene.remove(t.g); tripods.splice(i, 1); }
+  }
+}
+// 완등할 때 내 삼각대가 서 있으면 셀프캠
+function tripodShot(p) {
+  const t = tripods.find((x) => x.owner === 'me' && x.up && x.p === p);
+  if (!t) return;
+  setTimeout(() => {
+    const from = t.g.position.clone().add(new V3(0, 1.16, 0));
+    const look = me.group.position.clone().add(new V3(0, 0.8, 0));
+    photoCam.aspect = renderer.domElement.width / renderer.domElement.height;
+    photoCam.position.copy(from); photoCam.lookAt(look); photoCam.updateProjectionMatrix();
+    t.g.visible = false;
+    renderer.render(scene, photoCam);
+    t.g.visible = true;
+    const src = renderer.domElement, H = src.height, W = Math.round(H * 0.8);
+    const c = document.createElement('canvas'); c.width = 480; c.height = 600;
+    c.getContext('2d').drawImage(src, (src.width - W) / 2, 0, W, H, 0, 0, 480, 600);
+    const url = c.toDataURL('image/jpeg', 0.85);
+    renderer.render(scene, camera);
+    const label = `📷 삼각대 셀프캠 — ${problemLabel(p)} 완등`;
+    west.photos.unshift({ url, label, t: Date.now() }); if (west.photos.length > 8) west.photos.length = 8;
+    showPolaroid(url, label, '📷 내 삼각대가 찍음');
+    Sound.tone(2600, 0.04, 'square', 0.05);
+  }, 600);
+}
+// ----- 🤍 초크 던지기 -----
+function chalkThrowTarget() {
+  if (!hasSkill('chalkthrow') || chalkLeft() <= 0) return null;
+  if (pl.mode === 'route' && R.on && !R.anim && !R.rhythm) return 'rain';
+  if (pl.mode !== 'walk') return null;
+  const pos = me.group.position;
+  const list = [...npcs.map((n) => n.av), staff.av, west.av, ...[...Net.peers.values()].map((p) => p.av)].filter(Boolean);
+  let best = null, bd = 3;
+  list.forEach((a) => { const d = a.group.position.distanceTo(pos); if (d < bd) { bd = d; best = a; } });
+  return best;
+}
+function chalkThrow() {
+  const t = chalkThrowTarget(); if (!t) return;
+  if ((Store.data.liquid || 0) > 0) Store.data.liquid--; else Store.data.chalk--;
+  Store.save(); updateChalkBadge();
+  if (t === 'rain') {
+    chalkRain(me.group.position.clone().add(new V3(0, 1.5, 0))); Net.event('chalkrain');
+    me.say(pick(['초크 비 내려갑니다~ 💨', '아래 계신 분들 초크 서비스!']), 2000);
+    const below = [...npcs.map((n) => n.av), staff.av, west.av].filter((a) => a && Math.hypot(a.group.position.x - me.group.position.x, a.group.position.z - me.group.position.z) < 4 && a.group.position.y < me.group.position.y - 0.5);
+    below.slice(0, 2).forEach((a, k) => setTimeout(() => a.say(pick(['콜록… 위에서 초크 내려와요!', '앞이 안 보여 ㅋㅋㅋ', '눈에 들어갔어!!']), 2200), 900 + k * 500));
+    if (below.length) Manner.add(-1, '초크 비 💨');
+    return;
+  }
+  me.chalk();
+  chalkBurst(t.group.position.clone().add(new V3(0, 1.3, 0)), 26, 1.4);
+  popText('퍽! 💨', t.group.position.clone().add(new V3(0, 1.9, 0)), 0.3);
+  Sound.chalk();
+  setTimeout(() => t.say(pick(['콜록콜록!!', '아 초크 던지지 마요 ㅋㅋㅋ', '눈에 들어갔어!', '뭐야 하얘졌잖아']), 2200), 400);
+  t.chalkyT = 25;
+  Manner.add(-1, '초크 투척 💨');
+  if (staffMayNag(0.6)) setTimeout(() => staffSay('초크는 던지는 거 아니에요~ 손에 바르는 거예요 🐯', 2800), 1200);
+}
+function updateCtxButtons() {
+  const box = $('#ctx-actions'); if (!box) return;
+  const bump = nearbyBumpTarget(), tri = myTripodCandidate(), kn = nearbyKnockTarget();
+  $('#ctx-bump').hidden = !bump; $('#ctx-tripod').hidden = !tri; $('#ctx-knock').hidden = !kn; $('#ctx-chalk').hidden = !chalkThrowTarget();
+  const cp = $('#cere-picks');
+  const showC = pl.mode === 'route' && R.on && (R.atTop || R.done) && !R.ceremony;
+  const own = SKILLS.filter((k) => k.cere && hasSkill(k.id));
+  cp.hidden = !showC || !own.length;
+  if (!cp.hidden && cp.dataset.n !== String(own.length)) {
+    cp.dataset.n = String(own.length); cp.innerHTML = '';
+    own.forEach((k, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn cere-pick'; b.innerHTML = `${k.n}<kbd>${i + 1}</kbd>`; b.addEventListener('click', () => startCeremony(k.cere)); cp.appendChild(b); });
+  }
+}
+
+// =================================================================
 // 🛒 무호K 프로샵 + 📢 광고
 // =================================================================
 function statBar(label, v) { return `<div class="stat"><span>${label}</span><i><b style="width:${Math.round(v * 100)}%"></b></i></div>`; }
@@ -3307,6 +3573,8 @@ function renderShop() {
   const ss = $('#shop-shoes'); ss.innerHTML = ''; SHOES.forEach((it) => ss.appendChild(card(it, 'shoe')));
   ss.querySelectorAll('img[data-fallback]').forEach((im) => { im.onerror = () => { im.onerror = null; im.src = im.dataset.fallback; im.parentElement.classList.remove('photo'); }; });
   const pp = $('#shop-pants'); pp.innerHTML = ''; PANTS.forEach((it) => pp.appendChild(card(it, 'pants')));
+  renderSkills();
+  renderGear();
   const cc = $('#shop-chalk'); cc.innerHTML = '';
   $('#chalk-have').textContent = `가루 ${Store.data.chalk || 0}회 · 리퀴드 ${Store.data.liquid || 0}회 남음`;
   CHALKS.forEach((it) => {
@@ -4477,15 +4745,18 @@ function qteResult(ok) {
   }
 }
 // 🙌 세레머니: TOP에서 뒤돌아 한 팔 번쩍. 펌핑을 엄청 씀
-function startCeremony() {
+function startCeremony(type) {
   if (!R.on || !(R.atTop || R.done) || R.ceremony || R.anim) return;
+  const owned = SKILLS.filter((k) => k.cere && hasSkill(k.id));
+  if (!owned.length) return;
+  const sk = owned.find((k) => k.cere === type) || owned[0];
   R.ceremony = { t: 0, early: !R.done };
-  me.ceremony = true;
+  me.ceremony = sk.cere;
   pl.pump += 22;
-  popText(pick(['🙌 가즈아!!', '🔥 세레머니!', '💪 이것이 매운맛!']), me.group.position.clone().add(new V3(0, 2.2, 0)), 0.34);
+  popText(sk.pop, me.group.position.clone().add(new V3(0, 2.2, 0)), 0.34);
   fireConfetti(me.group.position.clone().add(new V3(0, 1.8, 0)), 14);
   Sound.top();
-  Net.event('ceremony');
+  Net.event('ceremony', { c: sk.cere });
   if (!R.done) toast('⚠️ 아직 3초 안 지났어요! 성급한 세레머니…', 1800);
 }
 // 😈 초크 빌런: 벽 위에서 아래로 초크 뿌리기
@@ -4518,6 +4789,7 @@ function routeKey(code) {
   if (code === 'Space') { if (R.rhythm) rhythmTap(); else if (R.mash) mashTap(); else if (R.gauge) routeFireGauge(); return true; }
   if (code === 'KeyE') { grabToggle(); return true; }
   if (code === 'KeyV') { startCeremony(); return true; }
+  if (/^Digit[1-4]$/.test(code) && (R.atTop || R.done)) { const own = SKILLS.filter((k) => k.cere && hasSkill(k.id)); const k = own[+code.slice(5) - 1]; if (k) startCeremony(k.cere); return true; }
   if (code === 'KeyW' || code === 'ArrowUp') { routeAuto(); return true; }
   const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
   if (map[code]) { if (R.qte) qteResult(R.qte.kind === map[code]); return true; }
@@ -4622,6 +4894,9 @@ function loop() {
   updateSitNag(dt);
   updateStaff(dt, now);
   updateVillain(now);
+  updateKnocks(dt);
+  updateTripods(dt);
+  updateCtxButtons();
   updateWest(dt, now);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
@@ -4786,7 +5061,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }

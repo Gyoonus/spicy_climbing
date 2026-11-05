@@ -256,6 +256,20 @@ body.route .hud-tech { display: none !important; }
 .r-judge.p { color: #ffe14d; } .r-judge.g { color: #2fd26b; } .r-judge.m { color: #ff6b6b; }
 @media (max-width: 640px) { .rhythm { bottom: 150px; } }
 
+/* 상황 버튼 / 세레머니 선택 */
+.ctx-actions { position: absolute; left: 50%; bottom: 196px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
+.ctx-btn { background: rgba(22,22,25,.9); border-color: #ffcf4a; box-shadow: 0 0 0 3px rgba(255,207,74,.25); }
+.ctx-btn[hidden] { display: none; }
+.cere-picks { position: absolute; left: 50%; bottom: 250px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
+.cere-picks[hidden] { display: none; }
+.cere-pick { background: rgba(60,40,0,.92); border-color: #ffcf4a; font-size: .9rem; }
+.cere-pick kbd { margin-left: 6px; }
+body.touch .ctx-actions { bottom: 222px; }
+body.route.touch .ctx-actions { bottom: 200px; }
+body.route.touch .cere-picks { bottom: 260px; }
+body.touch .cere-picks { bottom: 280px; }
+body.route.touch .cere-picks { bottom: 252px; }
+
 /* 다이노 게이지 */
 .gauge { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(320px, 80vw); text-align: center; pointer-events: none; }
 .g-label { font-weight: 900; font-size: .95rem; margin-bottom: 6px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); }
