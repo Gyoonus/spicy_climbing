@@ -1279,7 +1279,7 @@ class Avatar {
       sy = 1 - 0.3 * Math.sin(k * Math.PI) * k; sx = 1 + (1 - sy) * 0.7;
     }
     const [la, ra, ll, rl] = this.limbs;
-    this.rig.position.y = 0; this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
+    this.rig.position.set(0, 0, 0); this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
     if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
     if (this.throwT > 0) this.throwT = Math.max(0, this.throwT - dt);
     // 🤍 초크 투척: 팔을 뒤로 뺐다가 앞위로 휙
@@ -1324,6 +1324,13 @@ class Avatar {
       const f = Math.sin(this.t * (this.airborne ? 18 : 4)) * (this.airborne ? 0.35 : 0.1);
       this.limbRot(la, Math.PI * 0.92 + f, -0.25); this.limbRot(ra, Math.PI * 0.92 - f, 0.25);
       this.limbRot(ll, -0.5 - f, -0.12); this.limbRot(rl, -0.5 + f, 0.12);
+    } else if (this.sitting && this.lying) {
+      // 🛌 대자로 눕기: 등 대고 팔다리 쫙
+      this.rig.rotation.x = -Math.PI / 2; this.rig.position.set(0, 0.1, 0.45);
+      const br = Math.sin(this.t * 1.3) * 0.015;
+      this.solve(la, new V3(-0.6, BODY.shY + 0.1, 0.02 + br)); this.solve(ra, new V3(0.6, BODY.shY + 0.1, 0.02 + br));
+      this.solve(ll, new V3(-0.34, 0.06, 0.02)); this.solve(rl, new V3(0.34, 0.06, 0.02));
+      this.head.rotation.z = Math.sin(this.t * 0.7) * 0.12;
     } else if (this.sitting) {
       this.rig.position.y = -0.33;
       const b = Math.sin(this.t * 1.6) * 0.04;
@@ -1704,10 +1711,12 @@ function isRunning() { return shiftDown() || pl.runToggle; }
 function toggleSit() {
   if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
   if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.01) return;
-  pl.sitting = !pl.sitting;
-  me.sitting = pl.sitting;
-  if (!pl.sitting) { onStandUp(); Net.sync(true); return; }
-  if (pl.sitting) {
+  // 서기 → 앉기 → 대자로 눕기 → 일어나기
+  if (pl.lying) { standUp(); return; }
+  if (pl.sitting) { lieDown(); return; }
+  pl.sitting = true;
+  me.sitting = true;
+  {
     pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3;
     me.say(pick(['휴~', '잠깐 쉬어갈게요', '매트 최고…', '팔 털어야지']), 1600);
     const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 4);
@@ -1715,7 +1724,15 @@ function toggleSit() {
   }
   Net.sync(true);
 }
-function standUp() { if (!pl.sitting) return; pl.sitting = false; me.sitting = false; onStandUp(); Net.sync(true); }
+function lieDown() {
+  if (!pl.sitting) { pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3; }
+  pl.sitting = true; pl.lying = true; me.sitting = true; me.lying = true;
+  me.say(pick(['대자로 뻗음…', '아 눕는다~', '천장 예쁘다…', '5분만…']), 1600);
+  const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 5);
+  if (n) setTimeout(() => n.av.say(pick(['아예 누웠어 ㅋㅋㅋ', '대자로 ㅋㅋ 편해 보인다', '자는 거 아니지?'])), 900);
+  Net.sync(true);
+}
+function standUp() { if (!pl.sitting) return; pl.sitting = false; pl.lying = false; me.sitting = false; me.lying = false; onStandUp(); Net.sync(true); }
 // ----- 앉아만 있으면 잔소리 -----
 const NAGS = [
   '쉬는 거 좋지~ 근데 너무 오래 쉬는 거 아냐?',
@@ -1726,6 +1743,7 @@ const NAGS = [
 ];
 const NAGS_MORE = ['등반은 언제 할래?', '엉덩이에 뿌리 내리겠다 🌱', '펌핑 다 풀렸잖아 ㅋㅋ', '오늘 몇 개 깼어? …0개?',
   '사장님 여기 앉아만 있는 사람 있어요', '초크값은 냈니?', '암장에 쉬러 왔어? ㅋㅋㅋ', '눈 감으면 잔다 진짜'];
+const NAGS_LIE = ['매트에 대자로 누웠어?! ㅋㅋㅋ', '여기 찜질방 아니야~', '자는 거 아니지? 일어나 ㅋㅋ', '매트 전세 냈어? 🛌', '누가 매트에 불가사리 뒀어 ⭐'];
 function nagger() {
   const pos = me.group.position;
   const idle = npcs.filter((n) => n.state === 'idle').sort((a, b) => a.av.group.position.distanceTo(pos) - b.av.group.position.distanceTo(pos));
@@ -1738,7 +1756,7 @@ function updateSitNag(dt) {
   const n = nagger();
   pl.nagNext = pl.sitT + 8 + Math.random() * 5;
   if (!n) return;
-  const line = pl.nagN < NAGS.length ? NAGS[pl.nagN] : pick(NAGS_MORE);
+  const line = pl.lying && Math.random() < 0.6 ? pick(NAGS_LIE) : pl.nagN < NAGS.length ? NAGS[pl.nagN] : pick(NAGS_MORE);
   pl.nagN++;
   const g = n.av.group;
   g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
@@ -2138,7 +2156,7 @@ function updatePlayer(dt) {
     pl.pos.y += pl.vy * dt;
     const gy = groundY(pl.pos.x, pl.pos.z);
     if (pl.pos.y <= gy) { if (pl.vy < -4) me.squash(); pl.pos.y = gy; pl.vy = 0; }
-    pl.pump = Math.max(0, pl.pump - (pl.sitting ? 30 : 12) * dt);
+    pl.pump = Math.max(0, pl.pump - (pl.lying ? 45 : pl.sitting ? 30 : 12) * dt);
     pl.mountCand = findMount();
     me.group.position.lerp(pl.pos, damp(20, dt));
     me.group.rotation.y = lerpAngle(me.group.rotation.y, pl.yaw, damp(14, dt));
@@ -2346,7 +2364,7 @@ function npcUpdate(n, dt, now) {
           n.state = 'climb'; n.hold = 0; n.holdT = 0; n.av.setClimbing(true); n.climbStart = Date.now();
           if (Math.random() < 0.8) placeTripod(n.problem, n, n.av.name);
         }
-        else { n.state = 'idle'; n.av.sitting = true; n.problem = null; n.next = now + 10000 + Math.random() * 14000; }
+        else { n.state = 'idle'; n.av.sitting = true; n.av.lying = n.av.name === '떡볶이' && Math.random() < 0.5; n.problem = null; n.next = now + 10000 + Math.random() * 14000; }
       }
     } else {
       const sp = Math.min(d, 2.4 * dt);
@@ -2841,7 +2859,7 @@ function updateVillain(now) {
   me.say(line, 2600);
   Net.event('vsay', { text: line });
   if (v === 'chalk' && pl.chalkReady && chalkLeft() > 0) useChalk();
-  if (v === 'mat' && !pl.sitting && groundY(pl.pos.x, pl.pos.z) > 0) toggleSit();
+  if (v === 'mat' && !pl.lying && groundY(pl.pos.x, pl.pos.z) > 0 && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01) lieDown(); // 매트 점령자는 대자로
   const near = npcs.filter((n) => n.state === 'idle' && n.av.group.position.distanceTo(me.group.position) < 7);
   if (near.length) setTimeout(() => pick(near).av.say(pick(VILLAIN_REACT[v]), 2400), 1400);
   if (staffMayNag(0.3)) setTimeout(() => staffSay(STAFF_VILLAIN[v], 3000), 3200);
@@ -3099,7 +3117,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, k: lookToStr({ ...DEFAULT_LOOK, ...(Store.data.look || {}) }), st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, k: lookToStr({ ...DEFAULT_LOOK, ...(Store.data.look || {}) }), st: pl.climbStart || 0, a: pl.lying ? 'l' : pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -3143,7 +3161,7 @@ const Net = {
       for (let i = 0; i < 4; i++) p.gripT[i].set(d.g[i * 3], d.g[i * 3 + 1], d.g[i * 3 + 2]);
       if (!p.av.grips) p.av.grips = p.gripT.map((v) => v.clone());
     } else { p.gripT = null; p.av.grips = null; }
-    p.av.sitting = d.a === 's'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
+    p.av.sitting = d.a === 's' || d.a === 'l'; p.av.lying = d.a === 'l'; p.av.hanging = d.a === 'h'; p.av.campus = d.a === 'k';
     if (typeof d.o === 'string' && d.o !== p.outfit) { p.outfit = d.o; const [so, pa] = d.o.split('|'); p.av.setOutfit(so, pa); }
     p.av.tech = d.a === 'tf' ? 'flag' : d.a === 'ti' ? 'inside' : d.a === 'to' ? 'outside' : null;
   },
@@ -3249,7 +3267,8 @@ function updateHud(dt) {
     const n = FEST_SECTORS.filter(sectorDone).length;
     title.innerHTML = guide ? `★ ${problemLabel(guide)}<small>미니맵의 ★로 가서 벽을 잡으세요</small>` : `스탬프 ${n} / ${SECTORS.length} · 🌡️ ${Manner.v}℃ ${Manner.emoji()}<small>${Store.data.festival ? '🏆 페스티벌 완주자' : '섹터마다 한 문제씩 완등!'}</small>`;
     const c = pl.mountCand;
-    if (pl.sitting) prompt.textContent = '🪑 앉아서 쉬는 중 — 펌핑이 빨리 풀려요';
+    if (pl.lying) prompt.textContent = `🛌 대자로 누워 쉬는 중 — 펌핑이 싹 풀려요 · ${touch ? '🧍' : 'R'} 일어나기`;
+    else if (pl.sitting) prompt.textContent = `🪑 앉아서 쉬는 중 — 펌핑이 빨리 풀려요 · ${touch ? '🛌' : 'R'} 한 번 더 누르면 눕기`;
     else if (c && pl.mode === 'walk') {
       const near = c.st.problems.find((p) => uvDist(c.st, p.start.u, p.start.v, c.u, 1.55) <= REACH);
       const busy = conflictsAt(bodyPos(c.st, c.u, 1.55), 2.0);
@@ -3260,8 +3279,8 @@ function updateHud(dt) {
     } else prompt.textContent = '';
     $('#btn-grab').classList.toggle('ready', !!c);
     $('#grab-label').innerHTML = touch ? '잡기' : '잡기 <kbd>E</kbd>';
-    $('#act1-icon').textContent = pl.sitting ? '🧍' : '🪑';
-    $('#act1-label').innerHTML = (pl.sitting ? '일어나기' : '앉아 쉬기') + (touch ? '' : ' <kbd>R</kbd>');
+    $('#act1-icon').textContent = pl.lying ? '🧍' : pl.sitting ? '🛌' : '🪑';
+    $('#act1-label').innerHTML = (pl.lying ? '일어나기' : pl.sitting ? '대자로 눕기' : '앉아 쉬기') + (touch ? '' : ' <kbd>R</kbd>');
     $('#act2-icon').textContent = '🏃';
     $('#act2-label').innerHTML = '달리기' + (touch ? '' : ' <kbd>Shift</kbd>');
     $('#btn-act2').setAttribute('aria-pressed', isRunning() ? 'true' : 'false');
