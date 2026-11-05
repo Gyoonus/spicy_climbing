@@ -1747,8 +1747,10 @@ const shiftDown = () => keys.has('ShiftLeft') || keys.has('ShiftRight');
 function isCampus() { return pl.mode === 'climb' && !pl.hanging && !pl.tech && (shiftDown() || pl.campusToggle); }
 function isRunning() { return shiftDown() || pl.runToggle; }
 function toggleSit() {
-  if (pl.mode !== 'walk') { toast('앉기는 매트 위에서만! 벽에서는 H로 매달리기'); return; }
+  if (pl.mode !== 'walk') { toast('앉기는 매트 밖 바닥에서만! 벽에서는 H로 매달리기'); return; }
   if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) > 0.01) return;
+  // 🚫 매트 위에서는 앉기·눕기 금지 — 떨어지는 사람한테 깔려요
+  if (!pl.sitting && isMat(pl.pos.x, pl.pos.z)) { matRestRefused(); return; }
   // 서기 → 앉기 → 대자로 눕기 → 일어나기
   if (pl.lying) { standUp(); return; }
   if (pl.sitting) { lieDown(); return; }
@@ -1756,11 +1758,23 @@ function toggleSit() {
   me.sitting = true;
   {
     pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3;
-    me.say(pick(['휴~', '잠깐 쉬어갈게요', '매트 최고…', '팔 털어야지']), 1600);
+    me.say(pick(['휴~', '잠깐 쉬어갈게요', '바닥 최고…', '팔 털어야지']), 1600);
     const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 4);
     if (n) setTimeout(() => n.av.say(pick(['같이 쉬어요~', '물 마실래요?', '오늘 몇 개 깼어요?'])), 900);
   }
   Net.sync(true);
+}
+let matRefuseAt = -1e9;
+function matRestRefused() {
+  const now = performance.now();
+  // 바로 또 누르면 "눕기" 시도로 봄
+  const lie = now - matRefuseAt < 5000;
+  matRefuseAt = now;
+  const line = lie ? '매트는 침대가 아니에요! 눕는 건 집에 가서요 🐯' : '매트는 쇼파가 아니에요~ 위험해요! 떨어지는 사람한테 깔려요 🐯';
+  if (staff.av) { staff.av.say(line, 3200); toast(`🐯 무호K: ${line}`, 2600); }
+  else toast(line, 2600);
+  me.squash();
+  Sound.tone(330, 0.08, 'square', 0.05); Sound.tone(250, 0.12, 'square', 0.05, 0.1);
 }
 function lieDown() {
   if (!pl.sitting) { pl.sitT = 0; pl.nagN = 0; pl.nagNext = 9 + Math.random() * 3; }
@@ -1775,13 +1789,13 @@ function standUp() { if (!pl.sitting) return; pl.sitting = false; pl.lying = fal
 const NAGS = [
   '쉬는 거 좋지~ 근데 너무 오래 쉬는 거 아냐?',
   '너는 맨날 앉아서 쉬냐? 등반은 언제 할래?',
-  '매트 지박령 등장 👻',
-  '여기 매트 대여료 받습니다 💸',
+  '바닥 지박령 등장 👻',
+  '여기 바닥 대여료 받습니다 💸',
   '노랑 V0라도 하나 하자… 응?',
 ];
 const NAGS_MORE = ['등반은 언제 할래?', '엉덩이에 뿌리 내리겠다 🌱', '펌핑 다 풀렸잖아 ㅋㅋ', '오늘 몇 개 깼어? …0개?',
   '사장님 여기 앉아만 있는 사람 있어요', '초크값은 냈니?', '암장에 쉬러 왔어? ㅋㅋㅋ', '눈 감으면 잔다 진짜'];
-const NAGS_LIE = ['매트에 대자로 누웠어?! ㅋㅋㅋ', '여기 찜질방 아니야~', '자는 거 아니지? 일어나 ㅋㅋ', '매트 전세 냈어? 🛌', '누가 매트에 불가사리 뒀어 ⭐'];
+const NAGS_LIE = ['바닥에 대자로 누웠어?! ㅋㅋㅋ', '여기 찜질방 아니야~', '자는 거 아니지? 일어나 ㅋㅋ', '바닥 전세 냈어? 🛌', '누가 바닥에 불가사리 뒀어 ⭐'];
 function nagger() {
   const pos = me.group.position;
   const idle = npcs.filter((n) => n.state === 'idle').sort((a, b) => a.av.group.position.distanceTo(pos) - b.av.group.position.distanceTo(pos));
@@ -1814,7 +1828,7 @@ function onStandUp() {
   pl.nagN = 0; pl.sitT = 0;
 }
 function toggleHang() {
-  if (pl.mode !== 'climb') { toast('매달리기는 벽에서! 매트에서는 R로 앉아 쉬기'); return; }
+  if (pl.mode !== 'climb') { toast('매달리기는 벽에서! 바닥에서는 R로 앉아 쉬기'); return; }
   if (pl.hanging) { stopHang(); return; }
   const r = nearestGrab(pl.strip, pl.u, pl.v, pl.problem);
   if (!r || r.d > REACH) return;
@@ -2230,7 +2244,7 @@ function updatePlayer(dt) {
     }
     if (pl.problem && !pl.topped && uvDist(st, pl.u, pl.v, pl.problem.top.u, pl.problem.top.v) < 0.5) sendProblem(pl.problem);
     if (pl.topped) { pl.topT += dt; if (pl.topT > (pl.topHoldMax || 3)) { letGo('down'); return; } }
-    if (pl.pump >= 100) { pl.pump = 100; letGo('pump'); toast('펌핑 100%… 매트에서 쉬고 초크 바르고 다시!'); return; }
+    if (pl.pump >= 100) { pl.pump = 100; letGo('pump'); toast('펌핑 100%… 바닥에서 쉬고 초크 바르고 다시!'); return; }
   } else if (pl.mode === 'air') {
     const st = pl.strip;
     pl.t += dt;
@@ -2566,7 +2580,7 @@ async function npcTalk(text) {
   const arrive = t.called ? summonTo(t) : Promise.resolve();
   if (t.npc && t.npc.state === 'idle') { t.npc.next = Math.max(t.npc.next, performance.now() + 15000); }
   const hist = (npcTalkState.hist[t.key] = npcTalkState.hist[t.key] || []);
-  const doing = pl.mode === 'route' && pl.problem ? `${problemLabel(pl.problem)} 등반 중` : pl.sitting ? '매트에 앉아 쉬는 중' : '암장을 돌아다니는 중';
+  const doing = pl.mode === 'route' && pl.problem ? `${problemLabel(pl.problem)} 등반 중` : pl.sitting ? '바닥에 앉아 쉬는 중' : '암장을 돌아다니는 중';
   let reply = '';
   const url = npcApiUrl();
   const fetchReply = (async () => {
@@ -2865,7 +2879,7 @@ function showPolaroid(url, label, by = '📷 내 삼각대가 찍음') {
 // =================================================================
 const VILLAIN_LINES = {
   beta: ['그거 발 바꿔서 하면 돼요~', '제가 하면 한 번에 되는데…', '그 홀드 사이드로 잡아요 사이드로', '아 그거 그렇게 하는 거 아닌데', '저 그거 플래시했어요 ㅎ'],
-  mat: ['(매트에 대자로 누움)', '여기 내 자리임', '5분만 더 누워있을게요…', '매트가 제일 편해', '벽은 보는 거지 오르는 게 아님'],
+  mat: ['(매트에 누우려다 막힘)', '여기 내 자리임', '5분만 눕고 싶다…', '매트가 제일 편한데', '벽은 보는 거지 오르는 게 아님'],
   chalk: ['초크 팡팡 한 번 더~ 💨', '초크는 많을수록 좋지!', '바닥 하얗게 만들어주마', '공기 중에 초크 농도 올리는 중'],
   shirtless: ['더워서 벗었어요 💪', '등근육 보이죠?', '이게 진짜 클라이밍 복장이지', '바람 시원하다~'],
 };
@@ -2897,7 +2911,7 @@ function updateVillain(now) {
   me.say(line, 2600);
   Net.event('vsay', { text: line });
   if (v === 'chalk' && pl.chalkReady && chalkLeft() > 0) useChalk();
-  if (v === 'mat' && !pl.lying && groundY(pl.pos.x, pl.pos.z) > 0 && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01) lieDown(); // 매트 점령자는 대자로
+  if (v === 'mat' && !pl.sitting && isMat(pl.pos.x, pl.pos.z) && pl.pos.y - groundY(pl.pos.x, pl.pos.z) < 0.01) matRestRefused(); // 매트 점령자도 무호K한테 막힘
   const near = npcs.filter((n) => n.state === 'idle' && n.av.group.position.distanceTo(me.group.position) < 7);
   if (near.length) setTimeout(() => pick(near).av.say(pick(VILLAIN_REACT[v]), 2400), 1400);
   if (staffMayNag(0.3)) setTimeout(() => staffSay(STAFF_VILLAIN[v], 3000), 3200);
@@ -4901,7 +4915,7 @@ function routeStep(dt) {
   if (pl.pump >= 100 && (!R.done || R.ceremony)) {
     if (R.ceremony && !R.done) { ceremonyFail(); return; }
     if (R.ceremony && R.done) { popText('세레머니 하다 펌핑!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.28); letGo('pump'); setTimeout(() => teaseNear(['ㅋㅋㅋ 그래도 완등은 했네', '세레머니 과했다 ㅋㅋ', '멋있었는데 마무리가 ㅋㅋ']), 900); return; }
-    toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return;
+    toast('펌핑 100%… 초크 바르고 바닥에서 쉬었다가 다시!', 2400); letGo('pump'); return;
   }
   updateRhythm(dt);
   if (R.mash) {
@@ -5400,7 +5414,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { isMat, billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
