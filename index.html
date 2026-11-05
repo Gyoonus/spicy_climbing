@@ -7,6 +7,16 @@
   <meta name="description" content="스파이시 클라이밍 암장을 3D로 걸어 다니며 벽을 오르고, 다이노로 날아보는 온라인 클라이밍장." />
   <meta name="theme-color" content="#0d0d0d" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <script>
+    // GitHub Pages로 들어오면 Vercel 주소로 이동 (Vercel이 열릴 때만)
+    (function () {
+      if (!/github\.io$/.test(location.hostname)) return;
+      var T = 'https://spicy-climbing.vercel.app';
+      fetch(T + '/favicon.svg', { mode: 'no-cors', cache: 'no-store' })
+        .then(function () { location.replace(T + '/' + location.search + location.hash); })
+        .catch(function () {});
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Sedgwick+Ave+Display&display=swap" rel="stylesheet" />
