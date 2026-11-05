@@ -393,22 +393,43 @@ function roundRect(g, x, y, w, h, r) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }
-function textSprite(text, { h = 0.28, bg = 'rgba(20,20,22,.8)', fg = '#fff', border = null, tail = false, font = '700 44px "Noto Sans KR", sans-serif', circle = false, depthTest = false } = {}) {
+function wrapLines(g, text, maxW) {
+  const lines = [];
+  let cur = '';
+  for (const word of String(text).split(/(\s+)/)) {
+    const tryLine = cur + word;
+    if (!cur || g.measureText(tryLine).width <= maxW) { cur = tryLine; continue; }
+    lines.push(cur.trim()); cur = word.trimStart();
+  }
+  if (cur.trim()) lines.push(cur.trim());
+  // 띄어쓰기 없이 긴 줄은 글자 단위로 자르기
+  const out = [];
+  lines.forEach((ln) => {
+    let buf = '';
+    for (const ch of ln) { if (buf && g.measureText(buf + ch).width > maxW) { out.push(buf); buf = ch; } else buf += ch; }
+    if (buf) out.push(buf);
+  });
+  return out.length ? out : [''];
+}
+function textSprite(text, { h = 0.28, bg = 'rgba(20,20,22,.8)', fg = '#fff', border = null, tail = false, font = '700 44px "Noto Sans KR", sans-serif', circle = false, depthTest = false, wrap = 0 } = {}) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   g.font = font;
-  const tw = g.measureText(text).width;
-  const ph = 64, pad = 26;
-  const W = circle ? ph + 16 : Math.ceil(tw + pad * 2), Hh = ph + (tail ? 18 : 0) + 8;
+  const lines = wrap && !circle ? wrapLines(g, text, wrap) : [String(text)];
+  const tw = Math.max(...lines.map((ln) => g.measureText(ln).width));
+  const ph = 64, pad = 26, lineH = 52;
+  const bh = ph + (lines.length - 1) * lineH; // 말풍선 몸통 높이
+  const W = circle ? ph + 16 : Math.ceil(tw + pad * 2), Hh = bh + (tail ? 18 : 0) + 8;
   c.width = W; c.height = Hh;
   g.font = font;
   g.fillStyle = bg;
+  const rad = lines.length > 1 ? 28 : ph / 2;
   if (circle) { g.beginPath(); g.arc(W / 2, (ph + 8) / 2, ph / 2, 0, Math.PI * 2); g.fill(); }
-  else { roundRect(g, 4, 4, W - 8, ph, ph / 2); g.fill(); }
-  if (border) { g.lineWidth = 5; g.strokeStyle = border; if (circle) { g.beginPath(); g.arc(W / 2, (ph + 8) / 2, ph / 2 - 2, 0, Math.PI * 2); g.stroke(); } else { roundRect(g, 4, 4, W - 8, ph, ph / 2); g.stroke(); } }
-  if (tail) { g.fillStyle = bg; g.beginPath(); g.moveTo(W / 2 - 12, ph + 2); g.lineTo(W / 2, ph + 22); g.lineTo(W / 2 + 12, ph + 2); g.fill(); }
+  else { roundRect(g, 4, 4, W - 8, bh, rad); g.fill(); }
+  if (border) { g.lineWidth = 5; g.strokeStyle = border; if (circle) { g.beginPath(); g.arc(W / 2, (ph + 8) / 2, ph / 2 - 2, 0, Math.PI * 2); g.stroke(); } else { roundRect(g, 4, 4, W - 8, bh, rad); g.stroke(); } }
+  if (tail) { g.fillStyle = bg; g.beginPath(); g.moveTo(W / 2 - 12, bh + 2); g.lineTo(W / 2, bh + 22); g.lineTo(W / 2 + 12, bh + 2); g.fill(); }
   g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(text, W / 2, 4 + ph / 2 + 2);
+  lines.forEach((ln, i) => g.fillText(ln, W / 2, 4 + ph / 2 + 2 + i * lineH));
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest, depthWrite: false });
@@ -1232,7 +1253,7 @@ class Avatar {
   say(text, ms = 2800) {
     if (this.bubble) { this.group.remove(this.bubble); disposeSprite(this.bubble); }
     clearTimeout(this.bubbleT);
-    const b = textSprite(text, { h: 0.21, bg: '#ffffff', fg: '#151515', tail: true, font: '700 40px "Noto Sans KR", sans-serif' });
+    const b = textSprite(text, { h: 0.24, bg: '#ffffff', fg: '#151515', tail: true, font: '700 40px "Noto Sans KR", sans-serif', wrap: 520 });
     this.group.add(b);
     this.bubble = b;
     this.layoutBubbles();
@@ -1242,7 +1263,7 @@ class Avatar {
   chat(text, ms = 15000) {
     if (this.chatBubble) { this.group.remove(this.chatBubble); disposeSprite(this.chatBubble); }
     clearTimeout(this.chatT);
-    const b = textSprite(text, { h: 0.23, bg: '#ffffff', fg: '#151515', border: this.color, tail: true, font: '700 40px "Noto Sans KR", sans-serif' });
+    const b = textSprite(text, { h: 0.25, bg: '#ffffff', fg: '#151515', border: this.color, tail: true, font: '700 40px "Noto Sans KR", sans-serif', wrap: 520 });
     this.group.add(b);
     this.chatBubble = b;
     this.layoutBubbles();
@@ -1250,7 +1271,7 @@ class Avatar {
   }
   layoutBubbles() {
     if (this.bubble) this.bubble.position.y = this.bubbleY;
-    if (this.chatBubble) this.chatBubble.position.y = this.bubble ? this.bubbleY + 0.34 : this.bubbleY;
+    if (this.chatBubble) this.chatBubble.position.y = this.bubble ? this.bubbleY + this.bubble.scale.y + 0.04 : this.bubbleY;
   }
   // 두 마디 IK: 목표점(리그 좌표)을 향해 팔꿈치/무릎을 굽힘. 늘어나지 않음
   solve(l, target) {
