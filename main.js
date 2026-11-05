@@ -869,18 +869,19 @@ const HEAD_SHAPES = {
   star: { n: '별', d: 'M50 4 L62 34 L94 36 L69 57 L78 90 L50 72 L22 90 L31 57 L6 36 L38 34 Z' },
   cat: { n: '고양이', d: 'M16 32 L22 4 L42 22 C47 21 53 21 58 22 L78 4 L84 32 C94 44 94 58 92 68 C88 86 72 96 50 96 C28 96 12 86 8 68 C6 58 6 44 16 32 Z' },
 };
-const EYES = { dot: '동글', smile: '웃음', sparkle: '반짝', sleepy: '졸림' };
+const EYES = { dot: '동글', smile: '웃음', sparkle: '반짝', sleepy: '졸림', angry: '화남 😈' };
 const SKINS = ['#ffe3cc', '#f3c9a3', '#d9a27a', '#9c6a48'];
 const CLOTH = ['#ffffff', '#1d1d20', '#e3262b', '#2f6fd6', '#2fbf71', '#ffc21a', '#7b3fb8', '#ff7aa8'];
-const ACCS = { none: '없음', band: '헤드밴드', beanie: '비니', glasses: '안경', ribbon: '리본' };
-const DEFAULT_LOOK = { head: 'flame', eyes: 'dot', blush: 1, skin: SKINS[0], shirt: '', pants: '', acc: 'none' };
-function lookToStr(l) { return [l.head, l.eyes, l.blush ? 1 : 0, l.skin, l.shirt, l.pants, l.acc].join(','); }
+const ACCS = { none: '없음', band: '헤드밴드', beanie: '비니', glasses: '안경', ribbon: '리본', earbuds: '이어폰', headset: '헤드셋', horns: '악마 뿔 😈', mask: '빌런 마스크 😈' };
+const VILLAINS = { none: '착한 클라이머', beta: '베타 스프레이어', mat: '매트 점령자', chalk: '초크 폭격기', shirtless: '상탈 빌런' };
+const DEFAULT_LOOK = { head: 'flame', eyes: 'dot', blush: 1, skin: SKINS[0], shirt: '', pants: '', acc: 'none', vil: 'none' };
+function lookToStr(l) { return [l.head, l.eyes, l.blush ? 1 : 0, l.skin, l.shirt, l.pants, l.acc, l.vil].join(','); }
 function lookFromStr(str) {
   const a = String(str || '').split(',');
   const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(v) ? v : def);
   return {
     head: HEAD_SHAPES[a[0]] ? a[0] : 'flame', eyes: EYES[a[1]] ? a[1] : 'dot', blush: a[2] !== '0',
-    skin: hex(a[3], SKINS[0]), shirt: hex(a[4], ''), pants: hex(a[5], ''), acc: ACCS[a[6]] ? a[6] : 'none',
+    skin: hex(a[3], SKINS[0]), shirt: hex(a[4], ''), pants: hex(a[5], ''), acc: ACCS[a[6]] ? a[6] : 'none', vil: VILLAINS[a[7]] ? a[7] : 'none',
   };
 }
 const headGeoCache = new Map();
@@ -911,6 +912,7 @@ function buildFace(head, look, hs) {
     } else if (look.eyes === 'sleepy') {
       const e = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.016, 0.02), blackMat); e.position.set(ex, ey - 0.01, z); e.rotation.z = x < 0 ? 0.12 : -0.12; head.add(e);
     } else {
+      if (look.eyes === 'angry') { const br = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.022, 0.02), blackMat); br.position.set(ex, ey + 0.075, z + 0.01); br.rotation.z = x < 0 ? -0.45 : 0.45; head.add(br); }
       const big = look.eyes === 'sparkle';
       const e = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.068 : 0.05, 14, 10), blackMat); e.position.set(ex, ey, z); e.scale.z = 0.5; head.add(e);
       const hl = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.022 : 0.016, 8, 6), white); hl.position.set(ex + (big ? 0.02 : 0.015), ey + (big ? 0.025 : 0.02), z + 0.025); head.add(hl);
@@ -938,6 +940,26 @@ function buildFace(head, look, hs) {
     const m = mat('#16161a');
     [-0.12, 0.12].forEach((x) => { const r = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.012, 8, 20), m); r.position.set(x * hs, 0.41 * hs, z + 0.03); head.add(r); });
     const br = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.012), m); br.position.set(0, 0.42 * hs, z + 0.03); head.add(br);
+  } else if (look.acc === 'earbuds') {
+    const m = mat('#ffffff');
+    [-1, 1].forEach((sd) => {
+      const bud = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), m); bud.position.set(sd * 0.38 * hs, 0.36 * hs, 0.14); head.add(bud);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8), m); stem.position.set(sd * 0.38 * hs, 0.36 * hs - 0.09, 0.15); head.add(stem);
+    });
+  } else if (look.acc === 'headset') {
+    const m = mat('#1d1d20'), acc = mat('#e3262b');
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.47 * hs, 0.028, 8, 28, Math.PI), m); band.position.y = 0.36 * hs; head.add(band);
+    [-1, 1].forEach((sd) => {
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 18), m); cup.rotation.z = Math.PI / 2; cup.position.set(sd * 0.45 * hs, 0.36 * hs, 0); head.add(cup);
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.075, 14), acc); pad.rotation.z = Math.PI / 2; pad.position.set(sd * (0.45 * hs + 0.005), 0.36 * hs, 0); head.add(pad);
+    });
+    const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.24, 6), m); mic.rotation.z = 1.2; mic.position.set(-0.32 * hs, 0.24 * hs, 0.14); head.add(mic);
+  } else if (look.acc === 'horns') {
+    const m = mat('#2b0f3d');
+    [-1, 1].forEach((sd) => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.32, 14), m); c.position.set(sd * 0.3 * hs, 0.9 * hs, 0.1); c.rotation.z = -sd * 0.55; head.add(c); });
+  } else if (look.acc === 'mask') {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.66 * hs, 0.12, 0.012), mat('#3b1f5c')); band.position.set(0, 0.42 * hs, z); head.add(band);
+    [-1, 1].forEach((sd) => { const t = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.01), mat('#3b1f5c')); t.position.set(sd * 0.36 * hs, 0.4 * hs, z - 0.05); t.rotation.z = sd * -0.5; head.add(t); });
   } else if (look.acc === 'ribbon') {
     const m = mat('#ff5c8a');
     [-1, 1].forEach((sd) => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.15, 12), m); c.rotation.z = sd * Math.PI / 2; c.position.set(0.24 * hs + sd * 0.075, 0.8 * hs, 0.08); head.add(c); });
@@ -1062,7 +1084,8 @@ class Avatar {
     const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.78), roughness: 0.6 });
     const skin = new THREE.MeshStandardMaterial({ color: '#ffe3cc', roughness: 0.7 });
     const shoe = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.6 });
-    const shirt = L.shirt && !tiger && !cowboy ? new THREE.MeshStandardMaterial({ color: L.shirt, roughness: 0.65 }) : dark;
+    const shirt = L.vil === 'shirtless' && !tiger && !cowboy ? new THREE.MeshStandardMaterial({ color: L.skin, roughness: 0.7 }) : L.shirt && !tiger && !cowboy ? new THREE.MeshStandardMaterial({ color: L.shirt, roughness: 0.65 }) : dark;
+    this.villain = !tiger && !cowboy && L.vil !== 'none' ? L.vil : null;
     this.shoeMat = shoe; this.legMat = dark.clone();
     if (L.pants && !tiger && !cowboy) this.legMat.color.set(L.pants);
     this.legBase = this.legMat.color.clone();
@@ -1078,6 +1101,7 @@ class Avatar {
     pelvis.position.y = B.hipY + 0.03; pelvis.scale.set(1.08, 0.62, 0.85); this.rig.add(pelvis);
     const tee = cowboy ? textSprite('⭐', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }) : tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
     tee.position.set(0, B.hipY + 0.24, 0.15); this.rig.add(tee);
+    if (L.vil === 'shirtless' && !tiger && !cowboy) tee.visible = false;
     // 초크백 (허리 뒤)
     const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 14), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.9 }));
     bag.position.set(0, B.hipY + 0.06, -0.19); this.rig.add(bag);
@@ -1114,7 +1138,8 @@ class Avatar {
     };
     this.limbs = [mk('arm', -1), mk('arm', 1), mk('leg', -1), mk('leg', 1)];
     const tagY = tiger ? 1.68 : cowboy ? 1.84 : 1.62;
-    this.tag = textSprite(tiger ? `🐯 ${name}` : cowboy ? `🤠 ${name}` : name, { h: 0.17, bg: isPlayer ? '#e3262b' : tiger ? '#f39a2b' : cowboy ? '#ffd166' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor || tiger || cowboy ? '#111' : '#fff' });
+    const vil = this.villain;
+    this.tag = textSprite(tiger ? `🐯 ${name}` : cowboy ? `🤠 ${name}` : vil ? `😈 ${name}` : name, { h: 0.17, bg: vil ? '#6a2c91' : isPlayer ? '#e3262b' : tiger ? '#f39a2b' : cowboy ? '#ffd166' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: !vil && (visitor || tiger || cowboy) ? '#111' : '#fff', border: vil && isPlayer ? '#e3262b' : null });
     this.tag.position.y = tagY; this.bubbleY = tagY + 0.14;
     this.group.add(this.tag);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
@@ -2590,6 +2615,43 @@ function showPolaroid(url, label) {
 }
 
 // =================================================================
+// 😈 빌런 — 가끔 알아서 빌런 짓, 주변이 반응
+// =================================================================
+const VILLAIN_LINES = {
+  beta: ['그거 발 바꿔서 하면 돼요~', '제가 하면 한 번에 되는데…', '그 홀드 사이드로 잡아요 사이드로', '아 그거 그렇게 하는 거 아닌데', '저 그거 플래시했어요 ㅎ'],
+  mat: ['(매트에 대자로 누움)', '여기 내 자리임', '5분만 더 누워있을게요…', '매트가 제일 편해', '벽은 보는 거지 오르는 게 아님'],
+  chalk: ['초크 팡팡 한 번 더~ 💨', '초크는 많을수록 좋지!', '바닥 하얗게 만들어주마', '공기 중에 초크 농도 올리는 중'],
+  shirtless: ['더워서 벗었어요 💪', '등근육 보이죠?', '이게 진짜 클라이밍 복장이지', '바람 시원하다~'],
+};
+const VILLAIN_REACT = {
+  beta: ['…안 물어봤는데요 😑', '베타 스포 금지!!', '제가 알아서 할게요 ㅎㅎ'],
+  mat: ['저기 매트 좀 비켜주세요~', '거기 낙하지점이에요!', '누울 거면 쉼터 가요 ㅋㅋ'],
+  chalk: ['콜록콜록…', '초크 아껴요~!', '앞이 안 보여요 😵'],
+  shirtless: ['옷 좀 입어요 ㅋㅋ', '눈 둘 곳이 없네', '감기 걸려요~'],
+};
+const STAFF_VILLAIN = {
+  beta: '베타는 물어볼 때만~ 🐯 …그래도 열정은 좋네요',
+  mat: '거기 누우면 낙하지점이에요… 걱정돼서 그러는 거 아님 🐯',
+  chalk: '초크 팡팡은 완등하고 해요~ 🐯',
+  shirtless: '옷 입어요… 감기 걸려요. 진짜 걱정돼서 하는 말 아님 🐯',
+};
+const vil = { next: performance.now() + 20000 };
+function updateVillain(now) {
+  const v = me && me.villain;
+  if (!v || pl.mode !== 'walk' || !paidToday() || now < vil.next) return;
+  vil.next = now + 22000 + Math.random() * 18000;
+  const line = pick(VILLAIN_LINES[v]);
+  me.say(line, 2600);
+  Net.event('vsay', { text: line });
+  if (v === 'chalk' && pl.chalkReady) useChalk();
+  if (v === 'mat' && !pl.sitting && groundY(pl.pos.x, pl.pos.z) > 0) toggleSit();
+  const near = npcs.filter((n) => n.state === 'idle' && n.av.group.position.distanceTo(me.group.position) < 7);
+  if (near.length) setTimeout(() => pick(near).av.say(pick(VILLAIN_REACT[v]), 2400), 1400);
+  if (staffMayNag(0.3)) setTimeout(() => staffSay(STAFF_VILLAIN[v], 3000), 3200);
+  else if (Math.random() < 0.3) setTimeout(() => westSay(pick(['빌런도 매력이죠 🤠', '캐릭터 확실하네요 ㅋㅋ', '오늘도 빌런 컨셉 유지 중? 🤠'])), 3200);
+}
+
+// =================================================================
 // 암장 매너 — 선출발자 우선, 벽 위 교통사고, 매너 온도
 // =================================================================
 const Manner = {
@@ -2893,6 +2955,7 @@ const Net = {
     const text = typeof d.text === 'string' ? d.text.slice(0, 24) : '';
     if (d.type === 'say' && text) { p.av.chat(text); logChat(p.name, p.av.color, text); }
     if (d.type === 'chalk') p.av.chalk();
+    if (d.type === 'vsay' && text) p.av.say(text, 2600);
     if (d.type === 'fall') { if (text) p.av.say(text, 1600); setTimeout(() => chalkPuff(p.av.group.position.clone(), 10), 500); }
     if (d.type === 'top') {
       const prob = PROBLEMS.find((x) => x.id === d.pid);
@@ -4083,6 +4146,7 @@ function loop() {
   updateEtiquette(dt);
   updateSitNag(dt);
   updateStaff(dt, now);
+  updateVillain(now);
   updateWest(dt, now);
   if (now > chatNext) {
     const idle = npcs.filter((n) => n.state === 'idle');
@@ -4158,6 +4222,7 @@ function setupIntro() {
   chipRow('#opt-head', HEAD_SHAPES, 'head');
   chipRow('#opt-eyes', EYES, 'eyes');
   chipRow('#opt-acc', ACCS, 'acc');
+  chipRow('#opt-vil', VILLAINS, 'vil');
   const dotRow = (id, list, key, auto) => radioRow($(id), (auto ? [['', auto]] : []).concat(list.map((c) => [c, c])), () => look[key], (v) => { look[key] = v; }, (b, v) => {
     if (v) b.style.background = v; else { b.textContent = '기본'; b.style.background = '#2a2a2e'; }
   });
@@ -4245,7 +4310,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { R, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { vil, R, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
