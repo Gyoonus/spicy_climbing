@@ -793,29 +793,7 @@ function buildHolds(rand) {
     st.problems.push(p);
     PROBLEMS.push(p);
   });
-  // 장식 홀드 (자유 등반용)
-  const palette = Object.values(HOLD_COLORS);
-  strips.forEach((st) => {
-    const count = Math.round(st.L * (st.sec.dark ? 7 : 1.7));
-    let placed = 0, guard = 0;
-    while (placed < count && guard++ < count * 40) {
-      const u = rand() * st.L, v = 0.5 + rand() * (st.H - 0.8);
-      if (!st.closed && (u < 0.2 || u > st.L - 0.2)) continue;
-      if (st.holds.some((h) => uvDist(st, h.u, h.v, u, v) < (st.sec.dark ? 0.22 : 0.32))) continue;
-      const ty = pickHoldType(2, rand);
-      const h = { u, v, strip: st, problem: null, hex: palette[Math.floor(rand() * palette.length)], size: 0.04 + rand() * 0.06, type: ty, q: ty.q };
-      st.holds.push(h); allHolds.push(h);
-      placed++;
-    }
-    // 발홀드(풋칩): 매트 바로 위 낮은 곳에 작은 홀드 두 줄
-    for (let u = 0.3; u < st.L - (st.closed ? 0 : 0.3); u += 0.32 + rand() * 0.18) {
-      const v = (rand() < 0.5 ? 0.4 : 0.62) + rand() * 0.12;
-      if (st.holds.some((h) => uvDist(st, h.u, h.v, u, v) < 0.18)) continue;
-      const ty = rand() < 0.6 ? HT.edge : HT.jug;
-      const h = { u, v, strip: st, problem: null, foot: true, hex: palette[Math.floor(rand() * palette.length)], size: 0.03 + rand() * 0.02, type: ty, q: ty.q };
-      st.holds.push(h); allHolds.push(h);
-    }
-  });
+  // 장식 홀드 없음 — 벽에는 문제(루트) 홀드만
   // 인스턴싱
   const geos = [makeHoldGeo(1), makeHoldGeo(2), makeHoldGeo(3)];
   const buckets = geos.map(() => []);
@@ -3659,19 +3637,21 @@ function solveBody(lh, rh, reach = ARM_R) {
 }
 // 발 디딤: 엉덩이 아래 무릎 굽힐 만한 곳 (발은 아무 홀드나)
 function pickFeet(body) {
-  const used = new Set();
+  // 발도 루트 홀드만 (손으로 잡고 있는 홀드는 제외). 없으면 벽에 스미어
+  const used = new Set([R.lh, R.rh]);
   return [-1, 1].map((side) => {
     const hp = hipOf(side, body);
     let best = null, bs = Infinity;
     for (const h of R.st.holds) {
-      if (h.tap || used.has(h)) continue;
+      if (h.problem !== R.p || h.tap || used.has(h)) continue;
       const d = pd(h, hp);
       if (d > LEG_R || h.v > hp.v - 0.12) continue;
       const sc = Math.abs(rDu(h.u, hp.u + side * 0.1)) * 1.3 + Math.abs(h.v - (hp.v - 0.32));
       if (sc < bs) { bs = sc; best = h; }
     }
-    if (best) used.add(best);
-    return best;
+    if (best) { used.add(best); return best; }
+    const v = Math.max(MAT_H + 0.06, hp.v - 0.36);
+    return { u: hp.u + side * 0.12, v, q: 0.55, smear: true };
   });
 }
 // 이 홀드로 어떤 손이, 어떤 방식으로 갈 수 있나
