@@ -258,6 +258,8 @@ body.route .hud-tech { display: none !important; }
 
 /* 스킬 할인 */
 .sale-banner { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: linear-gradient(90deg, #e3262b, #ff8a2a); color: #fff; font-size: .9rem; text-align: center; }
+.sale-banner.earn { background: linear-gradient(90deg, #1f9d55, #2fd26b); margin-top: 8px; }
+.sale-banner[hidden] { display: none; }
 .sale-tag { background: #e3262b; color: #fff; font-weight: 900; font-size: .72rem; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
 .item-head .price s { color: var(--muted); font-weight: 600; font-size: .8rem; margin-right: 2px; }
 /* 상점 탭 */
@@ -274,15 +276,16 @@ body.route .hud-tech { display: none !important; }
 /* 상황 버튼 / 세레머니 선택 */
 .item .skill-pv { display: block; width: 100%; height: 140px; border-radius: 9px; background: #25252b; margin-bottom: 8px; }
 .item .diff { color: #ffcf4a; letter-spacing: 1px; font-size: .8rem; margin-right: 4px; }
-.ctx-actions { position: absolute; left: 50%; bottom: 196px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
-.ctx-btn { background: rgba(22,22,25,.9); border-color: #ffcf4a; box-shadow: 0 0 0 3px rgba(255,207,74,.25); }
+/* 상황 버튼(어깨빵 등): 오른쪽에 작게 — 채팅창과 안 겹치게 */
+.ctx-actions { position: absolute; right: 12px; bottom: 200px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ctx-btn { background: rgba(22,22,25,.9); border-color: #ffcf4a; box-shadow: 0 0 0 2px rgba(255,207,74,.25); padding: 6px 11px; font-size: .8rem; border-radius: 999px; min-height: 0; }
 .ctx-btn[hidden] { display: none; }
 .cere-picks { position: absolute; left: 50%; bottom: 250px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px); }
 .cere-picks[hidden] { display: none; }
 .cere-pick { background: rgba(60,40,0,.92); border-color: #ffcf4a; font-size: .9rem; }
 .cere-pick kbd { margin-left: 6px; }
-body.touch .ctx-actions { bottom: 222px; }
-body.route.touch .ctx-actions { bottom: 200px; }
+body.touch .ctx-actions { bottom: 196px; }
+body.route.touch .ctx-actions { bottom: 196px; }
 body.route.touch .cere-picks { bottom: 260px; }
 body.touch .cere-picks { bottom: 280px; }
 body.route.touch .cere-picks { bottom: 252px; }

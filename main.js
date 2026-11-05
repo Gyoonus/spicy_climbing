@@ -176,6 +176,8 @@ function shoeArt(sh) {
   return url;
 }
 
+// 🎉 등반 돈벌이 ×2 행사 — 완등·ZONE 보상에 곱함 (행사 끝나면 1로)
+const EARN_EVENT = 2;
 const REWARD = [2000, 3000, 4000, 6000, 8000, 11000, 15000, 20000, 26000, 33000, 40000]; // 난이도(핑~검)별
 const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 function gear() {
@@ -2061,8 +2063,9 @@ function sendProblem(p) {
   Store.addSend(p);
   if (pl.mode === 'route') tripodShot(p);
   const first = Store.data.sends[p.id] === 1;
-  const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1);
-  setTimeout(() => addMoney(reward, first ? '첫 완등 보너스 ×2' : '완등 보상'), 1200);
+  const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1) * EARN_EVENT;
+  const tag = EARN_EVENT > 1 ? ` · 🎉 행사 ×${EARN_EVENT}` : '';
+  setTimeout(() => addMoney(reward, (first ? '첫 완등 보너스 ×2' : '완등 보상') + tag), 1200);
   Net.event('top', { pid: p.id, text: line });
   addFeed(Store.data.name, p, true);
   logChat('', '', `🔥 ${Store.data.name}님 ${problemLabel(p)} 완등!`, 'sys');
@@ -3650,6 +3653,7 @@ function updateCtxButtons() {
 function statBar(label, v) { return `<div class="stat"><span>${label}</span><i><b style="width:${Math.round(v * 100)}%"></b></i></div>`; }
 function renderShop() {
   $('#shop-wallet').textContent = won(Store.data.wallet || 0);
+  $('#earn-banner').hidden = EARN_EVENT <= 1;
   const card = (it, kind) => {
     const owned = !!Store.data.owned[it.id] || it.price === 0;
     const equipped = kind === 'shoe' ? Store.data.equip.shoe === it.id : Store.data.equip.pants === it.id;
@@ -4825,7 +4829,7 @@ function afterMove(a) {
     popText('ZONE!', me.group.position.clone().add(new V3(0, 2.2, 0)), 0.36);
     Sound.tone(740, 0.1, 'triangle', 0.08); Sound.tone(980, 0.12, 'triangle', 0.08, 0.08);
     Store.data.zones = Store.data.zones || {};
-    if (!Store.data.zones[p.id]) { Store.data.zones[p.id] = 1; Store.save(); setTimeout(() => addMoney(1000, `${p.name} 첫 ZONE`), 600); }
+    if (!Store.data.zones[p.id]) { Store.data.zones[p.id] = 1; Store.save(); setTimeout(() => addMoney(1000 * EARN_EVENT, `${p.name} 첫 ZONE${EARN_EVENT > 1 ? ` · 🎉 ×${EARN_EVENT}` : ''}`), 600); }
   }
   if (R.lh === p.top || R.rh === p.top) {
     if (R.lh !== R.rh) {
@@ -5190,6 +5194,7 @@ async function enterGym(name, color) {
 
   Net.start(name, color);
   logChat('', '', '💬 Enter(모바일은 💬)로 채팅해요. 같은 링크로 들어온 사람들과 대화할 수 있어요', 'sys');
+  if (EARN_EVENT > 1) { logChat('', '', `🎉 등반 돈벌이 ×${EARN_EVENT} 행사 중! 완등 보상이 ${EARN_EVENT}배 (첫 완등이면 ×${EARN_EVENT * 2})`, 'sys'); setTimeout(() => toast(`🎉 등반 돈벌이 ×${EARN_EVENT} 행사 중! 완등하면 ${EARN_EVENT}배로 벌어요`, 3200), 2500); }
   setTimeout(() => me.say(`안녕하세요! ${name}예요`, 2400), 600);
   setTimeout(() => npcs[0].av.say('어서 와요~ 오늘 컨디션 어때요?', 2600), 1700);
 
