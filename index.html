@@ -56,6 +56,7 @@
           </div>
         </div>
         <button class="btn btn-primary btn-lg" type="submit">암장 입장하기 🔥</button>
+        <button class="link-btn" type="button" id="btn-loadcode">💾 다른 기기 기록 불러오기 (저장 코드)</button>
       </form>
       <a class="visit-card intro-visit" href="https://naver.me/xllIiJrK" target="_blank" rel="noopener"><b>📍 진짜 스파이시클라이밍 가보기 ↗</b><span>경기 군포시 엘에스로 153-8 111호 · 네이버지도</span></a>
       <ul class="intro-keys">
@@ -210,6 +211,10 @@
       <h3 class="rec-h">문제 목록 <small>‘안내’를 누르면 시작 홀드까지 깃발이 떠요</small></h3>
       <div id="problem-list" class="problem-list"></div>
 
+      <h3 class="rec-h">💾 저장 코드 <small>로그인 없이 다른 기기로 옮기기</small></h3>
+      <p class="code-note">지갑·스킬·장비·완등 기록·꾸미기가 코드 하나에 담겨요. 다른 기기에서 붙여넣으면 그대로 이어서 해요.</p>
+      <button class="btn" type="button" id="btn-savecode">💾 저장 코드 열기</button>
+
       <h3 class="rec-h">📷 삼각대 셀프캠 앨범 <small>이번 방문에 찍은 사진 · 눌러서 저장</small></h3>
       <div class="album" id="album"></div>
 
@@ -234,15 +239,15 @@
 
   <dialog id="shop" class="records shop">
     <form method="dialog" class="records-inner">
-      <div class="rec-head"><h2>🛒 무호K 프로샵</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
+      <div class="rec-head"><h2 id="shop-title">🐯 무호K 프로샵</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
       <a class="visit-card" href="https://naver.me/xllIiJrK" target="_blank" rel="noopener">
         <b>📍 스파이시클라이밍 오프라인 방문하기 ↗</b>
         <span>경기 군포시 엘에스로 153-8 111호 · 네이버지도</span>
       </a>
       <p class="shop-wallet">💰 지갑 <b id="shop-wallet"></b> <small>게임 머니 · 완등하면 벌어요 (어려울수록, 첫 완등은 2배)</small></p>
       <div class="shop-tabs" role="tablist">
-        <button type="button" class="shop-tab" role="tab" data-tab="items" aria-selected="true">🛒 아이템 구매</button>
-        <button type="button" class="shop-tab" role="tab" data-tab="skills" aria-selected="false">🎬 스킬 배우기</button>
+        <button type="button" class="shop-tab" role="tab" data-tab="items" aria-selected="true">🐯 무호K 프로샵<small>아이템 구매</small></button>
+        <button type="button" class="shop-tab" role="tab" data-tab="skills" aria-selected="false">🤠 웨스턴 스킬샵<small>스킬 배우기</small></button>
       </div>
       <div class="shop-panel" data-panel="items" role="tabpanel">
         <h3 class="rec-h">👟 암벽화 <small>마찰 = 발에 실리는 무게 · 엣지 = 작은 발홀드 · 오버행 = 가파른 벽에서 발</small></h3>
@@ -259,6 +264,19 @@
         <div id="shop-skills" class="shop-list"></div>
       </div>
       <p class="pay-note">게임 속 구매는 가상 머니예요. ‘실제 제품 보기 ↗’는 판매 페이지로 연결되는 광고 링크예요.</p>
+    </form>
+  </dialog>
+
+  <dialog id="savecode" class="records savecode">
+    <form method="dialog" class="records-inner">
+      <div class="rec-head"><h2>💾 저장 코드</h2><button class="icon-btn" value="close" aria-label="닫기">✕</button></div>
+      <h3 class="rec-h">내 코드 <small>복사해서 메모장·카톡 나에게 보내기에 보관</small></h3>
+      <textarea id="code-out" readonly rows="4" spellcheck="false"></textarea>
+      <button class="btn btn-primary" type="button" id="code-copy">📋 코드 복사</button>
+      <h3 class="rec-h">코드 불러오기 <small>지금 이 기기 기록은 코드 내용으로 바뀌어요</small></h3>
+      <textarea id="code-in" rows="4" spellcheck="false" placeholder="SPICY-… 코드를 붙여넣어요"></textarea>
+      <button class="btn btn-primary" type="button" id="code-load">📥 불러오기</button>
+      <p class="code-msg" id="code-msg" role="status"></p>
     </form>
   </dialog>
 

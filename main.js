@@ -3692,6 +3692,49 @@ function setShopTab(tab) {
   shopTab = tab;
   document.querySelectorAll('#shop .shop-tab').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'));
   document.querySelectorAll('#shop .shop-panel').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+  $('#shop-title').textContent = tab === 'skills' ? '🤠 웨스턴 스킬샵' : '🐯 무호K 프로샵';
+}
+// ----- 💾 저장 코드 (로그인 없이 기기 옮기기) -----
+function codeHash(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36).padStart(7, '0').slice(-7); }
+function makeSaveCode() {
+  const json = JSON.stringify(Store.data);
+  const bytes = new TextEncoder().encode(json);
+  let bin = ''; bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  const body = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `SPICY-${body}.${codeHash('spicy🔥' + json)}`;
+}
+function readSaveCode(code) {
+  const m = /^SPICY-([A-Za-z0-9_-]+)\.([0-9a-z]{7})$/.exec(code.replace(/\s+/g, ''));
+  if (!m) return null;
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+    const json = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    if (codeHash('spicy🔥' + json) !== m[2]) return null;
+    const d = JSON.parse(json);
+    return d && typeof d === 'object' && !Array.isArray(d) ? d : null;
+  } catch (e) { return null; }
+}
+function openSaveCode() {
+  const d = $('#savecode');
+  $('#code-out').value = makeSaveCode(); $('#code-in').value = ''; $('#code-msg').textContent = '';
+  if (!d.open) d.showModal();
+}
+function setupSaveCode() {
+  $('#code-copy').addEventListener('click', async () => {
+    const ta = $('#code-out'); ta.select();
+    try { await navigator.clipboard.writeText(ta.value); } catch (e) { document.execCommand && document.execCommand('copy'); }
+    $('#code-msg').textContent = '📋 복사했어요! 메모장이나 카톡 나에게 보내기에 보관해요';
+  });
+  $('#code-load').addEventListener('click', () => {
+    const d = readSaveCode($('#code-in').value || '');
+    if (!d) { $('#code-msg').textContent = '❌ 코드가 맞지 않아요. 처음부터 끝까지 다 복사됐는지 확인해요'; return; }
+    const sum = `${d.name || '이름 없음'} · 지갑 ${won(d.wallet || 0)} · 완등 ${Object.keys(d.sends || {}).length}문제 · 스킬 ${Object.keys(d.skills || {}).length}개`;
+    if (!confirm(`이 기록으로 바꿀까요?\n${sum}\n\n지금 이 기기 기록은 사라져요.`)) return;
+    Store.data = { ...Store.data, ...d }; Store.save();
+    $('#code-msg').textContent = '✅ 불러왔어요! 다시 시작할게요';
+    setTimeout(() => location.reload(), 700);
+  });
 }
 function openShop(tab) { renderShop(); setShopTab(typeof tab === 'string' ? tab : shopTab); const d = $('#shop'); if (!d.open) d.showModal(); }
 let adIdx = 0, adTimer;
@@ -5066,6 +5109,8 @@ function setupIntro() {
   dotRow('#opt-pants', CLOTH, 'pants', '기본');
   const bl = $('#opt-blush'); bl.checked = !!look.blush; bl.addEventListener('change', () => { look.blush = bl.checked ? 1 : 0; rebuild(); });
   rebuild(); tick();
+  setupSaveCode();
+  $('#btn-loadcode').addEventListener('click', openSaveCode);
   const nick = $('#nickname');
   if (Store.data.name) nick.value = Store.data.name;
   $('#enter-form').addEventListener('submit', (e) => {
@@ -5093,6 +5138,7 @@ async function enterGym(name, color) {
   updateWallet();
   updateChalkBadge();
   $('#btn-shop').addEventListener('click', openShop);
+  $('#btn-savecode').addEventListener('click', openSaveCode);
   document.querySelectorAll('#shop .shop-tab').forEach((b) => b.addEventListener('click', () => { setShopTab(b.dataset.tab); $('#shop').scrollTop = 0; }));
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
   $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
