@@ -79,15 +79,17 @@ SECTORS.forEach((s) => { s.footM = s.foot ? s.foot.map(m) : null; });
 const OBSTACLES = SECTORS.filter((s) => s.footM);
 
 // [섹터, 색, 레벨, 그레이드, 위치(0~1), 다이노]
-// [섹터, 색, 위치(0~1), 다이노('dyno' | 'double'), 아이템 잠금]
-const PROBLEM_DEFS = [
-  ['s1', 'pink', 0.05], ['s1', 'green', 0.19], ['s1', 'yellow', 0.33], ['s1', 'navy', 0.49], ['s1', 'orange', 0.66, 'dyno'], ['s1', 'brown', 0.84, null, 'edge'],
-  ['s2', 'red', 0.08], ['s2', 'sky', 0.28, 'dyno'], ['s2', 'lime', 0.5, null, 'over'], ['s2', 'black', 0.74, 'double'], ['s2', 'white', 0.92],
-  ['s3', 'pink', 0.07], ['s3', 'yellow', 0.24], ['s3', 'white', 0.43, null, 'pants'], ['s3', 'brown', 0.63], ['s3', 'black', 0.85, null, 'him'],
-  ['s4', 'green', 0.04], ['s4', 'red', 0.29], ['s4', 'sky', 0.54], ['s4', 'orange', 0.78, 'dyno'],
-  ['spray', 'navy', 0.25], ['spray', 'lime', 0.72, 'dyno', 'over'],
-  ['trial', 'pink', 0.18], ['trial', 'green', 0.5], ['trial', 'yellow', 0.84],
-];
+// 섹터별 문제: [색, 다이노('dyno' 위로 | 'side' 옆으로 | 'double'), 크럭스 잠금]
+const SECTOR_PROBLEMS = {
+  s1: [['pink'], ['green'], ['yellow'], ['red'], ['navy'], ['white', 'side'], ['sky'], ['orange', 'dyno'], ['brown', null, 'edge'], ['lime']],
+  s2: [['green'], ['red'], ['navy', 'dyno'], ['sky'], ['orange', 'side'], ['lime', null, 'over'], ['black', 'double'], ['white']],
+  s3: [['pink'], ['yellow'], ['green'], ['red'], ['white', null, 'pants'], ['sky'], ['navy', 'side'], ['brown'], ['orange', 'dyno'], ['black', null, 'him']],
+  s4: [['pink'], ['green'], ['yellow'], ['red'], ['navy'], ['white'], ['sky', 'dyno'], ['orange'], ['brown', 'side']],
+  spray: [['yellow'], ['red'], ['navy', 'side'], ['lime', 'dyno', 'over']],
+  trial: [['pink'], ['green'], ['yellow']],
+};
+const PROBLEM_DEFS = [];
+Object.entries(SECTOR_PROBLEMS).forEach(([sec, list]) => list.forEach(([color, dyno, lock], i) => PROBLEM_DEFS.push([sec, color, (i + 0.5) / list.length, dyno || null, lock || null, list.length])));
 // 아이템 없이는 못 푸는 크럭스
 const LOCKS = {
   edge: { n: '엣지 좋은 암벽화 (엣지 85↑: 인싸팅트 VRS·힘 에디션)', short: '엣지 신발', test: () => gear().e >= 0.85 },
@@ -761,40 +763,58 @@ function makeHoldGeo(seed) {
 
 function buildHolds(rand) {
   // 문제 홀드
-  PROBLEM_DEFS.forEach(([secId, color, at, dyno, lockKey]) => {
+  PROBLEM_DEFS.forEach(([secId, color, at, dyno, lockKey, count]) => {
     const st = strips.find((s) => s.sec.id === secId);
     const H = st.H, topV = H - 0.32;
     const rank = GRADES.indexOf(color), level = Math.min(6, Math.round(rank * 0.62));
-    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], rank, level, grade: `Lv.${rank + 1}`, dyno: !!dyno, double: dyno === 'double', lock: lockKey ? LOCKS[lockKey] : null, holds: [] };
-    let u = at * st.L, v = 1.3;
+    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], rank, level, grade: `Lv.${rank + 1}`, dyno: !!dyno, side: dyno === 'side', double: dyno === 'double', lock: lockKey ? LOCKS[lockKey] : null, holds: [] };
+    const c = at * st.L, half = Math.min(1.05, st.L / count / 2 - 0.3);
     if (dyno === 'double') {
       // 더블다이노: 시작 → (터치 홀드, 못 잡음) → TOP. 한 번에는 절대 못 닿는 거리
-      const uu = wrapU(st, u);
+      const uu = wrapU(st, c);
       p.holds.push({ u: uu, v: 1.0, start: true, type: HT.jug });
-      p.holds.push({ u: wrapU(st, u + 0.05), v: topV - 1.6, tap: true, type: HT.sloper });
-      p.holds.push({ u: wrapU(st, u + 0.1), v: topV, top: true, dynoTarget: true, type: HT.jug });
+      p.holds.push({ u: wrapU(st, c + 0.05), v: topV - 1.6, tap: true, type: HT.sloper });
+      p.holds.push({ u: wrapU(st, c + 0.1), v: topV, top: true, dynoTarget: true, type: HT.jug });
       p.holds.forEach((h) => { h.strip = st; h.problem = p; h.hex = p.hex; h.q = h.type.q; h.size = h.top ? 0.13 : h.tap ? 0.12 : 0.1; st.holds.push(h); allHolds.push(h); });
       p.start = p.holds[0]; p.top = p.holds[p.holds.length - 1];
       st.problems.push(p); PROBLEMS.push(p);
       return;
     }
-    let stretchDone = level < 3;
-    const step = 0.58 + level * 0.07, lat = 0.18 + level * 0.04;
-    let dynoDone = !dyno, dynoTop = false;
-    p.holds.push({ u: wrapU(st, u), v, start: true });
-    for (;;) {
-      let s = step * (0.85 + rand() * 0.3);
-      let isDyno = false;
-      if (!dynoDone && topV - v >= 1.8 && topV - v <= 2.3) { dynoTop = true; break; }
-      if (!dynoDone && v > H * 0.3 && v + 2.0 < topV - 0.2) { s = 2.0; dynoDone = true; isDyno = true; }
-      let isStretch = false;
-      if (!isDyno && !stretchDone && v > 1.8 && v + 1.92 < topV - 0.2) { s = 1.92; stretchDone = true; isStretch = true; }
-      if (v + s >= topV - 0.2) break;
-      v += s;
-      if (!isDyno && !isStretch) u += (rand() - 0.5) * 2 * lat;
-      p.holds.push({ u: wrapU(st, u), v, dynoTarget: isDyno, stretch: isStretch });
+    // IFSC 스타일: 홀드 8~13개, 위·대각·트래버스 섞기
+    const v0 = 1.1, total = topV - v0;
+    let n = 8 + Math.round(rank * 0.5) + (dyno ? -1 : 0);
+    let moves, unit;
+    for (let tries = 0; tries < 20; tries++) {
+      moves = [];
+      for (let i = 0; i < n - 1; i++) {
+        const last = i === n - 2, prevT = moves[i - 1] === 'trav';
+        const r = rand();
+        moves.push(last ? (r < 0.6 ? 'up' : 'diag') : r < 0.4 ? 'up' : r < 0.75 || prevT ? 'diag' : 'trav');
+      }
+      if (dyno) { const k = 2 + Math.floor(rand() * Math.max(1, n - 4)); moves[Math.min(k, n - 3)] = dyno === 'side' ? 'sdyno' : 'udyno'; }
+      const W = { up: 1, diag: 0.65, trav: 0, sdyno: 0, udyno: 0 }, F = { trav: 0.03, sdyno: 0.15, udyno: 1.55 };
+      const fixed = moves.reduce((a, m) => a + (F[m] || 0), 0), wsum = moves.reduce((a, m) => a + W[m], 0);
+      unit = (total - fixed) / Math.max(0.5, wsum);
+      if (unit <= 0.6) break;
+      n++;
     }
-    p.holds.push({ u: wrapU(st, dynoTop ? u : u + (rand() - 0.5) * 0.3), v: topV, top: true, dynoTarget: dynoTop });
+    unit = Math.max(0.2, unit);
+    let dir = rand() < 0.5 ? -1 : 1, u = c - dir * half * 0.6, v = v0;
+    p.holds.push({ u: wrapU(st, u), v, start: true });
+    moves.forEach((mv, i) => {
+      const last = i === moves.length - 1;
+      let du = 0, dv = 0;
+      if (mv === 'up') { du = (rand() - 0.5) * 0.24; dv = unit * (0.9 + rand() * 0.2); }
+      if (mv === 'diag') { du = dir * (0.32 + rand() * 0.1); dv = unit * 0.65 * (0.9 + rand() * 0.2); }
+      if (mv === 'trav') { du = dir * (0.46 + rand() * 0.08); dv = (rand() - 0.3) * 0.08; }
+      if (mv === 'udyno') { du = (rand() - 0.5) * 0.3; dv = 1.55; }
+      if (mv === 'sdyno') { du = dir * 1.5; dv = 0.15; }
+      if (mv === 'sdyno') du = (u < c ? 1 : -1) * Math.min(1.5, half * 1.9);
+      else if (Math.abs(u + du - c) > half) { dir = -dir; du = -du; }
+      u = clamp(u + du, c - half, c + half); v = last ? topV : Math.min(topV - 0.35, v + dv);
+      p.holds.push({ u: wrapU(st, u), v, top: last, dynoTarget: mv === 'udyno' || mv === 'sdyno' });
+      if (Math.abs(u - c) > half * 0.8) dir = -Math.sign(u - c) || dir;
+    });
     p.holds.forEach((h) => {
       h.strip = st; h.problem = p; h.hex = p.hex;
       h.type = h.start ? HT.jug : h.top ? (rank >= 8 ? HT.edge : HT.jug) : pickHoldType(Math.round(rank * 0.78), rand); // 검정은 크림프·슬로퍼 투성이
@@ -803,10 +823,13 @@ function buildHolds(rand) {
       st.holds.push(h); allHolds.push(h);
     });
     p.start = p.holds[0]; p.top = p.holds[p.holds.length - 1];
+    const mids = p.holds.filter((h) => !h.start && !h.top && !h.tap);
+    p.zone = mids[Math.floor(mids.length * 0.5)];
+    if (p.zone) { p.zone.zone = true; p.zone.size = Math.max(p.zone.size, 0.11); }
     if (p.lock) {
-      // 크럭스: 위쪽 60% 지점 홀드를 나쁜 홀드로 + 잠금
-      const mid = p.holds.filter((h) => !h.start && !h.top && !h.tap);
-      const cx = mid[Math.floor(mid.length * 0.6)] || mid[mid.length - 1];
+      // 크럭스: 위쪽 70% 지점 홀드를 나쁜 홀드로 + 잠금
+      const mid = mids.filter((h) => h !== p.zone);
+      const cx = mid[Math.floor(mid.length * 0.7)] || mid[mid.length - 1];
       if (cx) { cx.lock = p.lock; cx.type = lockKey === 'edge' ? HT.crimp : lockKey === 'over' ? HT.sloper : cx.type; cx.q = cx.type.q; p.crux = cx; }
     }
     st.problems.push(p);
@@ -843,7 +866,7 @@ function buildHolds(rand) {
   });
   // S / TOP 테이프
   PROBLEMS.forEach((p) => {
-    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP']), ...(p.crux ? [[p.crux, '💪']] : [])].forEach(([h, txt]) => {
+    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP']), ...(p.zone ? [[p.zone, 'Z']] : []), ...(p.crux ? [[p.crux, '🥁']] : [])].forEach(([h, txt]) => {
       const st = p.strip;
       const [s] = segAt(st, h.u);
       const dark = DARK_TAPE.includes(p.color);
@@ -1589,6 +1612,8 @@ function setupInput() {
   $('#inst-hip').addEventListener('click', instToggleHip);
   $('#qte').addEventListener('click', () => { if (R.mash) mashTap(); else if (R.qte) qteResult(true); });
   $('#btn-up').addEventListener('click', routeAuto);
+  // 박자 게임: 화면 어디든 누르는 순간 판정 (반응 빠르게 pointerdown)
+  window.addEventListener('pointerdown', (e) => { if (R.rhythm) { rhythmTap(); e.preventDefault(); e.stopPropagation(); } }, true);
   $('#inst-flag').addEventListener('click', instFlag);
   $('#inst-auto').addEventListener('click', instToggleAuto);
   $('#inst-down').addEventListener('click', () => { if (pl.mode === 'inst') letGo('down'); });
@@ -2796,7 +2821,7 @@ function renderRecords() {
     PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.rank - b.rank).forEach((p) => {
       const row = document.createElement('div'); row.className = 'prob';
       const sent = d.sends[p.id] || 0;
-      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.lock ? `<span class="tag lock${p.lock.test() ? ' ok' : ''}">💪 크럭스 꽉잡기${p.lock.test() ? ' (장비 OK)' : ''}</span>` : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
+      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.side ? '<span class="tag">사이드 다이노</span>' : ''}${p.lock ? `<span class="tag lock${p.lock.test() ? ' ok' : ''}">🥁 박자 크럭스${p.lock.test() ? ' (장비 OK)' : ''}</span>` : ''}<span class="grade">${p.holds.length}홀드</span>${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '안내';
       b.addEventListener('click', () => { setGuide(p); $('#records').close(); toast(`${problemLabel(p)} — 깃발과 미니맵 ★을 따라가세요`, 2600); });
       row.appendChild(b);
@@ -3837,19 +3862,20 @@ function classifyRaw(h) {
   const lowHand = lh.v <= rh.v ? 'lh' : 'rh';
   const sideHand = rDu(h.u, R.body.u) < 0 ? 'lh' : 'rh';
   [lowHand, sideHand, lowHand === 'lh' ? 'rh' : 'lh'].forEach((k) => { if (!tries.includes(k)) tries.push(k); });
-  if (!h.tap) {
+  if (!h.tap && !h.dynoTarget) {
     for (const k of tries) { const b = solveBody(k === 'lh' ? h : lh, k === 'rh' ? h : rh); if (b) return { kind: 'reach', k, body: b }; }
     for (const k of tries) { const b = solveBody(k === 'lh' ? h : lh, k === 'rh' ? h : rh, DEAD_R); if (b) return { kind: 'dead', k, body: b }; }
   }
-  // 다이노: 지금 손 위로 멀리
+  // 다이노: 위로 멀리 또는 옆으로 멀리
   const top = Math.max(lh.v, rh.v);
   const dv = h.v - top, du = Math.abs(rDu(h.u, R.body.u));
-  if (dv > 0.3 && dv < 2.6 && du < 1.2) return { kind: 'dyno', k: tries[0] };
+  const dHand = Math.min(pd(h, lh), pd(h, rh));
+  if (dv > -0.35 && dHand > 0.6 && dHand < 2.6 && du < 1.9 && (dv > 0.3 || du > 0.75)) return { kind: 'dyno', k: rDu(h.u, R.body.u) < 0 ? 'lh' : 'rh' };
   return null;
 }
 
 function enterRoute(p, st) {
-  R.on = true; R.mash = null; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
+  R.on = true; R.mash = null; R.rhythm = null; R.zoneHit = false; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
   R.lh = p.start; R.rh = p.start;
   R.body = solveBody(R.lh, R.rh) || { u: p.start.u, v: Math.max(MAT_H, p.start.v - BODY.shY - 0.4) };
   [R.lf, R.rf] = pickFeet(R.body);
@@ -3860,11 +3886,11 @@ function enterRoute(p, st) {
   document.body.classList.add('route');
   refreshRings();
   routeSync(1);
-  toast(p.lock && !p.lock.test() ? `${problemLabel(p)} — 💪 크럭스는 연타로 꽉 잡아요!` : `${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2800);
+  toast(p.lock && !p.lock.test() ? `${problemLabel(p)} — 🥁 크럭스는 박자 맞춰 꽉!` : `${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2800);
 }
 function endRoute() {
   if (!R.on) return;
-  R.on = false; R.qte = null; R.gauge = null; R.mash = null;
+  R.on = false; R.qte = null; R.gauge = null; R.mash = null; R.rhythm = null; $('#rhythm').hidden = true;
   document.body.classList.remove('route');
   routeRings.forEach((r) => (r.visible = false));
   $('#qte').hidden = true; $('#gauge').hidden = true;
@@ -3904,6 +3930,7 @@ function refreshRings() {
 // 화면 탭 → 가까운 후보 홀드
 function routeTap(cx, cy) {
   if (!R.on || R.anim || R.done) return false;
+  if (R.rhythm) return true;
   if (R.mash) { mashTap(); return true; }
   if (R.qte) qteResult(false);
   if (R.gauge) { routeFireGauge(); return true; }
@@ -3952,9 +3979,70 @@ function mashFail() {
   refreshRings();
 }
 
+// 🥁 크럭스 박자 게임: 노트가 과녁에 닿는 순간 탭
+function startRhythm(c) {
+  const rank = R.p.rank;
+  const notes = 4 + Math.floor(rank / 2);           // 핑크 4 ~ 검정 9
+  const beat = 60 / (96 + rank * 7);               // 96 ~ 166 BPM
+  const pattern = [];
+  let t = 1.4;
+  for (let i = 0; i < notes; i++) { pattern.push({ time: t, j: null }); t += beat * (rank >= 6 && rand01() < 0.3 ? 0.5 : 1) * (rank >= 3 && rand01() < 0.2 ? 2 : 1); }
+  R.rhythm = { c, notes: pattern, t: 0, need: Math.ceil(notes * 0.7), hits: 0, end: t + 0.5, win: 0.13 - rank * 0.005 };
+  routeRings.forEach((r) => (r.visible = false));
+  const box = $('#rhythm'); box.hidden = false;
+  const lane = $('#r-notes'); lane.innerHTML = '';
+  pattern.forEach((nt) => { const d = document.createElement('i'); lane.appendChild(d); nt.el = d; });
+  $('#r-label').textContent = `🥁 박자 맞춰 꽉! 0/${R.rhythm.need}`;
+  $('#r-judge').textContent = '';
+  popText('박자!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.34);
+  if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['박자 맞춰서 꽉~ 🐯', '리듬 타요 리듬! …응원한 거 아님 🐯']), 2600), 400);
+}
+function rand01() { return Math.random(); }
+function rhythmTap() {
+  const r = R.rhythm; if (!r) return;
+  let best = null, bd = Infinity;
+  r.notes.forEach((nt) => { if (nt.j) return; const d = Math.abs(nt.time - r.t); if (d < bd) { bd = d; best = nt; } });
+  if (!best || bd > 0.35) return;
+  const jd = $('#r-judge');
+  if (bd <= r.win * 0.45) { best.j = 'p'; r.hits++; jd.textContent = 'PERFECT'; jd.className = 'r-judge p'; Sound.tone(880, 0.06, 'triangle', 0.07); }
+  else if (bd <= r.win) { best.j = 'g'; r.hits++; jd.textContent = 'GOOD'; jd.className = 'r-judge g'; Sound.tone(660, 0.06, 'triangle', 0.06); }
+  else { best.j = 'm'; jd.textContent = 'MISS'; jd.className = 'r-judge m'; Sound.tone(180, 0.08, 'square', 0.05); }
+  best.el.className = best.j;
+  me.squash();
+  $('#r-label').textContent = `🥁 박자 맞춰 꽉! ${r.hits}/${r.need}`;
+}
+function updateRhythm(dt) {
+  const r = R.rhythm; if (!r) return;
+  r.t += dt; pl.pump += dt * 1.2;
+  const pxPerSec = 34; // % per second
+  r.notes.forEach((nt) => {
+    if (!nt.j && r.t - nt.time > r.win) { nt.j = 'm'; nt.el.className = 'm'; const jd = $('#r-judge'); jd.textContent = 'MISS'; jd.className = 'r-judge m'; }
+    nt.el.style.left = (14 + (nt.time - r.t) * pxPerSec) + '%';
+    nt.el.style.opacity = nt.j && nt.j !== 'm' ? 0 : nt.time - r.t > 2.6 ? 0 : 1;
+  });
+  // 메트로놈 (소리 켰을 때)
+  r.notes.forEach((nt) => { if (!nt.tick && r.t >= nt.time) { nt.tick = true; Sound.tone(1200, 0.02, 'square', 0.02); } });
+  if (r.t >= r.end || r.hits >= r.need && r.notes.every((nt) => nt.j)) finishRhythm();
+}
+function finishRhythm() {
+  const r = R.rhythm; R.rhythm = null; $('#rhythm').hidden = true;
+  const head = me.group.position.clone().add(new V3(0, 2.0, 0));
+  if (r.hits >= r.need) {
+    popText(r.notes.every((nt) => nt.j === 'p') ? 'ALL PERFECT!!' : '버텼다!!', head, 0.34);
+    pl.pump += 4; westPraise('tech', 700);
+    routeMove({ ...r.c, kind: r.c.raw || 'dead' });
+  } else {
+    popText('미끄덩!', head, 0.32); Sound.tone(160, 0.2, 'square', 0.06);
+    pl.pump += 16;
+    toast(`🥁 ${r.hits}/${r.need} — 박자 다시! (${r.c.h.lock.short} 있으면 그냥 잡혀요)`, 2600);
+    refreshRings();
+  }
+}
+
 // ⬆️ 버튼: 제일 높이 갈 수 있는 홀드로 (닿는 것 우선, 없으면 데드포인트, 그다음 다이노)
 function routeAuto() {
   if (!R.on || R.anim || R.done) return;
+  if (R.rhythm) return;
   if (R.mash) { mashTap(); return; }
   if (R.gauge) { routeFireGauge(); return; }
   if (R.qte) return;
@@ -3964,7 +4052,7 @@ function routeAuto() {
   if (best) routeMove(best); else toast('갈 수 있는 홀드가 없어요', 1400);
 }
 function routeMove(c) {
-  if (c.kind === 'locked') { startMash(c); return; }
+  if (c.kind === 'locked') { startRhythm(c); return; }
   if (c.kind === 'dyno') { routeStartGauge(c); return; }
   const prev = routeSnapshot();
   if (c.k === 'lh') R.lh = c.h; else R.rh = c.h;
@@ -3973,7 +4061,7 @@ function routeMove(c) {
   R.anim = { t: 0, dur: c.kind === 'dead' ? 0.85 : 1.0, from: prev, to: routeSnapshot(), k: c.k, kind: c.kind };
   me.tech = null; me.footless = false; R.hipIn = false;
   const g = gear();
-  const add = (1.2 + R.p.level * 0.5) / Math.pow(c.h.q, 0.7) * (c.kind === 'dead' ? 1.6 : 1) * (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
+  const add = (1.2 + R.p.level * 0.5) / Math.pow(c.h.q, 0.7) * (c.kind === 'dead' ? 1.6 : 1) * (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul * (6 / Math.max(6, R.p.holds.length)) * 0.75; // 홀드가 많을수록 무브당 펌핑은 작게
   pl.pump += add;
   routeRings.forEach((r) => (r.visible = false));
   if (c.kind === 'dead') { popText('데드포인트!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.26); Sound.tone(420, 0.12, 'triangle', 0.08, 0, 200); }
@@ -3995,7 +4083,7 @@ function routeStep(dt) {
   if (!R.done) {
     const ang = R.st.sec.angle || 0, g = gear();
     const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0) - (R.slipT > 0 ? 2 : 0);
-    let rate = (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
+    let rate = 0.6 * (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
     rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
     if (me.tech === 'flag') rate *= 0.7;
     const restful = R.lh.q >= 1 && R.rh.q >= 1 && feet >= 2 && !R.anim;
@@ -4003,6 +4091,7 @@ function routeStep(dt) {
     if (R.slipT > 0) { R.slipT -= dt; if (R.slipT <= 0) { me.footless = false; [R.lf, R.rf] = pickFeet(R.body); R.cur = routeSnapshot(); } }
   }
   if (pl.pump >= 100 && !R.done) { toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return; }
+  updateRhythm(dt);
   if (R.mash) {
     R.mash.t -= dt; pl.pump += dt * 4;
     $('#qte').style.setProperty('--t', clamp(R.mash.t / R.mash.max, 0, 1).toFixed(3));
@@ -4070,6 +4159,13 @@ function routeSync(dt) {
 // 무브가 끝나면: 완등? 아니면 상황에 따라 버튼 이벤트
 function afterMove(a) {
   const p = R.p;
+  if (p.zone && !R.zoneHit && (R.lh === p.zone || R.rh === p.zone)) {
+    R.zoneHit = true;
+    popText('ZONE!', me.group.position.clone().add(new V3(0, 2.2, 0)), 0.36);
+    Sound.tone(740, 0.1, 'triangle', 0.08); Sound.tone(980, 0.12, 'triangle', 0.08, 0.08);
+    Store.data.zones = Store.data.zones || {};
+    if (!Store.data.zones[p.id]) { Store.data.zones[p.id] = 1; Store.save(); setTimeout(() => addMoney(1000, `${p.name} 첫 ZONE`), 600); }
+  }
   if (R.lh === p.top || R.rh === p.top) {
     if (R.lh !== R.rh) {
       // 다른 손도 TOP으로 매칭
@@ -4135,7 +4231,7 @@ function qteResult(ok) {
   }
 }
 function routeKey(code) {
-  if (code === 'Space') { if (R.mash) mashTap(); else if (R.gauge) routeFireGauge(); return true; }
+  if (code === 'Space') { if (R.rhythm) rhythmTap(); else if (R.mash) mashTap(); else if (R.gauge) routeFireGauge(); return true; }
   if (code === 'KeyE') { grabToggle(); return true; }
   if (code === 'KeyW' || code === 'ArrowUp') { routeAuto(); return true; }
   const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
@@ -4146,9 +4242,9 @@ function routeKey(code) {
 function routeStartGauge(c) {
   const from = R.lh.v >= R.rh.v ? R.lh : R.rh;
   const q = Math.min(from.q, c.h.q);
-  const dv = c.h.v - Math.max(R.lh.v, R.rh.v);
+  const dist = Math.min(pd(c.h, R.lh), pd(c.h, R.rh));
   const dif = R.p.rank / 10; // 0(핑크) ~ 1(검정)
-  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.9 + (1 - q) * 0.6 + dif * 0.7, center: clamp(0.2 + dv / 2.6 * 0.65, 0.15, 0.88), width: (0.12 + 0.26 * q) * (1 - 0.5 * dif) * (0.85 + 0.25 * gear().f) };
+  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.9 + (1 - q) * 0.6 + dif * 0.7, center: clamp(0.2 + dist / 2.6 * 0.65, 0.15, 0.88), width: (0.12 + 0.26 * q) * (1 - 0.5 * dif) * (0.85 + 0.25 * gear().f) };
   routeRings.forEach((r) => (r.visible = false));
   toast('다이노! 초록 칸에서 탭 / Space', 1500);
 }
@@ -4403,7 +4499,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { vil, R, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { vil, R, rhythmTap, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
