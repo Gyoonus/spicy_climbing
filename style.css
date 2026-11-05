@@ -324,6 +324,8 @@ body.touch .prompt { bottom: 175px; }
 .feed li.empty { color: var(--muted); }
 .manners { margin: 0; padding-left: 18px; color: #d8d3cd; font-size: .84rem; line-height: 1.75; }
 .manners b { color: #fff; }
+.prob .tag.lock { color: #ff8aa0; border-color: rgba(255,45,85,.5); }
+.prob .tag.lock.ok { color: #8be0a8; border-color: rgba(47,210,107,.5); }
 .records-summary { color: var(--muted); margin: 16px 0 0; font-size: .85rem; }
 .records-actions { display: flex; justify-content: space-between; margin-top: 14px; gap: 8px; }
 

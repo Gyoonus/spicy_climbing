@@ -51,8 +51,12 @@ const WALL_H = 7.2;
 const HOLD_COLORS = {
   yellow: '#f6c915', green: '#3fae5a', blue: '#2f6fd6', red: '#e3262b', purple: '#7b3fb8',
   black: '#2a2a2d', pink: '#ff7aa8', white: '#f2f2f2', orange: '#ff8a1f',
+  navy: '#1f2f78', sky: '#6cc6f2', brown: '#7a4a24', lime: '#a6e23f',
 };
-const COLOR_NAMES = { yellow: '노랑', green: '초록', blue: '파랑', red: '빨강', purple: '보라', black: '검정', pink: '핑크', white: '흰색', orange: '주황' };
+// 스파이시 난이도: 핑 < 초 < 노 < 빨 < 남 < 흰 < 하 < 주 < 갈 < 연두 < 검
+const GRADES = ['pink', 'green', 'yellow', 'red', 'navy', 'white', 'sky', 'orange', 'brown', 'lime', 'black'];
+const DARK_TAPE = ['black', 'purple', 'blue', 'red', 'navy', 'brown'];
+const COLOR_NAMES = { yellow: '노랑', green: '초록', blue: '파랑', red: '빨강', purple: '보라', black: '검정', pink: '핑크', white: '흰색', orange: '주황', navy: '남색', sky: '하늘', brown: '갈색', lime: '연두' };
 
 const SECTORS = [
   { id: 's1', label: '1', name: '1번 섹터', color: '#d4a73a', H: 5.0, lean: 0.6, angle: 20,
@@ -75,14 +79,22 @@ SECTORS.forEach((s) => { s.footM = s.foot ? s.foot.map(m) : null; });
 const OBSTACLES = SECTORS.filter((s) => s.footM);
 
 // [섹터, 색, 레벨, 그레이드, 위치(0~1), 다이노]
+// [섹터, 색, 위치(0~1), 다이노('dyno' | 'double'), 아이템 잠금]
 const PROBLEM_DEFS = [
-  ['s1', 'yellow', 0, 'V0', 0.08], ['s1', 'green', 1, 'V1', 0.3], ['s1', 'blue', 2, 'V2', 0.62], ['s1', 'purple', 5, 'V5', 0.88, true],
-  ['s2', 'blue', 2, 'V2', 0.16], ['s2', 'red', 4, 'V4', 0.5, true], ['s2', 'black', 6, 'V6', 0.84, 'double'],
-  ['s3', 'yellow', 0, 'V0', 0.14], ['s3', 'green', 1, 'V1', 0.45], ['s3', 'red', 3, 'V3', 0.78],
-  ['s4', 'yellow', 0, 'V0', 0.06], ['s4', 'blue', 2, 'V2', 0.4], ['s4', 'purple', 5, 'V5', 0.74, true],
-  ['spray', 'pink', 3, 'V3', 0.28], ['spray', 'white', 5, 'V5', 0.74, true],
-  ['trial', 'orange', 0, 'VB', 0.28], ['trial', 'green', 1, 'V1', 0.76],
+  ['s1', 'pink', 0.05], ['s1', 'green', 0.19], ['s1', 'yellow', 0.33], ['s1', 'navy', 0.49], ['s1', 'orange', 0.66, 'dyno'], ['s1', 'brown', 0.84, null, 'edge'],
+  ['s2', 'red', 0.08], ['s2', 'sky', 0.28, 'dyno'], ['s2', 'lime', 0.5, null, 'over'], ['s2', 'black', 0.74, 'double'], ['s2', 'white', 0.92],
+  ['s3', 'pink', 0.07], ['s3', 'yellow', 0.24], ['s3', 'white', 0.43, null, 'pants'], ['s3', 'brown', 0.63], ['s3', 'black', 0.85, null, 'him'],
+  ['s4', 'green', 0.04], ['s4', 'red', 0.29], ['s4', 'sky', 0.54], ['s4', 'orange', 0.78, 'dyno'],
+  ['spray', 'navy', 0.25], ['spray', 'lime', 0.72, 'dyno', 'over'],
+  ['trial', 'pink', 0.18], ['trial', 'green', 0.5], ['trial', 'yellow', 0.84],
 ];
+// 아이템 없이는 못 푸는 크럭스
+const LOCKS = {
+  edge: { n: '엣지 좋은 암벽화 (엣지 85↑: 인싸팅트 VRS·힘 에디션)', short: '엣지 신발', test: () => gear().e >= 0.85 },
+  over: { n: '오버행 암벽화 (오버행 80↑: 솔루숀 콤프·드라군·힘 에디션)', short: '오버행 신발', test: () => gear().h >= 0.8 },
+  pants: { n: '바이트 클라이밍 팬츠 (하이스텝)', short: '바이트 팬츠', test: () => Store.data.equip.pants === 'bite' },
+  him: { n: '힘 에디션', short: '힘 에디션', test: () => Store.data.equip.shoe === 'him' },
+};
 
 const REACH = 0.85;   // 손이 닿는 거리 (m)
 // 홀드 종류: 나쁠수록(q↓) 펌핑이 빨리 차고, 다이노 게이지 초록 칸이 좁아짐
@@ -152,7 +164,7 @@ function shoeArt(sh) {
   return url;
 }
 
-const REWARD = [3000, 5000, 8000, 12000, 18000, 25000, 35000];
+const REWARD = [2000, 3000, 4000, 6000, 8000, 11000, 15000, 20000, 26000, 33000, 40000]; // 난이도(핑~검)별
 const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 function gear() {
   const sh = SHOES.find((x) => x.id === Store.data.equip.shoe) || SHOES[0];
@@ -749,10 +761,11 @@ function makeHoldGeo(seed) {
 
 function buildHolds(rand) {
   // 문제 홀드
-  PROBLEM_DEFS.forEach(([secId, color, level, grade, at, dyno]) => {
+  PROBLEM_DEFS.forEach(([secId, color, at, dyno, lockKey]) => {
     const st = strips.find((s) => s.sec.id === secId);
     const H = st.H, topV = H - 0.32;
-    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], level, grade, dyno: !!dyno, double: dyno === 'double', holds: [] };
+    const rank = GRADES.indexOf(color), level = Math.min(6, Math.round(rank * 0.62));
+    const p = { id: `${secId}-${color}`, strip: st, sector: st.sec, color, hex: HOLD_COLORS[color], name: COLOR_NAMES[color], rank, level, grade: `Lv.${rank + 1}`, dyno: !!dyno, double: dyno === 'double', lock: lockKey ? LOCKS[lockKey] : null, holds: [] };
     let u = at * st.L, v = 1.3;
     if (dyno === 'double') {
       // 더블다이노: 시작 → (터치 홀드, 못 잡음) → TOP. 한 번에는 절대 못 닿는 거리
@@ -790,6 +803,12 @@ function buildHolds(rand) {
       st.holds.push(h); allHolds.push(h);
     });
     p.start = p.holds[0]; p.top = p.holds[p.holds.length - 1];
+    if (p.lock) {
+      // 크럭스: 위쪽 60% 지점 홀드를 나쁜 홀드로 + 잠금
+      const mid = p.holds.filter((h) => !h.start && !h.top && !h.tap);
+      const cx = mid[Math.floor(mid.length * 0.6)] || mid[mid.length - 1];
+      if (cx) { cx.lock = p.lock; cx.type = lockKey === 'edge' ? HT.crimp : lockKey === 'over' ? HT.sloper : cx.type; cx.q = cx.type.q; p.crux = cx; }
+    }
     st.problems.push(p);
     PROBLEMS.push(p);
   });
@@ -824,10 +843,10 @@ function buildHolds(rand) {
   });
   // S / TOP 테이프
   PROBLEMS.forEach((p) => {
-    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP'])].forEach(([h, txt]) => {
+    [[p.start, 'S'], [p.top, 'TOP'], ...p.holds.filter((h) => h.tap).map((h) => [h, 'TAP']), ...(p.crux ? [[p.crux, '🔒']] : [])].forEach(([h, txt]) => {
       const st = p.strip;
       const [s] = segAt(st, h.u);
-      const dark = ['black', 'purple', 'blue', 'red'].includes(p.color);
+      const dark = DARK_TAPE.includes(p.color);
       const tex = canvasTex(128, 64, (g) => {
         g.fillStyle = p.hex; g.fillRect(0, 0, 128, 64);
         g.fillStyle = dark ? '#fff' : '#111'; g.font = '900 38px "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -1977,7 +1996,7 @@ function sendProblem(p) {
   fireConfetti(surf(p.strip, p.top.u, p.top.v), 36);
   Store.addSend(p);
   const first = Store.data.sends[p.id] === 1;
-  const reward = (REWARD[p.level] || 3000) * (first ? 2 : 1);
+  const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1);
   setTimeout(() => addMoney(reward, first ? '첫 완등 보너스 ×2' : '완등 보상'), 1200);
   if (first && Math.random() < 0.6) setTimeout(() => showAd(Math.random() < 0.7 ? 0 : 1, '완등 축하! '), 9000);
   Net.event('top', { pid: p.id, text: line });
@@ -1993,7 +2012,7 @@ function sendProblem(p) {
   }
   npcs.forEach((n, k) => { if (n.state === 'idle') setTimeout(() => n.av.say(pick(LINES.cheer)), 300 + k * 450); });
   const firstSend = Store.data.sends[p.id] === 1;
-  if ((firstSend ? westCanShoot() : p.level >= 4 && westCanShoot(0.5))) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
+  if ((firstSend ? westCanShoot() : p.rank >= 6 && westCanShoot(0.5))) { pl.topHoldMax = 5.5; westPhoto(me, `${Store.data.name} — ${problemLabel(p)} 완등!`, segAt(p.strip, pl.u)[0].n3); }
   else { pl.topHoldMax = 3; westPraise('top', 600); }
   if (staff.av && staff.av.group.position.distanceTo(me.group.position) < 14 && staffMayNag(0.2)) setTimeout(() => staffSay(pick(STAFF_LINES.praise), 2600), 3500);
   checkFestival();
@@ -2774,10 +2793,10 @@ function renderRecords() {
   SECTORS.forEach((sec) => {
     const grp = document.createElement('div'); grp.className = 'sector-group';
     grp.innerHTML = `<h4><i style="background:${sec.color}"></i>${sec.name}</h4>`;
-    PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.level - b.level).forEach((p) => {
+    PROBLEMS.filter((p) => p.sector === sec).sort((a, b) => a.rank - b.rank).forEach((p) => {
       const row = document.createElement('div'); row.className = 'prob';
       const sent = d.sends[p.id] || 0;
-      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
+      row.innerHTML = `<span class="dot" style="background:${p.hex}"></span>${p.name} <span class="grade">${p.grade}</span>${p.double ? '<span class="tag">더블다이노</span>' : p.dyno ? '<span class="tag">다이노</span>' : ''}${p.lock ? `<span class="tag lock${p.lock.test() ? ' ok' : ''}">${p.lock.test() ? '🔓' : '🔒'} ${p.lock.short}</span>` : ''}${p.holds.some((h) => h.stretch) ? '<span class="tag">기술</span>' : ''}${(d.campus || {})[p.id] ? '<span class="tag">🦍</span>' : ''}<span class="count">${sent ? '✔ ' + sent : ''}</span>`;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '안내';
       b.addEventListener('click', () => { setGuide(p); $('#records').close(); toast(`${problemLabel(p)} — 깃발과 미니맵 ★을 따라가세요`, 2600); });
       row.appendChild(b);
@@ -3603,7 +3622,7 @@ function renderInst(dt) {
       const txt = o.h === inst.p.start ? 'S' : o.h.tap ? 'TAP' : 'TOP';
       const tw = g.measureText(txt).width + 10;
       g.fillRect(sx - r - tw - 4, sy - 9, tw, 18);
-      g.fillStyle = ['black', 'purple', 'blue', 'red'].includes(inst.p.color) ? '#fff' : '#111';
+      g.fillStyle = DARK_TAPE.includes(inst.p.color) ? '#fff' : '#111';
       g.fillText(txt, sx - r - tw + 1, sy + 5);
     }
   });
@@ -3756,6 +3775,7 @@ const ringMat = {
   reach: new THREE.MeshBasicMaterial({ color: '#2fd26b', transparent: true, opacity: 0.95, depthTest: false }),
   dead: new THREE.MeshBasicMaterial({ color: '#ffcf4a', transparent: true, opacity: 0.95, depthTest: false }),
   dyno: new THREE.MeshBasicMaterial({ color: '#ff8a1f', transparent: true, opacity: 0.95, depthTest: false }),
+  locked: new THREE.MeshBasicMaterial({ color: '#ff2d55', transparent: true, opacity: 0.95, depthTest: false }),
 };
 const ringGeo = new THREE.TorusGeometry(0.17, 0.022, 8, 28);
 const routeRings = [];
@@ -3802,6 +3822,17 @@ function pickFeet(body) {
 function classify(h) {
   const { lh, rh } = R;
   if (h === lh || h === rh) return null;
+  const cx = R.p.crux;
+  if (cx && cx.lock && !cx.lock.test()) {
+    const top = Math.max(lh.v, rh.v);
+    // 잠긴 크럭스를 건너뛰는 다이노도 막음
+    if (h !== cx && h.v > cx.v + 0.05 && top < cx.v - 0.05) return null;
+    if (h === cx) { const r = classifyRaw(h); return r ? { ...r, kind: 'locked' } : null; }
+  }
+  return classifyRaw(h);
+}
+function classifyRaw(h) {
+  const { lh, rh } = R;
   const tries = [];
   const lowHand = lh.v <= rh.v ? 'lh' : 'rh';
   const sideHand = rDu(h.u, R.body.u) < 0 ? 'lh' : 'rh';
@@ -3829,7 +3860,7 @@ function enterRoute(p, st) {
   document.body.classList.add('route');
   refreshRings();
   routeSync(1);
-  toast(`${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2600);
+  toast(p.lock && !p.lock.test() ? `${problemLabel(p)} — 🔒 크럭스에 ${p.lock.short} 필요!` : `${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2800);
 }
 function endRoute() {
   if (!R.on) return;
@@ -3894,10 +3925,17 @@ function routeAuto() {
   if (R.qte) return;
   const c = R.cands || [];
   const pickBest = (kind) => c.filter((x) => x.kind === kind).sort((a, b) => b.h.v - a.h.v)[0];
-  const best = pickBest('reach') || pickBest('dead') || pickBest('dyno');
+  const best = pickBest('reach') || pickBest('dead') || pickBest('dyno') || pickBest('locked');
   if (best) routeMove(best); else toast('갈 수 있는 홀드가 없어요', 1400);
 }
 function routeMove(c) {
+  if (c.kind === 'locked') {
+    popText('🔒', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.4);
+    toast(`🔒 이 크럭스는 ${c.h.lock.n} 없이는 못 잡아요 — 프로샵에서!`, 3200);
+    Sound.tone(160, 0.2, 'square', 0.06);
+    if (staffMayNag(0.5)) setTimeout(() => staffSay(`그건 ${c.h.lock.short} 있어야 돼요… 프로샵 있어요. 그냥 알려주는 거예요 🐯`, 3200), 900);
+    return;
+  }
   if (c.kind === 'dyno') { routeStartGauge(c); return; }
   const prev = routeSnapshot();
   if (c.k === 'lh') R.lh = c.h; else R.rh = c.h;
