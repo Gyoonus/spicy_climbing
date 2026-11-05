@@ -152,6 +152,8 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .hud-btn.big { isolation: isolate; }
 .hud-btn.big::before { z-index: -1; }
 .hud-btn:active { transform: scale(.94); }
+.hud-btn .badge { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #fff; color: #111; font: 900 .72rem/22px "Noto Sans KR", sans-serif; }
+.hud-btn .badge.empty { background: #ff5c5c; color: #fff; }
 .hud-btn:disabled { opacity: .4; }
 .hud-btn.ready { border-color: var(--red); box-shadow: 0 0 0 3px rgba(227,38,43,.3); }
 

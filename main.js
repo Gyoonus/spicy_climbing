@@ -130,6 +130,16 @@ const SHOES = [
 const PANTS = [
   { id: 'bite', n: '바이트 클라이밍 팬츠', price: 89000, c: '#5b6b4c', d: '다리가 쭉쭉 — 발 닿는 거리 +8cm, 펌핑 −5%', ad: true, url: 'https://m.smartstore.naver.com/biteclimbing/products/12881990606' },
 ];
+const CHALKS = [
+  { id: 'powder', n: '가루 초크', price: 3000, uses: 10, c: '#f4f1ea', d: '기본 중의 기본. 10회분 (펌핑 −18)' },
+  { id: 'ball', n: '초크볼', price: 5000, uses: 20, c: '#e9e4d8', d: '덜 날리는 망사 초크볼. 20회분 (펌핑 −18)' },
+  { id: 'liquid', n: '리퀴드 초크', price: 8000, uses: 10, c: '#d8f0ff', d: '손에 착 붙어서 오래가요. 10회분 (펌핑 −28, 먼저 사용)' },
+];
+function chalkLeft() { return (Store.data.chalk || 0) + (Store.data.liquid || 0); }
+function updateChalkBadge() {
+  const b = $('#chalk-count'); if (!b) return;
+  const n = chalkLeft(); b.textContent = n; b.classList.toggle('empty', n <= 0);
+}
 const ADS = [
   { title: '🔥 힘 에디션 151,000원', copy: '스파이시 최강 암벽화. 마찰·엣지·오버행 전부 MAX — 이거 신으면 V6도 V3 느낌', url: SHOES.find((x) => x.id === 'him').url, item: 'him' },
   { title: '👖 바이트 클라이밍 팬츠', copy: '하이스텝 할 때 안 끼는 팬츠. 다리가 쭉쭉 올라가요', url: PANTS[0].url, item: 'bite' },
@@ -319,7 +329,7 @@ const Music = {
 // =================================================================
 const Store = {
   key: 'spicy-climbing-3d-v1',
-  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5, wallet: 100000, owned: { rental: true }, equip: { shoe: 'rental', pants: '' } },
+  data: { name: '', color: '#e3262b', sends: {}, recent: [], festival: 0, helpSeen: false, manner: 36.5, wallet: 100000, owned: { rental: true }, equip: { shoe: 'rental', pants: '' }, chalk: 5, liquid: 0 },
   load() {
     try {
       const raw = localStorage.getItem(this.key);
@@ -1995,14 +2005,24 @@ function jumpRelease(cancel) {
 }
 function useChalk() {
   if (!pl.chalkReady) return;
+  if (chalkLeft() <= 0) {
+    if (Store.data.chalkGift !== todayStr()) {
+      Store.data.chalkGift = todayStr(); Store.data.chalk = 3; Store.save(); updateChalkBadge();
+      staffSay('…초크 없어요? 제 거 조금 쓰세요. 오늘만이에요 🐯', 3000);
+    } else { toast('🤍 초크가 다 떨어졌어요 — 💰 프로샵에서 사요', 2200); if (pl.mode === 'walk') setTimeout(openShop, 600); return; }
+  }
+  const liquid = (Store.data.liquid || 0) > 0;
+  if (liquid) Store.data.liquid--; else Store.data.chalk--;
+  Store.save(); updateChalkBadge();
   pl.chalkReady = false;
   $('#btn-chalk').disabled = true;
   Sound.chalk();
   me.chalk();
   Net.event('chalk');
   onChalkUsed();
-  pl.pump = Math.max(0, pl.pump - 18);
-  if (pl.mode === 'climb') me.say(pick(['슥슥', '후~ 초크 충전']), 1000);
+  pl.pump = Math.max(0, pl.pump - (liquid ? 28 : 18));
+  if (liquid) popText('리퀴드!', me.group.position.clone().add(new V3(0, 1.9, 0)), 0.24);
+  if (pl.mode === 'climb' || pl.mode === 'route') me.say(pick(['슥슥', '후~ 초크 충전']), 1000);
   else setTimeout(() => me.say(pick(['쫙쫙 팡팡!', '가루 날린다~ 💨', '초크 풀충전!']), 1400), 1150);
   setTimeout(() => { pl.chalkReady = true; $('#btn-chalk').disabled = false; }, 3500);
 }
@@ -2688,7 +2708,7 @@ function updateVillain(now) {
   const line = pick(VILLAIN_LINES[v]);
   me.say(line, 2600);
   Net.event('vsay', { text: line });
-  if (v === 'chalk' && pl.chalkReady) useChalk();
+  if (v === 'chalk' && pl.chalkReady && chalkLeft() > 0) useChalk();
   if (v === 'mat' && !pl.sitting && groundY(pl.pos.x, pl.pos.z) > 0) toggleSit();
   const near = npcs.filter((n) => n.state === 'idle' && n.av.group.position.distanceTo(me.group.position) < 7);
   if (near.length) setTimeout(() => pick(near).av.say(pick(VILLAIN_REACT[v]), 2400), 1400);
@@ -3137,6 +3157,22 @@ function renderShop() {
   const ss = $('#shop-shoes'); ss.innerHTML = ''; SHOES.forEach((it) => ss.appendChild(card(it, 'shoe')));
   ss.querySelectorAll('img[data-fallback]').forEach((im) => { im.onerror = () => { im.onerror = null; im.src = im.dataset.fallback; im.parentElement.classList.remove('photo'); }; });
   const pp = $('#shop-pants'); pp.innerHTML = ''; PANTS.forEach((it) => pp.appendChild(card(it, 'pants')));
+  const cc = $('#shop-chalk'); cc.innerHTML = '';
+  $('#chalk-have').textContent = `가루 ${Store.data.chalk || 0}회 · 리퀴드 ${Store.data.liquid || 0}회 남음`;
+  CHALKS.forEach((it) => {
+    const el = document.createElement('div'); el.className = 'item';
+    el.innerHTML = `<div class="item-head"><span class="swatch-dot" style="background:${it.c}"></span><b>${it.n}</b><span class="price">${won(it.price)}</span></div><p>${it.d}</p>`;
+    const act = document.createElement('div'); act.className = 'item-act';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = `${won(it.price)}에 사기 (+${it.uses}회)`;
+    b.addEventListener('click', () => {
+      if ((Store.data.wallet || 0) < it.price) { toast(`돈이 ${won(it.price - (Store.data.wallet || 0))} 모자라요 — 완등해서 벌어요!`, 2200); return; }
+      addMoney(-it.price, `${it.n} 구매`);
+      if (it.id === 'liquid') Store.data.liquid = (Store.data.liquid || 0) + it.uses; else Store.data.chalk = (Store.data.chalk || 0) + it.uses;
+      Store.save(); updateChalkBadge(); Sound.tone(1400, 0.05, 'square', 0.05);
+      renderShop();
+    });
+    act.appendChild(b); el.appendChild(act); cc.appendChild(el);
+  });
 }
 function buyOrEquip(it, kind) {
   const owned = !!Store.data.owned[it.id] || it.price === 0;
@@ -4488,6 +4524,7 @@ async function enterGym(name, color) {
   makeWest();
   me.setOutfit(Store.data.equip.shoe, Store.data.equip.pants);
   updateWallet();
+  updateChalkBadge();
   $('#btn-shop').addEventListener('click', openShop);
   $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
   $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
