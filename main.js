@@ -2313,6 +2313,17 @@ function npcUpdate(n, dt, now) {
       g.position.y = lerp(g.position.y, groundY(g.position.x, g.position.z), damp(14, dt));
       g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(dx, dz), damp(10, dt));
     }
+  } else if (n.state === 'summon') {
+    const tgt = n.path[0];
+    if (!tgt) { n.state = 'idle'; n.next = now + 15000; const f = n.onArrive; n.onArrive = null; if (f) f(); return; }
+    const dx = tgt[0] - g.position.x, dz = tgt[1] - g.position.z, d = Math.hypot(dx, dz);
+    if (d < 0.1) n.path.shift();
+    else {
+      const sp = Math.min(d, 5 * dt);
+      g.position.x += (dx / d) * sp; g.position.z += (dz / d) * sp;
+      g.position.y = lerp(g.position.y, groundY(g.position.x, g.position.z), damp(14, dt));
+      g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(dx, dz), damp(10, dt));
+    }
   } else if (n.state === 'climb') {
     const p = n.problem, st = p.strip;
     n.holdT += dt;
@@ -2388,13 +2399,48 @@ function npcTargets() {
   if (west.av) list.push({ key: 'west', av: west.av, name: '웨스트' });
   return list.filter((t) => t.key);
 }
+// 이름 부르기: 띄어쓰기·호칭(쌤/님/씨/아/야) 상관없이
+const NPC_ALIASES = {
+  muho: ['무호', '호랑이', '호랑', '무호k', '무호케이', 'muho'],
+  west: ['웨스트', '카우보이', 'west'],
+  habanero: ['하바네로', '하바'],
+  cheongyang: ['청양이', '청양'],
+  tteokbokki: ['떡볶이', '떡볶', '떡뽁이', '떡보끼'],
+};
 function pickTalkTarget(text) {
   const all = npcTargets();
-  const byName = all.find((t) => text.includes(t.name.replace('K', '')) || (t.key === 'muho' && /무호|호랑/.test(text)) || (t.key === 'west' && /웨스트|카우보이/.test(text)));
-  if (byName) return byName;
+  const norm = text.replace(/\s+/g, '').toLowerCase();
+  const byName = all.find((t) => (NPC_ALIASES[t.key] || []).some((a) => norm.includes(a)));
+  if (byName) return { ...byName, called: true };
   const pos = me.group.position;
   const near = all.map((t) => ({ t, d: t.av.group.position.distanceTo(pos) })).filter((x) => x.d < 4.5).sort((a, b) => a.d - b.d)[0];
   return near ? near.t : null;
+}
+// 불리면 달려와서 내 앞에 섬
+function summonTo(t) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (done) return; done = true; resolve(); };
+    setTimeout(finish, 15000);
+    const g = t.av.group, mp = me.group.position;
+    if (g.position.distanceTo(mp) < 2.2 || pl.mode !== 'walk') { finish(); return; }
+    const dir = new V3(g.position.x - mp.x, 0, g.position.z - mp.z).normalize();
+    let pt = [mp.x + dir.x * 1.1, mp.z + dir.z * 1.1];
+    if (!walkable(pt[0], pt[1], 0.2)) pt = [mp.x + 0.8, mp.z + 0.8];
+    if (!walkable(pt[0], pt[1], 0.2)) pt = [mp.x, mp.z + 1];
+    t.av.say(pick(['네~ 가요!', '잠깐만요~', '부르셨어요?']), 1600);
+    if (t.key === 'muho') {
+      if (['collect', 'rush'].includes(staff.state)) { finish(); return; }
+      staffGo(pt, 7); staff.state = 'summon'; staff.onArrive = finish;
+    } else if (t.key === 'west') {
+      if (west.state === 'photo') { finish(); return; }
+      westGo(pt, 6.5); west.state = 'summon'; west.onArrive = finish;
+    } else if (t.npc && ['idle', 'rest', 'return', 'walk'].includes(t.npc.state)) {
+      const n = t.npc;
+      n.problem = null;
+      n.path = planPath([g.position.x, g.position.z], pt); n.state = 'summon'; n.av.sitting = false; n.onArrive = finish;
+    } else finish();
+  });
 }
 async function npcTalk(text) {
   const t = pickTalkTarget(text);
@@ -2403,13 +2449,13 @@ async function npcTalk(text) {
   if (npcTalkState.busy || now - npcTalkState.last < 2500) return;
   npcTalkState.last = now; npcTalkState.busy = true;
   const g = t.av.group;
-  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
-  if (t.npc && t.npc.state === 'idle') { t.npc.next = Math.max(t.npc.next, performance.now() + 8000); }
-  t.av.say('…', 6000);
+  const arrive = t.called ? summonTo(t) : Promise.resolve();
+  if (t.npc && t.npc.state === 'idle') { t.npc.next = Math.max(t.npc.next, performance.now() + 15000); }
   const hist = (npcTalkState.hist[t.key] = npcTalkState.hist[t.key] || []);
   const doing = pl.mode === 'route' && pl.problem ? `${problemLabel(pl.problem)} 등반 중` : pl.sitting ? '매트에 앉아 쉬는 중' : '암장을 돌아다니는 중';
   let reply = '';
   const url = npcApiUrl();
+  const fetchReply = (async () => {
   if (url) {
     try {
       const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
@@ -2421,11 +2467,19 @@ async function npcTalk(text) {
       if (r.ok) reply = ((await r.json()).reply || '').trim();
     } catch (e) { /* 서버 없음/시간 초과 → 기본 대사 */ }
   }
+  })();
+  await arrive;
+  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
+  t.av.say('…', 6000);
+  await fetchReply;
+  g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
   if (!reply) reply = pick(NPC_FALLBACK[t.key]);
   hist.push({ role: 'user', text }, { role: 'npc', text: reply });
   if (hist.length > 12) hist.splice(0, hist.length - 12);
   t.av.say(reply, 5200);
   logChat(t.name, t.key === 'muho' ? '#f39a2b' : t.key === 'west' ? '#ffd166' : t.av.color, reply);
+  // 웨스트한테 사진 부탁하면 진짜 찍어줌
+  if (t.key === 'west' && /사진|찍어|📸|셀카/.test(text) && west.state !== 'photo') setTimeout(() => { west.lastPhoto = -1e9; westPhoto(me, `${Store.data.name} 기념샷`); }, 1200);
   npcTalkState.busy = false;
 }
 
@@ -2457,12 +2511,12 @@ const staff = { av: null, state: 'patrol', path: [], speed: 2, next: 0, replan: 
 const watch = { chalks: [], runT: 0, calmT: 0, chaseNag: 0, chalkNag: 0, gateMsg: 0 };
 // 무호K = 잔소리 많은 츤데레: 잔소리는 길게, 마지막엔 쑥스러운 한마디
 const STAFF_LINES = {
-  run: ['뛰지 말라고 했죠~ 넘어지면 어쩌려고요. …걱정한 건 아니고요 🐯', '천천히 좀 다녀요! 벽은 안 도망가요. 그냥 하는 말이에요', '또 뛰어요? 발목 나가면 저만 귀찮아져요. 진짜로요 🐯', '거기 거기! 뛰지 말고요~ 흥, 그래도 제가 더 빨라요 🐯💨', '몇 번째예요 이게… 다치면 속상하… 아 아무것도 아니에요'],
+  run: ['뛰지 말라고 했죠~ 넘어지면 어쩌려고요. …걱정한 건 아니고요 🐯', '천천히 좀 다녀요! 벽은 안 도망가요. 그냥 하는 말이에요', '또 뛰어요? 발목 다치면 큰일이에요. 조심해요 🐯', '거기 거기! 뛰지 말고요~ 흥, 그래도 제가 더 빨라요 🐯💨', '몇 번째예요 이게… 다치면 속상하… 아 아무것도 아니에요'],
   chalk: ['초크 그렇게 막 뿌리면 옆사람 콜록거려요~ 적당히! 🐯', '팡팡은 완등하고 해요. 그땐… 박수 정도는 쳐줄게요', '손에 얇게 바르는 거예요 얇게! 알려준 거 아니고 그냥 보여서요', '또 팡팡이에요? …그 소리 좀 좋긴 한데 그래도 적당히요 🐯'],
   crash: ['둘 다 괜찮아요?! 그러니까 동선 보라고 했잖아요… 걱정한 건 아니고요 🐯', '부딪히고 그러면 안 돼요~ 먼저 붙은 사람 먼저! 다친 데는 없죠?'],
   cutin: ['저분 먼저 붙었잖아요~ 순서 지켜요. 그래야 멋있… 아니 그냥요 🐯', '조금만 기다려요~ 클라이밍은 기다리는 것도 실력이에요'],
   calm: ['그래요 그렇게 천천히~ 진작 그럴 것이지 🐯', '훨씬 낫네요. …칭찬한 거 맞아요, 한 번만 말해요', '봐요 걸어 다니니까 좋잖아요~'],
-  care: ['괜찮아요? 그러니까 무리하지 말랬잖아요… 걱정한 거 아니에요 🐯', '떨어질 때 손 짚지 마요, 손목 나가요. 그냥 알려주는 거예요', '물 좀 마시고 해요~ 쓰러지면 제가 귀찮아지니까요 🐯'],
+  care: ['괜찮아요? 그러니까 무리하지 말랬잖아요… 걱정한 거 아니에요 🐯', '떨어질 때 손 짚지 마요, 손목 나가요. 그냥 알려주는 거예요', '물 좀 마시고 해요~ 그래야 오래 하죠 🐯'],
   praise: ['오… 좀 하네요? 근데 발은 좀 조용히 놔요. 칭찬은 아니고요 🐯', '완등했어요? 흥, 잘했어요. 오늘만 말해주는 거예요', '그래요 그거예요~ 제가 그렇게 하라고 했잖아요 🐯'],
 };
 const todayStr = () => new Date().toLocaleDateString('ko-KR');
@@ -2600,6 +2654,9 @@ function updateStaff(dt, now) {
     case 'wait':
       if (now > staff.next) { staff.state = 'patrol'; staff.next = now + 800; }
       break;
+    case 'summon':
+      if (!staff.path.length) { staff.state = 'wait'; staff.next = now + 8000; const f = staff.onArrive; staff.onArrive = null; if (f) f(); }
+      break;
     case 'chase':
       if ((staff.replan -= dt) <= 0) { staff.replan = 0.6; staffGo([me.group.position.x, me.group.position.z], 5.2); }
       if ((staff.nagT += dt) > 3.5) { staff.nagT = 0; staffSay(pick(STAFF_LINES.run), 2000); }
@@ -2687,6 +2744,8 @@ function updateWest(dt, now) {
       west.cheerT = 15 + Math.random() * 10;
       if (g.position.distanceTo(me.group.position) < 9) westSay(pick(WEST_LINES.climb), 2200);
     }
+  } else if (west.state === 'summon') {
+    if (!west.path.length) { west.state = 'roam'; west.next = now + 8000; const f = west.onArrive; west.onArrive = null; if (f) f(); }
   } else if (west.state === 'photo') {
     west.shotT += dt;
     const S = west.subject.group.position;
