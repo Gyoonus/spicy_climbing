@@ -349,6 +349,15 @@ body.touch .prompt { bottom: 175px; }
 body.inst .adcard { display: none; }
 @media (max-width: 640px) { .adcard { top: 132px; width: calc(100% - 24px); } .inst-btns .btn { padding: 8px 12px; font-size: .82rem; } }
 
+.item-pic { background: #f4f1ea; border-radius: 10px; margin-bottom: 8px; display: grid; place-items: center; overflow: hidden; }
+.item-pic img { width: 100%; max-height: 130px; object-fit: contain; display: block; }
+.item.best .item-pic { box-shadow: 0 0 0 2px #e3262b; }
+.item.best .item-pic.photo img { max-height: 200px; object-fit: cover; }
+.visit-card { display: grid; gap: 2px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: #03c75a; color: #fff; text-decoration: none; }
+.visit-card b { font-size: .95rem; }
+.visit-card span { font-size: .78rem; opacity: .92; }
+.intro-visit { margin-top: 14px; text-align: left; }
+
 /* 무호K 카운터 */
 .pay { border: 2px solid #f39a2b; border-radius: 22px; background: #141414; color: var(--text); padding: 0; width: min(380px, calc(100% - 24px)); }
 .pay::backdrop { background: rgba(0,0,0,.55); }

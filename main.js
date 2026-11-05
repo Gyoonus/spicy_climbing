@@ -104,22 +104,54 @@ function pickHoldType(level, rand) {
 // 💰 경제 / 장비 — 완등하면 벌고, 암벽화·팬츠를 사면 등반이 쉬워짐
 // =================================================================
 const SHOES = [
-  { id: 'rental', n: '대여화', price: 0, f: 0.3, e: 0.2, h: 0.1, c: '#7a7f87', d: '카운터에서 빌려주는 그 신발. 냄새는 묻지 마세요' },
-  { id: 'madrock', n: '매드롹 드론', price: 59000, f: 0.5, e: 0.4, h: 0.35, c: '#2f6fd6', d: '입문 국민 암벽화. 하루 종일 신어도 편해요' },
-  { id: 'lemona', n: '레몬아', price: 79000, f: 0.55, e: 0.5, h: 0.4, c: '#f6c915', d: '상큼한 노랑. 발볼 넓은 분께 추천' },
-  { id: 'unpar', n: '언페럴 플립', price: 129000, f: 0.65, e: 0.6, h: 0.55, c: '#2a2a2e', d: '고무가 쫀득쫀득한 중급자 픽' },
-  { id: 'solution', n: '솔루숀 콤프', price: 189000, f: 0.75, e: 0.65, h: 0.8, c: '#e9c400', d: '오버행 장인. 힐훅이 착 붙어요' },
-  { id: 'vrs', n: '인싸팅트 VRS', price: 219000, f: 0.8, e: 0.85, h: 0.7, c: '#ff7a00', d: '엣지가 미친 정밀함. 인싸들의 신발' },
-  { id: 'dragoon', n: '드라군', price: 239000, f: 0.9, e: 0.75, h: 0.85, c: '#c8f03c', d: '말랑말랑 스미어 끝판왕' },
-  { id: 'him', n: '힘 에디션', price: 349000, f: 1, e: 1, h: 1, c: '#e3262b', d: '이 암장 최강 암벽화. 모든 능력치 MAX 🔥', ad: true, url: 'https://thegearshop.co.kr/products/view/687687' },
+  { id: 'him', n: '힘 에디션', price: 151000, f: 1, e: 1, h: 1, c: '#e3262b', c2: '#111111', d: '이 암장 최강 암벽화. 모든 능력치 MAX 🔥', ad: true, url: 'https://thegearshop.co.kr/products/view/687687', photo: 'img/him-edition.jpg' },
+  { id: 'dragoon', n: '드라군', price: 99000, f: 0.9, e: 0.75, h: 0.85, c: '#c8f03c', c2: '#1d1d1d', d: '말랑말랑 스미어 끝판왕' },
+  { id: 'vrs', n: '인싸팅트 VRS', price: 95000, f: 0.8, e: 0.85, h: 0.7, c: '#ff7a00', c2: '#2a2a2e', d: '엣지가 미친 정밀함. 인싸들의 신발' },
+  { id: 'solution', n: '솔루숀 콤프', price: 89000, f: 0.75, e: 0.65, h: 0.8, c: '#e9c400', c2: '#1d1d1d', d: '오버행 장인. 힐훅이 착 붙어요' },
+  { id: 'unpar', n: '언페럴 플립', price: 79000, f: 0.65, e: 0.6, h: 0.55, c: '#2a2a2e', c2: '#6fd0ff', d: '고무가 쫀득쫀득한 중급자 픽' },
+  { id: 'lemona', n: '레몬아', price: 69000, f: 0.55, e: 0.5, h: 0.4, c: '#f6c915', c2: '#3b3b3b', d: '상큼한 노랑. 발볼 넓은 분께 추천' },
+  { id: 'madrock', n: '매드롹 드론', price: 59000, f: 0.5, e: 0.4, h: 0.35, c: '#2f6fd6', c2: '#e9e9e9', d: '입문 국민 암벽화. 하루 종일 신어도 편해요' },
+  { id: 'rental', n: '대여화', price: 0, f: 0.3, e: 0.2, h: 0.1, c: '#7a7f87', c2: '#b9b9b9', d: '카운터에서 빌려주는 그 신발. 냄새는 묻지 마세요' },
 ];
 const PANTS = [
   { id: 'bite', n: '바이트 클라이밍 팬츠', price: 89000, c: '#5b6b4c', d: '다리가 쭉쭉 — 발 닿는 거리 +8cm, 펌핑 −5%', ad: true, url: 'https://m.smartstore.naver.com/biteclimbing/products/12881990606' },
 ];
 const ADS = [
-  { title: '🔥 힘 에디션', copy: '스파이시 최강 암벽화. 마찰·엣지·오버행 전부 MAX — 이거 신으면 V6도 V3 느낌', url: SHOES.find((x) => x.id === 'him').url, item: 'him' },
+  { title: '🔥 힘 에디션 151,000원', copy: '스파이시 최강 암벽화. 마찰·엣지·오버행 전부 MAX — 이거 신으면 V6도 V3 느낌', url: SHOES.find((x) => x.id === 'him').url, item: 'him' },
   { title: '👖 바이트 클라이밍 팬츠', copy: '하이스텝 할 때 안 끼는 팬츠. 다리가 쭉쭉 올라가요', url: PANTS[0].url, item: 'bite' },
 ];
+const GYM_MAP = 'https://naver.me/xllIiJrK';
+const GYM_ADDR = '경기 군포시 엘에스로 153-8 111호';
+// 짭 암벽화 그림 (옆모습)
+const shoeArtCache = new Map();
+function shoeArt(sh) {
+  if (shoeArtCache.has(sh.id)) return shoeArtCache.get(sh.id);
+  const c = document.createElement('canvas'); c.width = 240; c.height = 150;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, 240, 150);
+  g.translate(10, 12);
+  // 고무 밑창 + 토 랜드
+  g.fillStyle = '#1b1b1d';
+  g.beginPath(); g.moveTo(14, 104); g.quadraticCurveTo(10, 120, 40, 122); g.lineTo(170, 122); g.quadraticCurveTo(214, 120, 216, 98); g.quadraticCurveTo(214, 84, 196, 80); g.lineTo(150, 98); g.lineTo(20, 96); g.closePath(); g.fill();
+  // 갑피 (다운턴 모양)
+  g.fillStyle = sh.c;
+  g.beginPath(); g.moveTo(20, 98); g.quadraticCurveTo(10, 60, 34, 30); g.quadraticCurveTo(46, 16, 66, 20); g.lineTo(98, 34); g.quadraticCurveTo(150, 44, 194, 80); g.quadraticCurveTo(170, 98, 150, 100); g.closePath(); g.fill();
+  // 힐컵 고무
+  g.fillStyle = '#1b1b1d'; g.beginPath(); g.moveTo(20, 98); g.quadraticCurveTo(8, 64, 28, 38); g.quadraticCurveTo(26, 70, 40, 96); g.closePath(); g.fill();
+  // 벨크로 스트랩 / 포인트 색
+  g.fillStyle = sh.c2;
+  g.save(); g.translate(92, 52); g.rotate(-0.35); g.fillRect(-10, -26, 26, 64); g.restore();
+  g.fillStyle = sh.c2; g.beginPath(); g.moveTo(150, 60); g.quadraticCurveTo(186, 72, 196, 82); g.quadraticCurveTo(178, 92, 152, 96); g.quadraticCurveTo(160, 78, 150, 60); g.fill();
+  // 풀탭 + 하이라이트
+  g.fillStyle = '#e3262b'; g.fillRect(38, 14, 12, 18);
+  g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.beginPath(); g.moveTo(40, 40); g.quadraticCurveTo(60, 30, 84, 38); g.stroke();
+  // 로고 글자
+  g.fillStyle = '#fff'; g.font = '900 15px "Noto Sans KR", sans-serif'; g.fillText(sh.n.length > 5 ? sh.n.slice(0, 5) : sh.n, 112, 82);
+  const url = c.toDataURL('image/png');
+  shoeArtCache.set(sh.id, url);
+  return url;
+}
+
 const REWARD = [3000, 5000, 8000, 12000, 18000, 25000, 35000];
 const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 function gear() {
@@ -2923,7 +2955,8 @@ function renderShop() {
     const equipped = kind === 'shoe' ? Store.data.equip.shoe === it.id : Store.data.equip.pants === it.id;
     const el = document.createElement('div');
     el.className = 'item' + (it.id === 'him' ? ' best' : '') + (equipped ? ' on' : '');
-    el.innerHTML = `<div class="item-head"><span class="swatch-dot" style="background:${it.c}"></span><b>${it.n}</b>${it.ad ? '<span class="ad-tag">AD</span>' : ''}${it.id === 'him' ? '<span class="tag best-tag">최강</span>' : ''}<span class="price">${it.price ? won(it.price) : '무료'}</span></div>
+    const pic = kind === 'shoe' ? `<div class="item-pic${it.photo ? ' photo' : ''}"><img src="${it.photo || shoeArt(it)}" alt="${it.n}"${it.photo ? ` data-fallback="${shoeArt(it)}"` : ''}></div>` : '';
+    el.innerHTML = pic + `<div class="item-head"><span class="swatch-dot" style="background:${it.c}"></span><b>${it.n}</b>${it.ad ? '<span class="ad-tag">AD</span>' : ''}${it.id === 'him' ? '<span class="tag best-tag">최강</span>' : ''}<span class="price">${it.price ? won(it.price) : '무료'}</span></div>
       <p>${it.d}</p>${kind === 'shoe' ? statBar('마찰', it.f) + statBar('엣지', it.e) + statBar('오버행', it.h) : ''}`;
     const act = document.createElement('div'); act.className = 'item-act';
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (owned ? '' : ' btn-primary');
@@ -2936,6 +2969,7 @@ function renderShop() {
     return el;
   };
   const ss = $('#shop-shoes'); ss.innerHTML = ''; SHOES.forEach((it) => ss.appendChild(card(it, 'shoe')));
+  ss.querySelectorAll('img[data-fallback]').forEach((im) => { im.onerror = () => { im.onerror = null; im.src = im.dataset.fallback; im.parentElement.classList.remove('photo'); }; });
   const pp = $('#shop-pants'); pp.innerHTML = ''; PANTS.forEach((it) => pp.appendChild(card(it, 'pants')));
 }
 function buyOrEquip(it, kind) {
@@ -4040,6 +4074,7 @@ async function enterGym(name, color) {
   me.setOutfit(Store.data.equip.shoe, Store.data.equip.pants);
   updateWallet();
   $('#btn-shop').addEventListener('click', openShop);
+  $('#btn-visit').addEventListener('click', () => window.open(GYM_MAP, '_blank', 'noopener'));
   $('#ad-close').addEventListener('click', () => { $('#adcard').hidden = true; });
   scheduleAds();
   setupPay();
