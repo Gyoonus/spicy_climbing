@@ -2425,6 +2425,25 @@ function npcApiUrl() {
   return '/api/npc';
 }
 const NPC_KEYS = { 하바네로: 'habanero', 청양이: 'cheongyang', 떡볶이: 'tteokbokki' };
+// 💰 돈 쓰는 법 + 행사 안내 — 무호K는 템샵, 웨스트는 스킬샵 담당
+const MONEY_Q = /돈|머니|상점|템샵|스킬샵|프로샵|가게|행사|이벤트|할인|세일|뭐\s*사|살\s*거|사야|쇼핑|구매|스킬|어디에?\s*써|지갑|부자/;
+const salePct = () => Math.round((1 - SKILL_SALE) * 100);
+function shopGuideLine(key) {
+  if (key === 'muho') return pick(EARN_EVENT > 1 ? [
+    `오늘 등반 돈벌이 ×${EARN_EVENT} 행사예요. 완등하고 💰지갑 눌러서 무호K 템샵에서 써요 🐯`,
+    `돈은 완등하면 벌어요. 지금 ×${EARN_EVENT}라 첫 완등이면 ×${EARN_EVENT * 2}! 💰지갑 → 템샵이에요 🐯`,
+  ] : ['돈은 완등하면 벌어요. 💰지갑 눌러서 무호K 템샵에서 써요 🐯']);
+  return pick(SKILL_SALE < 1 ? [
+    `웨스턴 스킬샵 ${salePct()}% 할인 중이에요!! 💰지갑 → 스킬 탭에서 세레머니 배워봐요 🤠`,
+    `지금 스킬 ${salePct()}% 세일이에요! 초크투척, THIS IS SPICY 발차기 다 싸요 🤠`,
+  ] : ['💰지갑 → 웨스턴 스킬샵에서 TOP 세레머니 배울 수 있어요! 🤠']);
+}
+let shopHinted = false;
+function shopHintsOnce() {
+  if (shopHinted) return; shopHinted = true;
+  setTimeout(() => staffSay(shopGuideLine('muho'), 4200), 7000);
+  setTimeout(() => westSay(shopGuideLine('west'), 4200, true), 16000);
+}
 const NPC_FALLBACK = {
   muho: ['…네? 듣고 있었어요. 진짜로요 🐯', '물은 마셨어요? 그것부터 해요. 그냥 물어본 거예요', '다치지만 마요. 걱정한 건 아니고요 🐯'],
   west: ['오 좋아요 좋아!! 🤠', '오늘 폼 미쳤던데요?', '오늘 컨디션 최고죠? 🤠'],
@@ -2500,7 +2519,7 @@ async function npcTalk(text) {
       const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
       const r = await fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ npc: t.key, text, history: hist.slice(-6), ctx: { name: Store.data.name, doing, sends: Object.values(Store.data.sends).reduce((a, b) => a + b, 0) } }),
+        body: JSON.stringify({ npc: t.key, text, history: hist.slice(-6), ctx: { name: Store.data.name, doing, sends: Object.values(Store.data.sends).reduce((a, b) => a + b, 0), wallet: Store.data.wallet || 0, earn: EARN_EVENT, sale: salePct() } }),
       });
       clearTimeout(to);
       if (r.ok) reply = ((await r.json()).reply || '').trim();
@@ -2512,7 +2531,7 @@ async function npcTalk(text) {
   t.av.say('…', 6000);
   await fetchReply;
   g.rotation.y = Math.atan2(me.group.position.x - g.position.x, me.group.position.z - g.position.z);
-  if (!reply) reply = pick(NPC_FALLBACK[t.key]);
+  if (!reply) reply = (t.key === 'muho' || t.key === 'west') && MONEY_Q.test(text) ? shopGuideLine(t.key) : pick(NPC_FALLBACK[t.key]);
   hist.push({ role: 'user', text }, { role: 'npc', text: reply });
   if (hist.length > 12) hist.splice(0, hist.length - 12);
   t.av.say(reply, 5200);
@@ -2584,6 +2603,7 @@ function staffArrivedForPlayer() {
   if (paidToday()) {
     staffSay('또 왔어요? 손가락은 괜찮고요? …반가운 건 아니고요. 들어가요 🐯', 3000);
     staff.state = 'thanks'; staff.next = performance.now() + 2200;
+    shopHintsOnce();
     return;
   }
   staffSay('왔어요? 일일이용 2만원이에요. 스트레칭은 하고 왔죠? 기다린 건 아니고요 🐯', 3200);
@@ -2611,6 +2631,7 @@ function payDone(method) {
   setTimeout(() => me.say('들어갑니다~!', 1600), 600);
   westPraise('enter', 3000);
   staff.state = 'thanks'; staff.next = performance.now() + 2200;
+  shopHintsOnce();
 }
 function setupPay() {
   const d = $('#pay');
