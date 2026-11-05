@@ -3601,12 +3601,20 @@ function placeTripod(p, owner, label) {
   g.position.set(f.x, groundY(f.x, f.z), f.z);
   g.rotation.y = Math.atan2(-s.n3.x, -s.n3.z);
   scene.add(g);
-  const t = { g, owner, label, p, up: true, born: performance.now(), fallT: 0 };
+  // 작은 이름표: "○○의 삼각대"
+  const tag = textSprite(`📷 ${label || '누군가'}의 삼각대`, { h: 0.12, bg: 'rgba(20,20,22,.72)', font: '700 38px "Noto Sans KR", sans-serif', depthTest: true });
+  tag.position.set(f.x, g.position.y + 1.42, f.z); scene.add(tag);
+  const t = { g, tag, owner, label, p, up: true, born: performance.now(), fallT: 0 };
   tripods.push(t);
   return t;
 }
+function dropTripod(i) {
+  const t = tripods[i];
+  scene.remove(t.g); if (t.tag) { scene.remove(t.tag); disposeSprite(t.tag); }
+  tripods.splice(i, 1);
+}
 function removeTripod(owner) {
-  for (let i = tripods.length - 1; i >= 0; i--) if (tripods[i].owner === owner) { scene.remove(tripods[i].g); tripods.splice(i, 1); }
+  for (let i = tripods.length - 1; i >= 0; i--) if (tripods[i].owner === owner) { dropTripod(i); }
 }
 function myTripodCandidate() {
   if (!hasItem('tripod') || pl.mode !== 'walk' || !pl.mountCand) return null;
@@ -3679,7 +3687,8 @@ function updateTripods(dt) {
       t.g.quaternion.setFromAxisAngle(axis, (Math.PI * 0.46 + Math.PI * 2) * e).multiply(f.q0);
     } else if (!t.up) { t.fallT = Math.min(1, t.fallT + dt * 3); t.g.rotation.z = t.fallDir * (Math.PI / 2) * (t.fallT * t.fallT); t.g.position.y = groundY(t.g.position.x, t.g.position.z) + 0.05 * t.fallT; }
     const life = t.owner === 'me' ? 240000 : 150000;
-    if (now - t.born > life || (!t.up && t.fallT >= 1 && now - t.born > 20000 && t.owner !== 'me')) { scene.remove(t.g); tripods.splice(i, 1); }
+    if (t.tag) t.tag.position.set(t.g.position.x, t.g.position.y + (t.up ? 1.42 : 0.55), t.g.position.z);
+    if (now - t.born > life || (!t.up && t.fallT >= 1 && now - t.born > 20000 && t.owner !== 'me')) { dropTripod(i); }
   }
 }
 // 완등할 때 내 삼각대가 서 있으면 셀프캠
