@@ -55,6 +55,20 @@ const HOLD_COLORS = {
 };
 // 스파이시 난이도: 핑 < 초 < 노 < 빨 < 남 < 흰 < 하 < 주 < 갈 < 연두 < 검
 const GRADES = ['pink', 'green', 'yellow', 'red', 'navy', 'white', 'sky', 'orange', 'brown', 'lime', 'black'];
+// 🌶️ 스파이시 난이도 안내 (색 순서 = 난이도, 맵기로 표현)
+const GRADE_GUIDE = {
+  pink: { spice: '순한맛', v: 'VB', d: '처음 오셨나요? 큰 홀드로 몸풀기' },
+  green: { spice: '순한맛+', v: 'V0', d: '발 쓰는 법 익히기' },
+  yellow: { spice: '보통맛', v: 'V1', d: '조금씩 멀어지는 홀드' },
+  red: { spice: '약간 매운맛', v: 'V2', d: '박자 맞추기 시작' },
+  navy: { spice: '매운맛', v: 'V3', d: '다이노·플래깅 등장' },
+  white: { spice: '매운맛+', v: 'V4', d: '작은 홀드, 펌핑 관리' },
+  sky: { spice: '아주 매운맛', v: 'V5', d: '크럭스 — 꽉 잡아야 넘어감' },
+  orange: { spice: '불맛', v: 'V6', d: '멀고 작고 가파름' },
+  brown: { spice: '불닭맛', v: 'V7', d: '긴 문제, 연속 무브' },
+  lime: { spice: '핵불닭맛', v: 'V8', d: '거의 다 크럭스' },
+  black: { spice: '지옥맛 💀', v: 'V9+', d: '스파이시 최고 난이도' },
+};
 const DARK_TAPE = ['black', 'purple', 'blue', 'red', 'navy', 'brown'];
 const COLOR_NAMES = { yellow: '노랑', green: '초록', blue: '파랑', red: '빨강', purple: '보라', black: '검정', pink: '핑크', white: '흰색', orange: '주황', navy: '남색', sky: '하늘', brown: '갈색', lime: '연두' };
 
@@ -1623,7 +1637,10 @@ function setupInput() {
     const r = el.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
     const hit = ray.intersectObjects(billboards)[0];
-    if (hit && hit.distance < 14) openShop();
+    if (hit && hit.distance < 14) {
+      if (hit.object.userData.item === 'grades') { renderRecords(); $('#records').showModal(); setTimeout(() => $('#grade-guide-h').scrollIntoView({ block: 'start' }), 60); }
+      else openShop();
+    }
   });
   const end = (e) => { camCtl.pointers.delete(e.pointerId); camCtl.pinch = 0; };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
@@ -2965,7 +2982,22 @@ function setGuide(p) {
   guideMesh.userData.base = surf(p.strip, p.start.u, p.start.v + 0.7).addScaledVector(s.n3, 0.5);
   scene.add(guideMesh);
 }
+function renderGradeGuide() {
+  const box = $('#grade-guide'); if (!box) return;
+  box.innerHTML = '';
+  GRADES.forEach((c, i) => {
+    const gg = GRADE_GUIDE[c], probs = PROBLEMS.filter((p) => p.color === c);
+    const done = probs.filter((p) => Store.data.sends[p.id]).length;
+    const row = document.createElement('div'); row.className = 'gg-row';
+    const chilis = '🌶️'.repeat(Math.ceil((i + 1) / 2.2));
+    row.innerHTML = `<span class="gg-chip" style="background:${HOLD_COLORS[c]}"></span>
+      <div class="gg-main"><b>Lv.${i + 1} ${COLOR_NAMES[c]}</b> <span class="gg-spice">${gg.spice} ${chilis}</span><small>${gg.d} · 약 ${gg.v}</small></div>
+      <div class="gg-side"><span class="gg-money">💰 ${won(REWARD[i] * EARN_EVENT)}</span><small>${probs.length ? `${done}/${probs.length} 완등` : '문제 없음'}</small></div>`;
+    box.appendChild(row);
+  });
+}
 function renderRecords() {
+  renderGradeGuide();
   const d = Store.data;
   // 스탬프
   const st = $('#stamps');
@@ -3887,6 +3919,24 @@ function buildBillboards() {
     himTex.needsUpdate = true;
   };
   photo.src = SHOES[0].photo;
+  // 🌶️ 난이도 안내판 (입구 복도)
+  const gradeTex = canvasTex(640, 900, (g) => {
+    g.fillStyle = '#141416'; g.fillRect(0, 0, 640, 900);
+    g.textAlign = 'center'; g.fillStyle = '#e3262b'; g.font = '84px "Sedgwick Ave Display", cursive'; g.fillText('SPICY', 320, 96);
+    g.fillStyle = '#fff'; g.font = '48px "Black Han Sans", sans-serif'; g.fillText('난이도 안내 🌶️', 320, 156);
+    GRADES.forEach((c, i) => {
+      const y = 196 + i * 62, gg = GRADE_GUIDE[c];
+      g.fillStyle = HOLD_COLORS[c]; g.beginPath(); g.roundRect(46, y, 120, 48, 10); g.fill();
+      if (c === 'black') { g.strokeStyle = '#666'; g.lineWidth = 3; g.stroke(); }
+      g.textAlign = 'left'; g.fillStyle = '#fff'; g.font = '36px "Black Han Sans", sans-serif'; g.fillText(`Lv.${i + 1} ${COLOR_NAMES[c]}`, 186, y + 38);
+      g.textAlign = 'right'; g.fillStyle = i >= 7 ? '#ff6b4a' : '#ffcf4a'; g.font = '900 28px "Noto Sans KR"'; g.fillText(gg.spice.replace(' 💀', ''), 598, y + 36);
+    });
+    g.textAlign = 'center'; g.fillStyle = '#9a958f'; g.font = '700 24px "Noto Sans KR"'; g.fillText('쉬움 ↑ · ↓ 어려움  —  눌러서 자세히', 320, 886);
+  });
+  { const [x, z] = m([291, 1055]);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.4), new THREE.MeshBasicMaterial({ map: gradeTex }));
+    mesh.position.set(x + 0.02, 2.0, z); mesh.rotation.y = Math.PI / 2; mesh.userData.item = 'grades';
+    scene.add(mesh); billboards.push(mesh); }
   add(579, 1000, -Math.PI / 2, poster(['BITE', '클라이밍 팬츠', '하이스텝도 쭉쭉', '발 닿는 거리 +8cm'], '#28331f', '#f3f0e4', '#c8f03c'), 'bite');
 }
 
@@ -5320,7 +5370,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }

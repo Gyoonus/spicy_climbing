@@ -262,6 +262,15 @@ body.route .hud-tech { display: none !important; }
 .sale-banner[hidden] { display: none; }
 .sale-tag { background: #e3262b; color: #fff; font-weight: 900; font-size: .72rem; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
 .item-head .price s { color: var(--muted); font-weight: 600; font-size: .8rem; margin-right: 2px; }
+/* 🌶️ 난이도 안내 */
+.grade-guide { display: grid; gap: 4px; }
+.gg-row { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+.gg-chip { width: 34px; height: 22px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.gg-main { flex: 1; min-width: 0; font-size: .9rem; }
+.gg-main small, .gg-side small { display: block; color: var(--muted); font-size: .74rem; }
+.gg-spice { color: #ffb347; font-weight: 800; font-size: .8rem; }
+.gg-side { text-align: right; font-size: .8rem; white-space: nowrap; }
+.gg-money { color: #ffcf4a; font-weight: 800; }
 /* 상점 탭 */
 .shop-tabs { display: flex; gap: 6px; margin: 12px 0 4px; }
 .shop-tab { flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: inherit; font-weight: 800; font-size: .95rem; cursor: pointer; font-family: inherit; }
