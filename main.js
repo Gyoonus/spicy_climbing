@@ -860,6 +860,91 @@ function setFocus(p) {
 // =================================================================
 // 캐릭터 (불꽃이)
 // =================================================================
+// =================================================================
+// 🎨 캐릭터 꾸미기
+// =================================================================
+const HEAD_SHAPES = {
+  flame: { n: '불꽃', d: FLAME_D },
+  drop: { n: '물방울', d: 'M50 4 C60 24 90 44 90 66 C90 86 72 96 50 96 C28 96 10 86 10 66 C10 44 40 24 50 4 Z' },
+  star: { n: '별', d: 'M50 4 L62 34 L94 36 L69 57 L78 90 L50 72 L22 90 L31 57 L6 36 L38 34 Z' },
+  cat: { n: '고양이', d: 'M16 32 L22 4 L42 22 C47 21 53 21 58 22 L78 4 L84 32 C94 44 94 58 92 68 C88 86 72 96 50 96 C28 96 12 86 8 68 C6 58 6 44 16 32 Z' },
+};
+const EYES = { dot: '동글', smile: '웃음', sparkle: '반짝', sleepy: '졸림' };
+const SKINS = ['#ffe3cc', '#f3c9a3', '#d9a27a', '#9c6a48'];
+const CLOTH = ['#ffffff', '#1d1d20', '#e3262b', '#2f6fd6', '#2fbf71', '#ffc21a', '#7b3fb8', '#ff7aa8'];
+const ACCS = { none: '없음', band: '헤드밴드', beanie: '비니', glasses: '안경', ribbon: '리본' };
+const DEFAULT_LOOK = { head: 'flame', eyes: 'dot', blush: 1, skin: SKINS[0], shirt: '', pants: '', acc: 'none' };
+function lookToStr(l) { return [l.head, l.eyes, l.blush ? 1 : 0, l.skin, l.shirt, l.pants, l.acc].join(','); }
+function lookFromStr(str) {
+  const a = String(str || '').split(',');
+  const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(v) ? v : def);
+  return {
+    head: HEAD_SHAPES[a[0]] ? a[0] : 'flame', eyes: EYES[a[1]] ? a[1] : 'dot', blush: a[2] !== '0',
+    skin: hex(a[3], SKINS[0]), shirt: hex(a[4], ''), pants: hex(a[5], ''), acc: ACCS[a[6]] ? a[6] : 'none',
+  };
+}
+const headGeoCache = new Map();
+function getHeadGeo(key) {
+  if (headGeoCache.has(key)) return headGeoCache.get(key);
+  const tokens = HEAD_SHAPES[key].d.match(/[MCLZ]|-?\d+(\.\d+)?/g);
+  const X = (v) => (v - 50) / 100, Y = (v) => (96 - v) / 100;
+  const sh = new THREE.Shape();
+  let i = 0;
+  while (i < tokens.length) {
+    const c = tokens[i++];
+    if (c === 'M') sh.moveTo(X(+tokens[i++]), Y(+tokens[i++]));
+    else if (c === 'L') sh.lineTo(X(+tokens[i++]), Y(+tokens[i++]));
+    else if (c === 'C') { const a = tokens.slice(i, i + 6).map(Number); i += 6; sh.bezierCurveTo(X(a[0]), Y(a[1]), X(a[2]), Y(a[3]), X(a[4]), Y(a[5])); }
+  }
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: true, bevelThickness: 0.08, bevelSize: key === 'star' ? 0.04 : 0.05, bevelSegments: 3, curveSegments: 10 });
+  g.translate(0, 0.05, -0.15);
+  headGeoCache.set(key, g);
+  return g;
+}
+function buildFace(head, look, hs) {
+  const z = 0.25 * hs + 0.01;
+  const white = new THREE.MeshBasicMaterial({ color: '#fff' });
+  [-0.12, 0.12].forEach((x) => {
+    const ex = x * hs, ey = 0.41 * hs;
+    if (look.eyes === 'smile') {
+      const e = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.012, 6, 12, Math.PI), blackMat); e.position.set(ex, ey - 0.01, z); head.add(e);
+    } else if (look.eyes === 'sleepy') {
+      const e = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.016, 0.02), blackMat); e.position.set(ex, ey - 0.01, z); e.rotation.z = x < 0 ? 0.12 : -0.12; head.add(e);
+    } else {
+      const big = look.eyes === 'sparkle';
+      const e = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.068 : 0.05, 14, 10), blackMat); e.position.set(ex, ey, z); e.scale.z = 0.5; head.add(e);
+      const hl = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.022 : 0.016, 8, 6), white); hl.position.set(ex + (big ? 0.02 : 0.015), ey + (big ? 0.025 : 0.02), z + 0.025); head.add(hl);
+      if (big) { const h2 = new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), white); h2.position.set(ex - 0.02, ey - 0.022, z + 0.025); head.add(h2); }
+    }
+    if (look.blush) {
+      const blush = new THREE.Mesh(new THREE.CircleGeometry(0.04, 16), new THREE.MeshBasicMaterial({ color: '#ff9aa8', transparent: true, opacity: 0.7 }));
+      blush.position.set(x * hs * 1.75, 0.3 * hs, z + 0.002); head.add(blush);
+    }
+  });
+  const arcL = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.01, 6, 12, Math.PI), blackMat);
+  arcL.position.set(-0.034, 0.28 * hs, z); head.add(arcL);
+  const arcR = arcL.clone(); arcR.rotation.z = Math.PI; arcR.position.set(0.034, 0.28 * hs, z); head.add(arcR);
+  // 액세서리
+  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+  if (look.acc === 'band') {
+    const b = new THREE.Mesh(new THREE.TorusGeometry(0.36 * hs, 0.035, 8, 32), mat('#e3262b'));
+    b.rotation.x = Math.PI / 2; b.scale.set(1, 0.62, 1); b.position.y = 0.6 * hs; head.add(b);
+  } else if (look.acc === 'beanie') {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.38 * hs, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat('#2f6fd6'));
+    b.scale.set(1.05, 0.95, 0.7); b.position.y = 0.6 * hs; head.add(b);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.39 * hs, 0.05, 8, 28), mat('#1d3f86')); rim.rotation.x = Math.PI / 2; rim.scale.set(1.05, 0.7, 1); rim.position.y = 0.6 * hs; head.add(rim);
+    const pom = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8), mat('#ffffff')); pom.position.y = 0.97 * hs; head.add(pom);
+  } else if (look.acc === 'glasses') {
+    const m = mat('#16161a');
+    [-0.12, 0.12].forEach((x) => { const r = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.012, 8, 20), m); r.position.set(x * hs, 0.41 * hs, z + 0.03); head.add(r); });
+    const br = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.012), m); br.position.set(0, 0.42 * hs, z + 0.03); head.add(br);
+  } else if (look.acc === 'ribbon') {
+    const m = mat('#ff5c8a');
+    [-1, 1].forEach((sd) => { const c = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.15, 12), m); c.rotation.z = sd * Math.PI / 2; c.position.set(0.24 * hs + sd * 0.075, 0.8 * hs, 0.08); head.add(c); });
+    const k = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), m); k.position.set(0.24 * hs, 0.8 * hs, 0.09); head.add(k);
+  }
+}
+
 let flameGeo = null;
 function getFlameGeo() {
   if (flameGeo) return flameGeo;
@@ -967,7 +1052,8 @@ function placeSeg(mesh, a, b) {
   if (d.lengthSq() > 1e-8) mesh.quaternion.setFromUnitVectors(UPV, d.normalize());
 }
 class Avatar {
-  constructor(name, color, { isPlayer = false, visitor = false, tiger = false, cowboy = false } = {}) {
+  constructor(name, color, { isPlayer = false, visitor = false, tiger = false, cowboy = false, look = null } = {}) {
+    const L = { ...DEFAULT_LOOK, ...(look || {}) };
     this.name = name; this.color = color;
     this.group = new THREE.Group();
     this.rig = new THREE.Group();
@@ -976,13 +1062,17 @@ class Avatar {
     const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.78), roughness: 0.6 });
     const skin = new THREE.MeshStandardMaterial({ color: '#ffe3cc', roughness: 0.7 });
     const shoe = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.6 });
-    this.shoeMat = shoe; this.legMat = dark.clone(); this.legBase = dark.color.clone();
+    const shirt = L.shirt && !tiger && !cowboy ? new THREE.MeshStandardMaterial({ color: L.shirt, roughness: 0.65 }) : dark;
+    this.shoeMat = shoe; this.legMat = dark.clone();
+    if (L.pants && !tiger && !cowboy) this.legMat.color.set(L.pants);
+    this.legBase = this.legMat.color.clone();
     if (tiger) skin.color.set('#f39a2b');
-    this.skinBase = tiger ? '#f39a2b' : cowboy ? '#ffd9b3' : '#ffe3cc';
+    this.skinBase = tiger ? '#f39a2b' : cowboy ? '#ffd9b3' : L.skin;
+    skin.color.set(this.skinBase);
     this.skin = skin;
     const B = BODY;
     // 몸통 (티셔츠) + 골반 (바지)
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.135, Math.max(0.04, B.shY - B.hipY - 0.12), 6, 14), dark);
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.135, Math.max(0.04, B.shY - B.hipY - 0.12), 6, 14), shirt);
     torso.position.y = (B.hipY + B.shY) / 2 + 0.02; torso.scale.set(1, 1, 0.82); this.rig.add(torso);
     const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.145, 16, 10), this.legMat);
     pelvis.position.y = B.hipY + 0.03; pelvis.scale.set(1.08, 0.62, 0.85); this.rig.add(pelvis);
@@ -1005,19 +1095,9 @@ class Avatar {
       const lens = new THREE.Mesh(new THREE.CircleGeometry(0.025, 12), new THREE.MeshBasicMaterial({ color: '#7fb6ff' }));
       lens.position.set(0.04, 0.08, 0.014); this.phone.add(lens);
     } else {
-      const flame = new THREE.Mesh(getFlameGeo(), main); flame.scale.setScalar(hs); this.head.add(flame);
+      const flame = new THREE.Mesh(getHeadGeo(L.head), main); flame.scale.setScalar(hs); this.head.add(flame);
       this.headMat = main;
-      [-0.12, 0.12].forEach((x) => {
-        const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), blackMat);
-        e.position.set(x * hs, 0.41 * hs, 0.25 * hs + 0.01); e.scale.z = 0.5; this.head.add(e);
-        const hl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff' }));
-        hl.position.set(x * hs + 0.015, 0.43 * hs, 0.25 * hs + 0.035); this.head.add(hl);
-        const blush = new THREE.Mesh(new THREE.CircleGeometry(0.04, 16), new THREE.MeshBasicMaterial({ color: '#ff9aa8', transparent: true, opacity: 0.7 }));
-        blush.position.set(x * hs * 1.75, 0.3 * hs, 0.25 * hs + 0.012); this.head.add(blush);
-      });
-      const arcL = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.01, 6, 12, Math.PI), blackMat);
-      arcL.position.set(-0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcL);
-      const arcR = arcL.clone(); arcR.rotation.z = Math.PI; arcR.position.set(0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcR);
+      buildFace(this.head, L, hs);
     }
     this.rig.add(this.head);
     // 팔다리: 어깨/엉덩이 → 팔꿈치/무릎 → 손/발
@@ -1025,7 +1105,7 @@ class Avatar {
       const arm = kind === 'arm';
       const a = arm ? B.armA : B.legA, b = arm ? B.armB : B.legB, r = arm ? 0.046 : 0.06;
       const root = arm ? new V3(side * B.shW, B.shY - 0.04, 0) : new V3(side * B.hipW, B.hipY, 0);
-      const upper = new THREE.Mesh(segGeo(r, a), arm ? dark : this.legMat);
+      const upper = new THREE.Mesh(segGeo(r, a), arm ? shirt : this.legMat);
       const lower = new THREE.Mesh(segGeo(r * 0.88, b), arm ? skin : this.legMat);
       const joint = new THREE.Mesh(new THREE.SphereGeometry(r * 1.02, 10, 8), arm ? skin : this.legMat);
       const end = new THREE.Mesh(arm ? handGeo : footGeo, arm ? skin : shoe);
@@ -2760,7 +2840,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, k: lookToStr({ ...DEFAULT_LOOK, ...(Store.data.look || {}) }), st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2781,7 +2861,7 @@ const Net = {
       if (this.peers.size >= 30) return;
       const name = String(d.n || '손님').slice(0, 8);
       const color = /^#[0-9a-f]{6}$/i.test(d.c) ? d.c : '#9a9aa2';
-      const av = new Avatar(name, color, { visitor: true });
+      const av = new Avatar(name, color, { visitor: true, look: lookFromStr(d.k) });
       av.group.position.set(x, y, z);
       p = { av, name, target: new V3(x, y, z), r };
       this.peers.set(id, p);
@@ -4029,26 +4109,70 @@ let chatNext = performance.now() + 5000;
 // =================================================================
 function setupIntro() {
   Store.load();
-  const sw = $('#swatches');
+  const look = { ...DEFAULT_LOOK, ...(Store.data.look || {}) };
   let chosen = Store.data.color || PLAYER_COLORS[0].c;
-  PLAYER_COLORS.forEach((c) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'swatch'; b.setAttribute('role', 'radio');
-    b.setAttribute('aria-label', c.name); b.setAttribute('aria-checked', c.c === chosen ? 'true' : 'false');
-    b.innerHTML = `<svg viewBox="0 0 100 100"><path d="${FLAME_D}" fill="${c.c}"/><circle cx="38" cy="60" r="5" fill="#1a0a06"/><circle cx="62" cy="60" r="5" fill="#1a0a06"/></svg>`;
-    b.addEventListener('click', () => {
-      chosen = c.c;
-      sw.querySelectorAll('.swatch').forEach((s) => s.setAttribute('aria-checked', 'false'));
-      b.setAttribute('aria-checked', 'true');
+  // 3D 미리보기
+  const pcv = $('#look-preview');
+  let prev = null;
+  try {
+    const pr = new THREE.WebGLRenderer({ canvas: pcv, antialias: true, alpha: true });
+    pr.setPixelRatio(Math.min(window.devicePixelRatio, 2)); pr.setSize(pcv.clientWidth || 180, pcv.clientHeight || 180, false);
+    const ps = new THREE.Scene();
+    ps.add(new THREE.HemisphereLight(0xfff4e2, 0x4a4a52, 2.6));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.4); dl.position.set(2, 4, 5); ps.add(dl);
+    const pc = new THREE.PerspectiveCamera(32, 1, 0.1, 20); pc.position.set(0, 1.05, 3.4); pc.lookAt(0, 0.82, 0);
+    prev = { pr, ps, pc, av: null, t: 0, on: true };
+  } catch (e) { pcv.hidden = true; }
+  const rebuild = () => {
+    if (!prev) return;
+    const keep = scene; scene = prev.ps;
+    if (prev.av) prev.av.dispose();
+    prev.av = new Avatar('', chosen, { look }); prev.av.tag.visible = false; prev.av.shadow.visible = false;
+    scene = keep;
+  };
+  const tick = () => {
+    if (!prev || !prev.on) return;
+    prev.t += 0.016;
+    if (prev.av) { prev.av.group.rotation.y = Math.sin(prev.t * 0.7) * 0.7; prev.av.update(0.016); }
+    prev.pr.render(prev.ps, prev.pc);
+    requestAnimationFrame(tick);
+  };
+  const radioRow = (box, items, cur, onPick, render) => {
+    box.innerHTML = '';
+    items.forEach(([val, label]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', val === cur() ? 'true' : 'false'); b.setAttribute('aria-label', label);
+      render(b, val, label);
+      b.addEventListener('click', () => { onPick(val); box.querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', 'false')); b.setAttribute('aria-checked', 'true'); rebuild(); });
+      box.appendChild(b);
     });
-    sw.appendChild(b);
+  };
+  radioRow($('#swatches'), PLAYER_COLORS.map((c) => [c.c, c.name]), () => chosen, (v) => { chosen = v; }, (b, v) => {
+    b.className = 'swatch';
+    b.innerHTML = `<svg viewBox="0 0 100 100"><path d="${HEAD_SHAPES[look.head].d}" fill="${v}"/><circle cx="38" cy="60" r="5" fill="#1a0a06"/><circle cx="62" cy="60" r="5" fill="#1a0a06"/></svg>`;
   });
+  const chipRow = (id, map, key) => radioRow($(id), Object.entries(map).map(([k, v]) => [k, typeof v === 'string' ? v : v.n]), () => look[key], (v) => {
+    look[key] = v;
+    if (key === 'head') $('#swatches').querySelectorAll('path').forEach((pth) => pth.setAttribute('d', HEAD_SHAPES[v].d));
+  }, (b, v, label) => { b.textContent = label; });
+  chipRow('#opt-head', HEAD_SHAPES, 'head');
+  chipRow('#opt-eyes', EYES, 'eyes');
+  chipRow('#opt-acc', ACCS, 'acc');
+  const dotRow = (id, list, key, auto) => radioRow($(id), (auto ? [['', auto]] : []).concat(list.map((c) => [c, c])), () => look[key], (v) => { look[key] = v; }, (b, v) => {
+    if (v) b.style.background = v; else { b.textContent = '기본'; b.style.background = '#2a2a2e'; }
+  });
+  dotRow('#opt-skin', SKINS, 'skin');
+  dotRow('#opt-shirt', CLOTH, 'shirt', '기본');
+  dotRow('#opt-pants', CLOTH, 'pants', '기본');
+  const bl = $('#opt-blush'); bl.checked = !!look.blush; bl.addEventListener('change', () => { look.blush = bl.checked ? 1 : 0; rebuild(); });
+  rebuild(); tick();
   const nick = $('#nickname');
   if (Store.data.name) nick.value = Store.data.name;
   $('#enter-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = nick.value.trim().slice(0, 8) || '불꽃이';
-    Store.data.name = name; Store.data.color = chosen; Store.save();
+    Store.data.name = name; Store.data.color = chosen; Store.data.look = { ...look }; Store.save();
+    if (prev) { prev.on = false; if (prev.av) { const keep = scene; scene = prev.ps; prev.av.dispose(); scene = keep; } prev.pr.dispose(); }
     enterGym(name, chosen);
   });
 }
@@ -4060,7 +4184,7 @@ async function enterGym(name, color) {
   initThree();
   buildWorld();
   NPCS.forEach((d) => npcs.push(makeNpc(d)));
-  me = new Avatar(name, color, { isPlayer: true });
+  me = new Avatar(name, color, { isPlayer: true, look: Store.data.look });
   me.group.position.copy(pl.pos);
   me.group.rotation.y = pl.yaw;
   makeStaff();

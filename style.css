@@ -59,6 +59,23 @@ kbd { font-family: inherit; font-size: .72em; opacity: .7; border: 1px solid rgb
 .swatch { width: 44px; height: 44px; border-radius: 50%; border: 2px solid transparent; padding: 4px; background: transparent; cursor: pointer; }
 .swatch svg { width: 100%; height: 100%; display: block; }
 .swatch[aria-checked="true"] { border-color: #fff; }
+.intro-inner { max-width: 560px; }
+.customizer { display: grid; grid-template-columns: 180px 1fr; gap: 14px; align-items: start; }
+.look-preview { width: 180px; height: 180px; border-radius: 16px; background: radial-gradient(circle at 50% 40%, #2a2a30, #121214); position: sticky; top: 8px; }
+.look-opts { display: grid; gap: 10px; }
+.look-opts .field > legend { margin-bottom: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { appearance: none; border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; padding: 6px 11px; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.chips button[aria-checked="true"] { border-color: #fff; background: #3a2a2a; }
+.dots { display: flex; flex-wrap: wrap; gap: 7px; }
+.dots button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); cursor: pointer; padding: 0; font-size: .62rem; color: #999; background: transparent; }
+.dots button[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 2px var(--red); }
+.blush-toggle { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); font-weight: 700; }
+.swatches .swatch { width: 38px; height: 38px; }
+@media (max-width: 560px) {
+  .customizer { grid-template-columns: 1fr; }
+  .look-preview { width: 160px; height: 160px; margin: 0 auto; position: static; }
+}
 .intro-keys { list-style: none; padding: 0; margin: 18px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.9; }
 .intro-keys b { color: var(--text); }
 @keyframes flicker {

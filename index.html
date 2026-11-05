@@ -31,10 +31,19 @@
           <span>닉네임</span>
           <input id="nickname" maxlength="8" placeholder="불꽃이" required />
         </label>
-        <fieldset class="field">
-          <legend>내 불꽃 색</legend>
-          <div class="swatches" id="swatches"></div>
-        </fieldset>
+        <div class="customizer">
+          <canvas id="look-preview" class="look-preview" width="320" height="320" aria-label="캐릭터 미리보기"></canvas>
+          <div class="look-opts">
+            <fieldset class="field"><legend>머리 색</legend><div class="swatches" id="swatches"></div></fieldset>
+            <fieldset class="field"><legend>머리 모양</legend><div class="chips" id="opt-head"></div></fieldset>
+            <fieldset class="field"><legend>눈</legend><div class="chips" id="opt-eyes"></div></fieldset>
+            <fieldset class="field"><legend>모자·액세서리</legend><div class="chips" id="opt-acc"></div></fieldset>
+            <fieldset class="field"><legend>피부</legend><div class="dots" id="opt-skin"></div></fieldset>
+            <fieldset class="field"><legend>티셔츠</legend><div class="dots" id="opt-shirt"></div></fieldset>
+            <fieldset class="field"><legend>바지</legend><div class="dots" id="opt-pants"></div></fieldset>
+            <label class="blush-toggle"><input type="checkbox" id="opt-blush" checked /> 볼터치</label>
+          </div>
+        </div>
         <button class="btn btn-primary btn-lg" type="submit">암장 입장하기 🔥</button>
       </form>
       <a class="visit-card intro-visit" href="https://naver.me/xllIiJrK" target="_blank" rel="noopener"><b>📍 진짜 스파이시클라이밍 가보기 ↗</b><span>경기 군포시 엘에스로 153-8 111호 · 네이버지도</span></a>
