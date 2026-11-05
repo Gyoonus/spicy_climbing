@@ -3875,7 +3875,7 @@ function classifyRaw(h) {
 }
 
 function enterRoute(p, st) {
-  R.on = true; R.mash = null; R.rhythm = null; R.zoneHit = false; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
+  R.on = true; R.mash = null; R.rhythm = null; R.zoneHit = false; R.missStreak = 0; R.backs = 0; R.visited = new Set([p.start]); R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
   R.lh = p.start; R.rh = p.start;
   R.body = solveBody(R.lh, R.rh) || { u: p.start.u, v: Math.max(MAT_H, p.start.v - BODY.shY - 0.4) };
   [R.lf, R.rf] = pickFeet(R.body);
@@ -3980,22 +3980,46 @@ function mashFail() {
 }
 
 // 🥁 크럭스 박자 게임: 노트가 과녁에 닿는 순간 탭
-function startRhythm(c) {
+// kind: 'move'(모든 무브) | 'crux'(크럭스: 70% 이상 맞혀야)
+function startRhythm(c, kind = 'crux') {
   const rank = R.p.rank;
-  const notes = 4 + Math.floor(rank / 2);           // 핑크 4 ~ 검정 9
-  const beat = 60 / (96 + rank * 7);               // 96 ~ 166 BPM
+  const holdN = c.h.q >= 1 ? 2 : c.h.q >= 0.55 ? 3 : 4;               // 저그 2 · 엣지/핀치 3 · 크림프/슬로퍼 4
+  const notes = kind === 'crux' ? 4 + Math.floor(rank / 2) : holdN + (c.kind === 'dead' ? 1 : 0) + Math.floor(rank / 4);
+  const beat = 60 / (96 + rank * 7);                                 // 96 ~ 166 BPM
   const pattern = [];
-  let t = 1.4;
-  for (let i = 0; i < notes; i++) { pattern.push({ time: t, j: null }); t += beat * (rank >= 6 && rand01() < 0.3 ? 0.5 : 1) * (rank >= 3 && rand01() < 0.2 ? 2 : 1); }
-  R.rhythm = { c, notes: pattern, t: 0, need: Math.ceil(notes * 0.7), hits: 0, end: t + 0.5, win: 0.13 - rank * 0.005 };
+  let t = kind === 'crux' ? 1.4 : 0.9;
+  for (let i = 0; i < notes; i++) { pattern.push({ time: t, j: null }); t += beat * (rank >= 6 && rand01() < 0.3 ? 0.5 : 1) * (rank >= 3 && rand01() < 0.15 ? 2 : 1); }
+  R.rhythm = { c, kind, notes: pattern, t: 0, need: kind === 'crux' ? Math.ceil(notes * 0.7) : 0, hits: 0, end: t + 0.3, win: 0.13 - rank * 0.005 };
   routeRings.forEach((r) => (r.visible = false));
-  const box = $('#rhythm'); box.hidden = false;
+  const box = $('#rhythm'); box.hidden = false; box.classList.toggle('crux', kind === 'crux');
   const lane = $('#r-notes'); lane.innerHTML = '';
   pattern.forEach((nt) => { const d = document.createElement('i'); lane.appendChild(d); nt.el = d; });
-  $('#r-label').textContent = `🥁 박자 맞춰 꽉! 0/${R.rhythm.need}`;
+  rhythmLabel();
   $('#r-judge').textContent = '';
-  popText('박자!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.34);
-  if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['박자 맞춰서 꽉~ 🐯', '리듬 타요 리듬! …응원한 거 아님 🐯']), 2600), 400);
+  if (kind === 'crux') {
+    popText('크럭스!', c.h.pos.clone().add(new V3(0, 0.3, 0)), 0.34);
+    if (staffMayNag(0.4)) setTimeout(() => staffSay(pick(['박자 맞춰서 꽉~ 🐯', '리듬 타요 리듬! …응원한 거 아님 🐯']), 2600), 400);
+  }
+}
+function rhythmLabel() {
+  const r = R.rhythm; if (!r) return;
+  const streak = R.missStreak ? ` · 💀 미스 ${R.missStreak}/3` : '';
+  $('#r-label').textContent = r.kind === 'crux' ? `🥁 크럭스! ${r.hits}/${r.need}${streak}` : `🥁 ${r.c.h.type.n} ${r.hits}/${r.notes.length}${streak}`;
+}
+// 박자 하나 놓침: 나쁜 홀드일수록 체력 많이, 연속 3번이면 추락
+function rhythmMiss() {
+  const q = (R.lh.q + R.rh.q) / 2;
+  pl.pump += 4 / Math.pow(q, 0.9) * (1 + R.p.rank * 0.06);
+  R.missStreak = (R.missStreak || 0) + 1;
+  rhythmLabel();
+  if (R.missStreak >= 3) {
+    R.rhythm = null; $('#rhythm').hidden = true;
+    popText('3연속 미스!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.34);
+    toast('💀 박자 3번 연속 놓쳐서 손이 풀렸어요!', 2400);
+    letGo('fall');
+    return true;
+  }
+  return false;
 }
 function rand01() { return Math.random(); }
 function rhythmTap() {
@@ -4004,33 +4028,42 @@ function rhythmTap() {
   r.notes.forEach((nt) => { if (nt.j) return; const d = Math.abs(nt.time - r.t); if (d < bd) { bd = d; best = nt; } });
   if (!best || bd > 0.35) return;
   const jd = $('#r-judge');
-  if (bd <= r.win * 0.45) { best.j = 'p'; r.hits++; jd.textContent = 'PERFECT'; jd.className = 'r-judge p'; Sound.tone(880, 0.06, 'triangle', 0.07); }
-  else if (bd <= r.win) { best.j = 'g'; r.hits++; jd.textContent = 'GOOD'; jd.className = 'r-judge g'; Sound.tone(660, 0.06, 'triangle', 0.06); }
+  if (bd <= r.win * 0.45) { best.j = 'p'; r.hits++; R.missStreak = 0; jd.textContent = 'PERFECT'; jd.className = 'r-judge p'; Sound.tone(880, 0.06, 'triangle', 0.07); }
+  else if (bd <= r.win) { best.j = 'g'; r.hits++; R.missStreak = 0; jd.textContent = 'GOOD'; jd.className = 'r-judge g'; Sound.tone(660, 0.06, 'triangle', 0.06); }
   else { best.j = 'm'; jd.textContent = 'MISS'; jd.className = 'r-judge m'; Sound.tone(180, 0.08, 'square', 0.05); }
   best.el.className = best.j;
+  if (best.j === 'm' && rhythmMiss()) return;
   me.squash();
-  $('#r-label').textContent = `🥁 박자 맞춰 꽉! ${r.hits}/${r.need}`;
+  rhythmLabel();
+  if (r.notes.every((nt) => nt.j)) finishRhythm();
 }
 function updateRhythm(dt) {
   const r = R.rhythm; if (!r) return;
-  r.t += dt; pl.pump += dt * 1.2;
+  r.t += dt; pl.pump += dt * 0.5 / Math.pow((R.lh.q + R.rh.q) / 2, 0.6);
   const pxPerSec = 34; // % per second
+  for (const nt of r.notes) {
+    if (!nt.j && r.t - nt.time > r.win) { nt.j = 'm'; nt.el.className = 'm'; const jd = $('#r-judge'); jd.textContent = 'MISS'; jd.className = 'r-judge m'; if (rhythmMiss()) return; }
+  }
   r.notes.forEach((nt) => {
-    if (!nt.j && r.t - nt.time > r.win) { nt.j = 'm'; nt.el.className = 'm'; const jd = $('#r-judge'); jd.textContent = 'MISS'; jd.className = 'r-judge m'; }
     nt.el.style.left = (14 + (nt.time - r.t) * pxPerSec) + '%';
     nt.el.style.opacity = nt.j && nt.j !== 'm' ? 0 : nt.time - r.t > 2.6 ? 0 : 1;
   });
   // 메트로놈 (소리 켰을 때)
   r.notes.forEach((nt) => { if (!nt.tick && r.t >= nt.time) { nt.tick = true; Sound.tone(1200, 0.02, 'square', 0.02); } });
-  if (r.t >= r.end || r.hits >= r.need && r.notes.every((nt) => nt.j)) finishRhythm();
+  if (r.t >= r.end || r.notes.every((nt) => nt.j)) finishRhythm();
 }
 function finishRhythm() {
   const r = R.rhythm; R.rhythm = null; $('#rhythm').hidden = true;
   const head = me.group.position.clone().add(new V3(0, 2.0, 0));
+  if (r.kind === 'move') {
+    if (r.notes.every((nt) => nt.j === 'p')) popText('PERFECT 무브!', head, 0.28);
+    routeMove({ ...r.c, beatDone: true });
+    return;
+  }
   if (r.hits >= r.need) {
     popText(r.notes.every((nt) => nt.j === 'p') ? 'ALL PERFECT!!' : '버텼다!!', head, 0.34);
     pl.pump += 4; westPraise('tech', 700);
-    routeMove({ ...r.c, kind: r.c.raw || 'dead' });
+    routeMove({ ...r.c, kind: r.c.raw || 'dead', beatDone: true });
   } else {
     popText('미끄덩!', head, 0.32); Sound.tone(160, 0.2, 'square', 0.06);
     pl.pump += 16;
@@ -4052,8 +4085,17 @@ function routeAuto() {
   if (best) routeMove(best); else toast('갈 수 있는 홀드가 없어요', 1400);
 }
 function routeMove(c) {
-  if (c.kind === 'locked') { startRhythm(c); return; }
+  if (c.kind === 'locked') { startRhythm(c, 'crux'); return; }
   if (c.kind === 'dyno') { routeStartGauge(c); return; }
+  if (!c.beatDone) { startRhythm(c, 'move'); return; }
+  // 왔다갔다: 이미 잡았던 홀드로 돌아가면 힘 빠짐, 두 번째엔 끝
+  R.visited = R.visited || new Set();
+  if (R.visited.has(c.h)) {
+    R.backs = (R.backs || 0) + 1;
+    if (R.backs >= 2) { popText('왔다갔다…', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.3); toast('↩️ 왔다갔다하다 힘이 다 빠졌어요!', 2400); letGo('fall'); return; }
+    pl.pump += 15; toast('↩️ 왔다갔다하면 힘 빠져요! 한 번 더 그러면 끝', 2200);
+  }
+  R.visited.add(c.h);
   const prev = routeSnapshot();
   if (c.k === 'lh') R.lh = c.h; else R.rh = c.h;
   R.body = c.body;
@@ -4083,7 +4125,7 @@ function routeStep(dt) {
   if (!R.done) {
     const ang = R.st.sec.angle || 0, g = gear();
     const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0) - (R.slipT > 0 ? 2 : 0);
-    let rate = 0.6 * (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
+    let rate = 0.35 * (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
     rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
     if (me.tech === 'flag') rate *= 0.7;
     const restful = R.lh.q >= 1 && R.rh.q >= 1 && feet >= 2 && !R.anim;
@@ -4244,7 +4286,8 @@ function routeStartGauge(c) {
   const q = Math.min(from.q, c.h.q);
   const dist = Math.min(pd(c.h, R.lh), pd(c.h, R.rh));
   const dif = R.p.rank / 10; // 0(핑크) ~ 1(검정)
-  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.9 + (1 - q) * 0.6 + dif * 0.7, center: clamp(0.2 + dist / 2.6 * 0.65, 0.15, 0.88), width: (0.12 + 0.26 * q) * (1 - 0.5 * dif) * (0.85 + 0.25 * gear().f) };
+  R.gauge = { h: c.h, k: c.k, t: 0, speed: (0.9 + (1 - q) * 0.6 + dif * 0.7) * (1 + Math.max(0, dist - 0.8) * 1.1), // 멀리(높이) 뛸수록 바늘 훨씬 빠르게
+    center: clamp(0.2 + dist / 2.6 * 0.65, 0.15, 0.88), width: (0.12 + 0.26 * q) * (1 - 0.5 * dif) * (0.85 + 0.25 * gear().f) };
   routeRings.forEach((r) => (r.visible = false));
   toast('다이노! 초록 칸에서 탭 / Space', 1500);
 }
