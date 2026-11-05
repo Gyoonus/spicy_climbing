@@ -104,7 +104,7 @@ function pickHoldType(level, rand) {
 // 💰 경제 / 장비 — 완등하면 벌고, 암벽화·팬츠를 사면 등반이 쉬워짐
 // =================================================================
 const SHOES = [
-  { id: 'him', n: '힘 에디션', price: 151000, f: 1, e: 1, h: 1, c: '#e3262b', c2: '#111111', d: '이 암장 최강 암벽화. 모든 능력치 MAX 🔥', ad: true, url: 'https://thegearshop.co.kr/products/view/687687', photo: 'img/him-edition.jpg' },
+  { id: 'him', n: '힘 에디션', price: 151000, f: 1, e: 1, h: 1, c: '#1b1b1d', c2: '#8a8a8a', d: '블랙 호피 패턴 + ‘힘’ 자수. 이 암장 최강 암벽화, 모든 능력치 MAX 🔥', ad: true, url: 'https://thegearshop.co.kr/products/view/687687', photo: 'img/him-edition.jpg' },
   { id: 'dragoon', n: '드라군', price: 99000, f: 0.9, e: 0.75, h: 0.85, c: '#c8f03c', c2: '#1d1d1d', d: '말랑말랑 스미어 끝판왕' },
   { id: 'vrs', n: '인싸팅트 VRS', price: 95000, f: 0.8, e: 0.85, h: 0.7, c: '#ff7a00', c2: '#2a2a2e', d: '엣지가 미친 정밀함. 인싸들의 신발' },
   { id: 'solution', n: '솔루숀 콤프', price: 89000, f: 0.75, e: 0.65, h: 0.8, c: '#e9c400', c2: '#1d1d1d', d: '오버행 장인. 힐훅이 착 붙어요' },
@@ -2996,6 +2996,8 @@ function showAd(i = adIdx++ % ADS.length, prefix = '') {
   const ad = ADS[i % ADS.length];
   $('#ad-title').textContent = prefix + ad.title;
   $('#ad-copy').textContent = ad.copy;
+  const img = $('#ad-img'); const it = SHOES.find((x) => x.id === ad.item);
+  if (it && it.photo) { img.src = it.photo; img.hidden = false; } else img.hidden = true;
   const a = $('#ad-link'); a.href = ad.url;
   $('#ad-shop').onclick = () => { $('#adcard').hidden = true; openShop(); };
   const el = $('#adcard'); el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
@@ -3020,7 +3022,19 @@ function buildBillboards() {
     mesh.position.set(x, 2.2, z); mesh.rotation.y = rotY; mesh.userData.item = item;
     scene.add(mesh); billboards.push(mesh);
   };
-  add(291, 975, Math.PI / 2, poster(['HIM', '힘 에디션', '스파이시 최강 암벽화', '마찰·엣지·오버행 MAX'], '#111111', '#ffffff', '#e3262b'), 'him');
+  const himTex = poster(['HIM', '힘 에디션', '스파이시 최강 암벽화', '마찰·엣지·오버행 MAX'], '#111111', '#ffffff', '#e3262b');
+  add(291, 975, Math.PI / 2, himTex, 'him');
+  const photo = new Image();
+  photo.onload = () => {
+    const c = himTex.image, g = c.getContext('2d');
+    g.fillStyle = '#111'; g.fillRect(0, 70, 512, 530);
+    g.fillStyle = '#f4f2ee'; g.fillRect(36, 250, 440, 330);
+    g.drawImage(photo, 46, 258, 420, 314);
+    g.textAlign = 'center'; g.fillStyle = '#e3262b'; g.font = '100px "Sedgwick Ave Display", cursive'; g.fillText('HIM', 256, 170);
+    g.fillStyle = '#fff'; g.font = '900 54px "Black Han Sans", sans-serif'; g.fillText('힘 에디션 151,000원', 256, 234);
+    himTex.needsUpdate = true;
+  };
+  photo.src = SHOES[0].photo;
   add(579, 1000, -Math.PI / 2, poster(['BITE', '클라이밍 팬츠', '하이스텝도 쭉쭉', '발 닿는 거리 +8cm'], '#28331f', '#f3f0e4', '#c8f03c'), 'bite');
 }
 
