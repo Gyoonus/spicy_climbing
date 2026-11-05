@@ -11,7 +11,7 @@
     // GitHub Pages로 들어오면 Vercel 주소로 이동 (Vercel이 열릴 때만)
     (function () {
       if (!/github\.io$/.test(location.hostname)) return;
-      var T = 'https://spicy-climbing.vercel.app';
+      var T = 'https://spicyclimbing.vercel.app';
       fetch(T + '/favicon.svg', { mode: 'no-cors', cache: 'no-store' })
         .then(function () { location.replace(T + '/' + location.search + location.hash); })
         .catch(function () {});

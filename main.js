@@ -2377,7 +2377,7 @@ function npcUpdate(n, dt, now) {
 // 🗣️ NPC와 대화 — Vercel 서버 함수(/api/npc)가 Claude Haiku로 대답
 // =================================================================
 // GitHub Pages에서 열면 Vercel 주소로 요청 (Vercel 배포 후 주소를 여기에)
-const NPC_API_REMOTE = 'https://spicy-climbing.vercel.app';
+const NPC_API_REMOTE = 'https://spicyclimbing.vercel.app';
 function npcApiUrl() {
   const q = new URLSearchParams(location.search).get('npcapi');
   if (q) return q;

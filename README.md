@@ -103,7 +103,7 @@
    - `ANTHROPIC_API_KEY` = Claude API 키 (Production, Preview 체크)
    - (선택) `ALLOWED_ORIGINS` = 직접 연결한 도메인이 있으면 `https://내도메인.com` (쉼표로 여러 개). `*.vercel.app`과 `gyoonus.github.io`는 기본 허용
 5. **Settings → Git → Production Branch** 를 이 작업 브랜치로 바꾸면 푸시할 때마다 자동 배포
-6. 새 주소: **https://spicy-climbing.vercel.app** — 옛 GitHub Pages 주소로 들어오면 Vercel이 열려 있을 때 자동으로 넘어가요(`?room=` 유지). 주소가 다르면 `index.html`의 리다이렉트 주소와 `main.js`의 `NPC_API_REMOTE`를 바꾸면 돼요
+6. 새 주소: **https://spicyclimbing.vercel.app** — 옛 GitHub Pages 주소로 들어오면 Vercel이 열려 있을 때 자동으로 넘어가요(`?room=` 유지). 주소가 다르면 `index.html`의 리다이렉트 주소와 `main.js`의 `NPC_API_REMOTE`를 바꾸면 돼요
 
 ## 실행 / 배포
 빌드 없이 정적 파일만으로 동작합니다.
