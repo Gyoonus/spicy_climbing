@@ -191,6 +191,20 @@ body.inst .chat { bottom: 34px; }
   body.inst .chatlog { bottom: 150px; width: calc(100% - 190px); max-height: 3.6em; font-size: .8rem; opacity: .85; }
 }
 
+/* 등반 모드 */
+body.route .hud-sub, body.route .hud-tech, body.route #joystick, body.route #btn-grab.ready { display: none !important; }
+body.route .hud-tech { display: none !important; }
+.qte {
+  position: absolute; left: 50%; bottom: 220px; transform: translateX(-50%); border: 0; cursor: pointer;
+  padding: 18px 30px; border-radius: 999px; font: 900 1.6rem "Black Han Sans", sans-serif; color: #111;
+  background: conic-gradient(#ffcf4a calc(var(--t, 1) * 1turn), rgba(255,255,255,.35) 0);
+  box-shadow: 0 0 0 4px #fff, 0 10px 30px rgba(0,0,0,.45); display: flex; align-items: center; gap: 10px;
+}
+.qte kbd { font-size: .8rem; background: #111; color: #fff; border: 0; padding: 2px 8px; border-radius: 6px; opacity: 1; }
+.qte.pop { animation: qpop .35s cubic-bezier(.2,1.6,.4,1); }
+@keyframes qpop { from { transform: translateX(-50%) scale(.4); } to { transform: translateX(-50%) scale(1); } }
+@media (max-width: 640px) { .qte { bottom: 300px; font-size: 1.35rem; padding: 16px 24px; } }
+
 /* 다이노 게이지 */
 .gauge { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(320px, 80vw); text-align: center; pointer-events: none; }
 .g-label { font-weight: 900; font-size: .95rem; margin-bottom: 6px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.8); }

@@ -136,7 +136,7 @@ function updateWallet() { const el = $('#wallet'); if (el) { el.textContent = wo
 
 const TECHS = { flag: { n: '플래깅', icon: '🦵' }, inside: { n: '인사이드 스텝', icon: '↩️' }, outside: { n: '아웃사이드 스텝', icon: '↪️' } };
 const CATCH = 0.34;   // 다이노 캐치 반경
-const BODY_DROP = 0.98; // 손 → 발바닥 높이 (2등신)
+const BODY_DROP = 1.15; // 손(매달린 홀드) → 발바닥 높이
 const PLAYER_R = 0.28;
 
 const FLAME_D = 'M50 4 C57 17 63 21 70 15 C71 27 77 30 85 24 C81 39 93 50 91 67 C89 86 72 96 50 96 C28 96 11 86 9 67 C7 50 19 39 15 24 C23 30 29 27 30 15 C37 21 43 17 50 4 Z';
@@ -945,11 +945,17 @@ function buildCowboyHead(head) {
   b.position.y = 0.71; head.add(b);
 }
 
-// 2등신 불꽃이: 큰 불꽃 머리 + 작은 몸 + 늘어나는 팔다리 (IK로 홀드를 잡음)
-const LIMB = { arm: 0.3, leg: 0.28 };
-const limbGeo = { arm: new THREE.CapsuleGeometry(0.048, LIMB.arm, 4, 8).translate(0, -LIMB.arm / 2, 0), leg: new THREE.CapsuleGeometry(0.06, LIMB.leg, 4, 8).translate(0, -LIMB.leg / 2, 0) };
-const handGeo = new THREE.SphereGeometry(0.07, 12, 8), footGeo = new THREE.SphereGeometry(0.08, 12, 8).scale(1, 0.7, 1.4);
-const DOWN = new V3(0, -1, 0);
+// 불꽃이: 큰 불꽃 머리 + 사람 같은 두 마디 팔다리 (팔꿈치·무릎이 굽는 IK)
+const BODY = { hipY: 0.48, shY: 0.8, shW: 0.16, hipW: 0.08, armA: 0.23, armB: 0.23, legA: 0.245, legB: 0.235 }; // 작고 귀엽게 (머리는 그대로)
+const handGeo = new THREE.SphereGeometry(0.055, 12, 8), footGeo = new THREE.SphereGeometry(0.066, 12, 8).scale(1, 0.62, 1.55).translate(0, -0.02, 0.045);
+const UPV = new V3(0, 1, 0), DOWN = new V3(0, -1, 0);
+const segGeoCache = new Map();
+function segGeo(r, len) { const k = r + ':' + len; if (!segGeoCache.has(k)) segGeoCache.set(k, new THREE.CapsuleGeometry(r, len, 4, 10)); return segGeoCache.get(k); }
+function placeSeg(mesh, a, b) {
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  const d = tmpV.copy(b).sub(a);
+  if (d.lengthSq() > 1e-8) mesh.quaternion.setFromUnitVectors(UPV, d.normalize());
+}
 class Avatar {
   constructor(name, color, { isPlayer = false, visitor = false, tiger = false, cowboy = false } = {}) {
     this.name = name; this.color = color;
@@ -961,61 +967,65 @@ class Avatar {
     const skin = new THREE.MeshStandardMaterial({ color: '#ffe3cc', roughness: 0.7 });
     const shoe = new THREE.MeshStandardMaterial({ color: '#2a2a2e', roughness: 0.6 });
     this.shoeMat = shoe; this.legMat = dark.clone(); this.legBase = dark.color.clone();
-    // 몸통 (작은 티셔츠)
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.12, 6, 12), dark);
-    torso.position.y = 0.45; this.rig.add(torso);
-    const tee = cowboy ? textSprite('⭐', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }) : tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
-    tee.position.set(0, 0.47, 0.16); this.rig.add(tee);
     if (tiger) skin.color.set('#f39a2b');
     this.skinBase = tiger ? '#f39a2b' : cowboy ? '#ffd9b3' : '#ffe3cc';
+    this.skin = skin;
+    const B = BODY;
+    // 몸통 (티셔츠) + 골반 (바지)
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.135, Math.max(0.04, B.shY - B.hipY - 0.12), 6, 14), dark);
+    torso.position.y = (B.hipY + B.shY) / 2 + 0.02; torso.scale.set(1, 1, 0.82); this.rig.add(torso);
+    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.145, 16, 10), this.legMat);
+    pelvis.position.y = B.hipY + 0.03; pelvis.scale.set(1.08, 0.62, 0.85); this.rig.add(pelvis);
+    const tee = cowboy ? textSprite('⭐', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true }) : tiger ? textSprite('STAFF', { h: 0.07, bg: '#f39a2b', fg: '#111', depthTest: true, font: '900 40px "Noto Sans KR", sans-serif' }) : textSprite('🔥', { h: 0.12, bg: 'rgba(0,0,0,0)', depthTest: true });
+    tee.position.set(0, B.hipY + 0.24, 0.15); this.rig.add(tee);
     // 초크백 (허리 뒤)
     const bag = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.14, 14), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.9 }));
-    bag.position.set(0, 0.34, -0.17); this.rig.add(bag);
+    bag.position.set(0, B.hipY + 0.06, -0.19); this.rig.add(bag);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.073, 0.014, 6, 16), new THREE.MeshStandardMaterial({ color: '#e3262b' }));
-    rim.rotation.x = Math.PI / 2; rim.position.set(0, 0.41, -0.17); this.rig.add(rim);
-    this.skin = skin;
-    // 머리 (큰 불꽃 / 호랑이)
+    rim.rotation.x = Math.PI / 2; rim.position.set(0, B.hipY + 0.13, -0.19); this.rig.add(rim);
+    // 머리 (큰 불꽃 / 호랑이 / 카우보이)
     this.head = new THREE.Group();
-    this.head.position.y = 0.55;
+    this.head.position.y = B.shY - 0.06;
     const hs = 0.86;
     if (tiger) { buildTigerHead(this.head); bag.visible = false; rim.visible = false; }
     else if (cowboy) {
       buildCowboyHead(this.head); bag.visible = false; rim.visible = false;
       this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.26, 0.025), new THREE.MeshStandardMaterial({ color: '#16161a', roughness: 0.3 }));
-      this.phone.position.set(0, 0.86, 0.42); this.phone.visible = false; this.rig.add(this.phone);
+      this.phone.position.set(0, B.shY + 0.32, 0.46); this.phone.visible = false; this.rig.add(this.phone);
       const lens = new THREE.Mesh(new THREE.CircleGeometry(0.025, 12), new THREE.MeshBasicMaterial({ color: '#7fb6ff' }));
       lens.position.set(0.04, 0.08, 0.014); this.phone.add(lens);
-    }
-    else {
-    const flame = new THREE.Mesh(getFlameGeo(), main); flame.scale.setScalar(hs); this.head.add(flame);
-    [-0.12, 0.12].forEach((x) => {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), blackMat);
-      e.position.set(x * hs, 0.41 * hs, 0.25 * hs + 0.01); e.scale.z = 0.5; this.head.add(e);
-      const hl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff' }));
-      hl.position.set(x * hs + 0.015, 0.43 * hs, 0.25 * hs + 0.035); this.head.add(hl);
-      const blush = new THREE.Mesh(new THREE.CircleGeometry(0.04, 16), new THREE.MeshBasicMaterial({ color: '#ff9aa8', transparent: true, opacity: 0.7 }));
-      blush.position.set(x * hs * 1.75, 0.3 * hs, 0.25 * hs + 0.012); this.head.add(blush);
-    });
-    const arcL = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.01, 6, 12, Math.PI), blackMat);
-    arcL.position.set(-0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcL);
-    const arcR = arcL.clone(); arcR.rotation.z = Math.PI; arcR.position.set(0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcR);
+    } else {
+      const flame = new THREE.Mesh(getFlameGeo(), main); flame.scale.setScalar(hs); this.head.add(flame);
+      this.headMat = main;
+      [-0.12, 0.12].forEach((x) => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), blackMat);
+        e.position.set(x * hs, 0.41 * hs, 0.25 * hs + 0.01); e.scale.z = 0.5; this.head.add(e);
+        const hl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff' }));
+        hl.position.set(x * hs + 0.015, 0.43 * hs, 0.25 * hs + 0.035); this.head.add(hl);
+        const blush = new THREE.Mesh(new THREE.CircleGeometry(0.04, 16), new THREE.MeshBasicMaterial({ color: '#ff9aa8', transparent: true, opacity: 0.7 }));
+        blush.position.set(x * hs * 1.75, 0.3 * hs, 0.25 * hs + 0.012); this.head.add(blush);
+      });
+      const arcL = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.01, 6, 12, Math.PI), blackMat);
+      arcL.position.set(-0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcL);
+      const arcR = arcL.clone(); arcR.rotation.z = Math.PI; arcR.position.set(0.034, 0.28 * hs, 0.25 * hs + 0.01); this.head.add(arcR);
     }
     this.rig.add(this.head);
-    // 팔다리
-    const mk = (kind, x, y, z) => {
-      const pivot = new THREE.Group(); pivot.position.set(x, y, z);
-      const seg = new THREE.Mesh(limbGeo[kind], kind === 'arm' ? dark : this.legMat);
-      const end = new THREE.Mesh(kind === 'arm' ? handGeo : footGeo, kind === 'arm' ? skin : shoe);
-      end.position.y = -LIMB[kind];
-      if (kind === 'leg') end.position.z = 0.04;
-      pivot.add(seg, end);
-      this.rig.add(pivot);
-      return { pivot, seg, end, len: LIMB[kind], kind };
+    // 팔다리: 어깨/엉덩이 → 팔꿈치/무릎 → 손/발
+    const mk = (kind, side) => {
+      const arm = kind === 'arm';
+      const a = arm ? B.armA : B.legA, b = arm ? B.armB : B.legB, r = arm ? 0.046 : 0.06;
+      const root = arm ? new V3(side * B.shW, B.shY - 0.04, 0) : new V3(side * B.hipW, B.hipY, 0);
+      const upper = new THREE.Mesh(segGeo(r, a), arm ? dark : this.legMat);
+      const lower = new THREE.Mesh(segGeo(r * 0.88, b), arm ? skin : this.legMat);
+      const joint = new THREE.Mesh(new THREE.SphereGeometry(r * 1.02, 10, 8), arm ? skin : this.legMat);
+      const end = new THREE.Mesh(arm ? handGeo : footGeo, arm ? skin : shoe);
+      this.rig.add(upper, lower, joint, end);
+      return { kind, side, root, a, b, len: a + b, upper, lower, joint, end, dir: new V3(0, -1, 0) };
     };
-    this.limbs = [mk('arm', -0.2, 0.55, 0), mk('arm', 0.2, 0.55, 0), mk('leg', -0.085, 0.3, 0), mk('leg', 0.085, 0.3, 0)];
+    this.limbs = [mk('arm', -1), mk('arm', 1), mk('leg', -1), mk('leg', 1)];
+    const tagY = tiger ? 1.68 : cowboy ? 1.84 : 1.62;
     this.tag = textSprite(tiger ? `🐯 ${name}` : cowboy ? `🤠 ${name}` : name, { h: 0.17, bg: isPlayer ? '#e3262b' : tiger ? '#f39a2b' : cowboy ? '#ffd166' : visitor ? '#f5f2ee' : 'rgba(20,20,22,.8)', fg: visitor || tiger || cowboy ? '#111' : '#fff' });
-    if (cowboy) this.tag.position.y = 1.62;
-    if (!cowboy) this.tag.position.y = 1.5;
+    this.tag.position.y = tagY; this.bubbleY = tagY + 0.14;
     this.group.add(this.tag);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
     this.shadow.rotation.x = -Math.PI / 2;
@@ -1027,6 +1037,7 @@ class Avatar {
     this.prev = new V3(); this.speed = 0;
   }
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
+  setHeadAlpha(a) { if (!this.headMat) return; this.headMat.transparent = a < 1; this.headMat.opacity = a; this.headMat.depthWrite = a >= 1; this.headMat.needsUpdate = true; }
   setOutfit(shoeId, pantsId) {
     const sh = SHOES.find((x) => x.id === shoeId), pa = PANTS.find((x) => x.id === pantsId);
     this.shoeMat.color.set(sh && sh.id !== 'rental' ? sh.c : '#2a2a2e');
@@ -1039,13 +1050,12 @@ class Avatar {
     if (this.bubble) { this.group.remove(this.bubble); disposeSprite(this.bubble); }
     clearTimeout(this.bubbleT);
     const b = textSprite(text, { h: 0.21, bg: '#ffffff', fg: '#151515', tail: true, font: '700 40px "Noto Sans KR", sans-serif' });
-    b.position.y = 1.64;
     this.group.add(b);
     this.bubble = b;
     this.layoutBubbles();
     this.bubbleT = setTimeout(() => { if (this.bubble === b) { this.group.remove(b); disposeSprite(b); this.bubble = null; this.layoutBubbles(); } }, ms);
   }
-  // 직접 입력한 채팅: 70초 유지, 새 채팅이 올 때만 바뀜 (위 칸)
+  // 직접 입력한 채팅 (위 칸)
   chat(text, ms = 15000) {
     if (this.chatBubble) { this.group.remove(this.chatBubble); disposeSprite(this.chatBubble); }
     clearTimeout(this.chatT);
@@ -1056,93 +1066,114 @@ class Avatar {
     this.chatT = setTimeout(() => { if (this.chatBubble === b) { this.group.remove(b); disposeSprite(b); this.chatBubble = null; this.layoutBubbles(); } }, ms);
   }
   layoutBubbles() {
-    if (this.bubble) this.bubble.position.y = 1.64;
-    if (this.chatBubble) this.chatBubble.position.y = this.bubble ? 1.98 : 1.64;
+    if (this.bubble) this.bubble.position.y = this.bubbleY;
+    if (this.chatBubble) this.chatBubble.position.y = this.bubble ? this.bubbleY + 0.34 : this.bubbleY;
   }
-  limbRot(l, rx, rz = 0) { l.pivot.quaternion.setFromEuler(new THREE.Euler(rx, 0, rz)); this.limbLen(l, l.len); }
-  limbLen(l, d) { l.seg.scale.y = d / l.len; l.end.position.y = -d; }
-  limbTo(l, world) {
-    const local = l.pivot.parent.worldToLocal(world.clone()).sub(l.pivot.position);
-    const d = local.length();
-    if (d < 1e-4) return;
-    l.pivot.quaternion.setFromUnitVectors(DOWN, local.multiplyScalar(1 / d));
-    this.limbLen(l, clamp(d, l.len * 0.5, l.len * 2.6));
+  // 두 마디 IK: 목표점(리그 좌표)을 향해 팔꿈치/무릎을 굽힘. 늘어나지 않음
+  solve(l, target) {
+    const r = l.root, d = tmpV2.copy(target).sub(r);
+    let dist = d.length();
+    if (dist < 1e-4) { d.set(0, -1, 0); dist = 0.1; }
+    const dir = d.multiplyScalar(1 / dist).clone();
+    dist = clamp(dist, 0.08, l.len - 0.002);
+    const cosA = clamp((l.a * l.a + dist * dist - l.b * l.b) / (2 * l.a * dist), -1, 1), sinA = Math.sqrt(1 - cosA * cosA);
+    // 팔꿈치는 바깥·아래, 무릎은 앞(등반 중이면 바깥·벽 반대쪽)
+    const pole = l.kind === 'arm'
+      ? (this.climbing ? new V3(l.side, -1, -0.7) : new V3(l.side * 0.6, -0.2, -1))
+      : (this.climbing ? new V3(l.side, 0.2, -0.8) : new V3(l.side * 0.15, 0, 1));
+    pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
+    if (pole.lengthSq() < 1e-6) pole.set(0, 0, 1);
+    pole.normalize();
+    const mid = r.clone().addScaledVector(dir, l.a * cosA).addScaledVector(pole, l.a * sinA);
+    const end = r.clone().addScaledVector(dir, dist);
+    placeSeg(l.upper, r, mid); placeSeg(l.lower, mid, end);
+    l.joint.position.copy(mid); l.end.position.copy(end);
+    if (l.kind === 'leg') l.end.rotation.set(0, 0, 0);
   }
+  // 각도로 자세 잡기 (아래 방향을 회전) — 기존 포즈 코드와 호환
+  limbRot(l, rx, rz = 0) {
+    l.dir.copy(DOWN).applyEuler(new THREE.Euler(rx, 0, rz));
+    this.solve(l, l.root.clone().addScaledVector(l.dir, l.len * 0.96));
+  }
+  limbLen(l, d) { this.solve(l, l.root.clone().addScaledVector(l.dir, Math.min(d, l.len))); }
+  limbTo(l, world) { this.solve(l, this.rig.worldToLocal(world.clone())); }
   update(dt) {
     this.t += dt;
     const p = this.group.position;
     const mv = Math.hypot(p.x - this.prev.x, p.z - this.prev.z) / Math.max(dt, 1e-3);
     this.prev.copy(p);
     this.speed = lerp(this.speed, mv, damp(8, dt));
-    // 몸 스쿼시/바운스
     let sx = 1, sy = 1;
     if (this.squashT > 0) {
       this.squashT -= dt;
       const k = this.squashT / 0.45;
-      sy = 1 - 0.35 * Math.sin(k * Math.PI) * k; sx = 1 + (1 - sy) * 0.8;
+      sy = 1 - 0.3 * Math.sin(k * Math.PI) * k; sx = 1 + (1 - sy) * 0.7;
     }
     const [la, ra, ll, rl] = this.limbs;
     this.rig.position.y = 0; this.rig.rotation.set(0, 0, 0); this.head.rotation.set(0, 0, 0);
-    // 초크: 0~0.45 초크백에 손 넣기, 0.45~1 박수 짝!
     if (this.chalkT > 0) this.chalkT = Math.max(0, this.chalkT - dt);
     const ck = this.chalkT > 0 ? this.chalkDur - this.chalkT : -1;
     if (this.chalkyT > 0) this.chalkyT -= dt;
     this.skin.color.set(this.skinBase).lerp(new THREE.Color('#ffffff'), clamp(this.chalkyT / 4, 0, 1));
+    this.rig.scale.set(1, 1, 1);
+    this.group.updateMatrixWorld(true);
     if (this.climbing && this.grips) {
-      this.group.updateMatrixWorld(true);
+      if (this.swing) this.rig.rotation.z = this.swing;
+      this.rig.updateMatrixWorld(true);
       this.limbTo(la, this.grips[0]);
       if (ck >= 0) this.limbRot(ra, ck < 0.5 ? 0.9 : 0.3, 0.35); else this.limbTo(ra, this.grips[1]);
       if (this.tech === 'flag' && !this.hanging) {
-        this.limbTo(ll, this.grips[2]);
-        this.limbRot(rl, 0.15, 1.35); this.limbLen(rl, 0.42);
-        this.rig.rotation.z = -0.08;
-      } else if ((this.tech === 'inside' || this.tech === 'outside') && !this.hanging) {
-        this.rig.rotation.y = this.tech === 'inside' ? 0.5 : -0.5;
+        const fs = this.flagSide || 1, fl = fs > 0 ? ll : rl, other = fs > 0 ? rl : ll;
+        this.limbTo(other, this.grips[fs > 0 ? 3 : 2]);
+        this.solve(fl, fl.root.clone().add(new V3(fs * 0.55, -0.32, -0.05)));
+        this.rig.rotation.z = -fs * 0.06;
+      } else if (this.tech === 'heel') {
         this.limbTo(ll, this.grips[2]); this.limbTo(rl, this.grips[3]);
-      } else if (this.campus || this.hanging) {
-        const f = Math.sin(this.t * (this.hanging ? 2 : 6)) * (this.hanging ? 0.18 : 0.35);
-        this.limbRot(ll, 0.05 + f, -0.1); this.limbRot(rl, 0.05 - f, 0.1);
-        if (this.hanging) this.rig.rotation.z = Math.sin(this.t * 2) * 0.06;
+      } else if (this.campus || this.hanging || this.footless) {
+        const f = Math.sin(this.t * (this.hanging ? 2 : 6)) * (this.hanging ? 0.15 : 0.3);
+        this.limbRot(ll, 0.25 + f, -0.12); this.limbRot(rl, 0.25 - f, 0.12);
       } else { this.limbTo(ll, this.grips[2]); this.limbTo(rl, this.grips[3]); }
       this.head.rotation.z = Math.sin(this.t * 2.5) * 0.05;
     } else if (this.climbing || this.airborne) {
       const f = Math.sin(this.t * (this.airborne ? 18 : 4)) * (this.airborne ? 0.35 : 0.1);
       this.limbRot(la, Math.PI * 0.92 + f, -0.25); this.limbRot(ra, Math.PI * 0.92 - f, 0.25);
-      this.limbRot(ll, -0.3 - f, -0.1); this.limbRot(rl, -0.3 + f, 0.1);
+      this.limbRot(ll, -0.5 - f, -0.12); this.limbRot(rl, -0.5 + f, 0.12);
     } else if (this.sitting) {
-      this.rig.position.y = -0.22;
-      const b = Math.sin(this.t * 1.6) * 0.06;
-      this.limbRot(la, -0.5 + b, -0.5); this.limbRot(ra, -0.5 - b, 0.5);
-      this.limbRot(ll, -Math.PI / 2 + 0.1, -0.15); this.limbRot(rl, -Math.PI / 2 + 0.1, 0.15);
-      sy *= 1 + Math.sin(this.t * 1.6) * 0.02;
+      this.rig.position.y = -0.33;
+      const b = Math.sin(this.t * 1.6) * 0.04;
+      this.solve(la, new V3(-0.2, 0.47 + b, 0.3)); this.solve(ra, new V3(0.2, 0.47 - b, 0.3));
+      this.solve(ll, new V3(-0.13, 0.32, 0.42)); this.solve(rl, new V3(0.13, 0.32, 0.42));
+      sy *= 1 + Math.sin(this.t * 1.6) * 0.015;
     } else {
       const sp = clamp(this.speed / 3.4, 0, 1.9);
       const run = clamp(sp - 1, 0, 0.9) / 0.9;
-      this.phase += dt * (4 + Math.min(sp, 1) * 9 + run * 6);
-      const amp = Math.min(sp, 1) * 0.9 + run * 0.45;
+      this.phase += dt * (4 + Math.min(sp, 1) * 8 + run * 5);
+      const amp = Math.min(sp, 1) * 0.7 + run * 0.35;
       const s = Math.sin(this.phase) * amp;
-      this.limbRot(la, s, -0.12 - run * 0.2); this.limbRot(ra, -s, 0.12 + run * 0.2);
-      this.limbRot(ll, -s, 0); this.limbRot(rl, s, 0);
-      const bob = sp > 0.1 ? Math.abs(Math.sin(this.phase)) * (0.05 + run * 0.06) * Math.min(sp, 1) : Math.sin(this.t * 2.6) * 0.012;
+      this.limbRot(la, s * 0.9, -0.12 - run * 0.15); this.limbRot(ra, -s * 0.9, 0.12 + run * 0.15);
+      // 다리: 앞으로 나가는 쪽은 무릎을 들어 올림
+      const lift = (v) => Math.max(0, Math.sin(v)) * 0.12 * Math.min(sp, 1.4);
+      this.solve(ll, ll.root.clone().add(new V3(0, -ll.len * 0.97 + lift(this.phase + Math.PI), Math.sin(-this.phase) * 0.32 * Math.min(sp, 1.4))));
+      this.solve(rl, rl.root.clone().add(new V3(0, -rl.len * 0.97 + lift(this.phase), Math.sin(this.phase) * 0.32 * Math.min(sp, 1.4))));
+      const bob = sp > 0.1 ? Math.abs(Math.sin(this.phase)) * (0.04 + run * 0.05) * Math.min(sp, 1) : Math.sin(this.t * 2.6) * 0.01;
       this.rig.position.y = bob;
-      this.rig.rotation.x = run * 0.22;
-      this.head.rotation.z = Math.sin(this.phase) * 0.06 * Math.min(sp, 1);
+      this.rig.rotation.x = run * 0.2;
+      this.head.rotation.z = Math.sin(this.phase) * 0.05 * Math.min(sp, 1);
     }
     if (this.photoPose) {
-      this.limbRot(la, -1.75, 0.55); this.limbRot(ra, -1.75, -0.55);
-      this.limbLen(la, 0.26); this.limbLen(ra, 0.26);
+      this.solve(la, new V3(-0.1, BODY.shY + 0.28, 0.42)); this.solve(ra, new V3(0.1, BODY.shY + 0.28, 0.42));
     }
     if (this.phone) this.phone.visible = !!this.photoPose;
     const onWall = this.climbing && this.grips;
     if (ck >= 0 && !onWall) {
       // 초크백에 손 넣기 → 쫙! 쫙! 팡!!
-      if (ck < 0.35) { this.limbRot(la, 0.95, -0.25); this.limbRot(ra, 0.95, 0.25); }
+      if (ck < 0.35) { this.solve(la, new V3(-0.08, BODY.hipY + 0.06, -0.26)); this.solve(ra, new V3(0.08, BODY.hipY + 0.06, -0.26)); }
       else {
         let pulse = 0;
         CLAPS.forEach((tc) => { pulse = Math.max(pulse, Math.exp(-(((ck - tc) / 0.06) ** 2))); });
-        const th = 0.78 * pulse - 0.15 * (1 - pulse), lift = -1.25 - 0.3 * pulse;
-        this.limbRot(la, lift, th); this.limbRot(ra, lift, -th);
-        sy *= 1 - 0.07 * pulse; sx *= 1 + 0.04 * pulse;
+        const gap = 0.02 + 0.26 * (1 - pulse);
+        this.solve(la, new V3(-gap, BODY.shY - 0.05 + pulse * 0.08, 0.36)); this.solve(ra, new V3(gap, BODY.shY - 0.05 + pulse * 0.08, 0.36));
+        sy *= 1 - 0.06 * pulse; sx *= 1 + 0.03 * pulse;
         this.head.rotation.x = -0.12 * pulse;
       }
     }
@@ -1336,6 +1367,7 @@ function setupInput() {
     if (e.target.tagName === 'INPUT') { if (e.key === 'Escape') e.target.blur(); return; }
     if (document.querySelector('dialog[open]')) return;
     if (pl.mode === 'inst' && !e.repeat && instKey(e.code)) { e.preventDefault(); return; }
+    if (pl.mode === 'route' && !e.repeat && routeKey(e.code)) { e.preventDefault(); return; }
     if (e.code === 'Enter') { e.preventDefault(); openChat(); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -1378,7 +1410,8 @@ function setupInput() {
   const ray = new THREE.Raycaster();
   el.addEventListener('pointerdown', (e) => { camCtl.downAt = [e.clientX, e.clientY]; });
   el.addEventListener('click', (e) => {
-    if (!camCtl.downAt || Math.hypot(e.clientX - camCtl.downAt[0], e.clientY - camCtl.downAt[1]) > 6) return;
+    if (!camCtl.downAt || Math.hypot(e.clientX - camCtl.downAt[0], e.clientY - camCtl.downAt[1]) > 10) return;
+    if (pl.mode === 'route') { routeTap(e.clientX, e.clientY); return; }
     const r = el.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
     const hit = ray.intersectObjects(billboards)[0];
@@ -1420,6 +1453,7 @@ function setupInput() {
   icv.addEventListener('pointerup', instPointerUp);
   icv.addEventListener('pointercancel', instPointerUp);
   $('#inst-hip').addEventListener('click', instToggleHip);
+  $('#qte').addEventListener('click', () => { if (R.qte) qteResult(true); });
   $('#inst-flag').addEventListener('click', instFlag);
   $('#inst-auto').addEventListener('click', instToggleAuto);
   $('#inst-down').addEventListener('click', () => { if (pl.mode === 'inst') letGo('down'); });
@@ -1625,10 +1659,10 @@ function gripPoints(st, u, v, problem, out) {
   const [s] = segAt(st, u);
   const g = out || [new V3(), new V3(), new V3(), new V3()];
   [-1, 1].forEach((sd, i) => {
-    const r = nearestGrab(st, u + sd * 0.42, v - 0.05, problem);
-    if (r && r.d < 0.38) g[i].copy(r.h.pos); else surf(st, u + sd * 0.42, v - 0.05, g[i]);
+    const r = nearestGrab(st, u + sd * 0.24, v - 0.05, problem);
+    if (r && r.d < 0.34) g[i].copy(r.h.pos); else surf(st, u + sd * 0.24, v - 0.05, g[i]);
     g[i].addScaledVector(s.n3, 0.07);
-    const fv = Math.max(0.08, v - 0.95);
+    const fv = Math.max(0.36, v - 0.94);
     const f = nearestGrab(st, u + sd * 0.18, fv, null);
     if (f && f.d < 0.4) g[i + 2].copy(f.h.pos); else surf(st, u + sd * 0.18, fv, g[i + 2]);
     g[i + 2].addScaledVector(s.n3, 0.06);
@@ -1654,8 +1688,8 @@ function mount(c) {
   const st = c.st, u = c.u, v = 1.55;
   let prob = null, bd = Infinity;
   st.problems.forEach((p) => { const d = uvDist(st, p.start.u, p.start.v, u, v); if (d <= REACH && d < bd) { bd = d; prob = p; } });
-  const r = nearestGrab(st, u, v, prob);
-  if (!r || r.d > REACH) { toast('손 닿는 홀드가 없어요. 조금 옆으로 가볼까요?'); return; }
+  if (!prob) { st.problems.forEach((p) => { const d = uvDist(st, p.start.u, p.start.v, u, v); if (d <= REACH * 1.6 && d < bd) { bd = d; prob = p; } }); }
+  if (!prob) { toast('여기엔 문제가 없어요 — 시작 홀드(S) 앞에서 잡아요 (★ 문제·기록 → 안내)', 2400); return; }
   const conflicts = conflictsAt(bodyPos(st, u, v), 2.0);
   pl.mode = 'climb'; pl.strip = st; pl.u = u; pl.v = v; pl.problem = prob; pl.topped = false;
   pl.climbStart = Date.now();
@@ -1680,11 +1714,12 @@ function mount(c) {
     westPraise('yield', 2000);
   }
   Sound.grab();
-  if (prob) { pl.usedFeet = false; enterInstance(prob, st); }
+  pl.usedFeet = true; enterRoute(prob, st);
   Net.sync(true);
 }
 function letGo(reason) {
   exitInstanceUI();
+  endRoute();
   const st = pl.strip;
   const [s] = segAt(st, pl.u);
   bodyPos(st, pl.u, pl.v, pl.pos);
@@ -1715,7 +1750,7 @@ function grabToggle() {
   if (pl.mode === 'walk') {
     const c = findMount();
     if (c) mount(c); else toast('벽 가까이 가서 눌러주세요');
-  } else if (pl.mode === 'climb') {
+  } else if (pl.mode === 'climb' || pl.mode === 'route') {
     const nb = ety.near;
     if (nb && nb.start < pl.climbStart && !pl.topped) {
       nb.av.say(pick(['감사합니다~ 🙏', '양보 천사다…', '다음엔 먼저 하세요!']), 2400);
@@ -1742,6 +1777,7 @@ function jumpPress() {
     return;
   }
   if (pl.mode === 'air') tryDoubleDyno();
+  if (pl.mode === 'route' && R.gauge) routeFireGauge();
 }
 function tryDoubleDyno() {
   if (pl.doubleUsed) return;
@@ -1848,6 +1884,7 @@ function sendProblem(p) {
 }
 
 function updatePlayer(dt) {
+  if (pl.mode === 'route') { if (R.on) routeStep(dt); return; }
   if (pl.mode === 'inst') {
     if (inst.on) { updateInstance(dt); if (inst.on && ['lf', 'rf'].some((k) => inst.limbs[k].hold)) pl.usedFeet = true; }
     return;
@@ -1986,6 +2023,8 @@ function camBlocked(x, y, z) {
   return false;
 }
 function updateCamera(dt) {
+  if (pl.mode === 'route' && R.on) { routeCamera(dt); return; }
+  camCtl.routePos = null;
   const target = me.group.position.clone();
   const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst';
   if (climbing) {
@@ -2400,7 +2439,7 @@ function updateWest(dt, now) {
   if (west.state === 'roam') {
     if (!west.path.length && now > west.next) { westGo(pick(STAFF_PATROL), 1.5); west.next = now + 6000 + Math.random() * 7000; }
     // 벽에 붙은 플레이어 응원
-    if ((pl.mode === 'climb') && (west.cheerT -= dt) <= 0) {
+    if ((pl.mode === 'climb' || pl.mode === 'route') && (west.cheerT -= dt) <= 0) {
       west.cheerT = 15 + Math.random() * 10;
       if (g.position.distanceTo(me.group.position) < 9) westSay(pick(WEST_LINES.climb), 2200);
     }
@@ -2427,7 +2466,7 @@ const photoCam = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
 function takeWestShot() {
   west.shotPending = false; west.shotDone = true;
   const S = west.subject.group.position;
-  const from = west.av.group.position.clone().add(new V3(0, 1.25, 0));
+  const from = west.av.group.position.clone().add(new V3(0, 1.3, 0));
   const look = S.clone().add(new V3(0, 0.8, 0));
   photoCam.aspect = renderer.domElement.width / renderer.domElement.height;
   photoCam.position.copy(from); photoCam.lookAt(look); photoCam.updateProjectionMatrix();
@@ -2506,7 +2545,7 @@ function crash(c) {
 }
 function updateEtiquette(dt) {
   if (ety.cooldown > 0) ety.cooldown -= dt;
-  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst';
+  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route';
   ety.near = null;
   if (!climbing) return;
   let nearest = null, nd = Infinity;
@@ -2711,7 +2750,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, st: pl.climbStart || 0, a: pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -2813,6 +2852,20 @@ function updateHud(dt) {
   const status = $('#status'), title = $('#status-title'), prompt = $('#prompt');
   const climbing = pl.mode === 'climb' || pl.mode === 'air';
   const touch = document.body.classList.contains('touch');
+  if (pl.mode === 'route' && R.on) {
+    status.classList.add('climbing');
+    const p = pl.problem;
+    const holdN = R.lh.v >= R.rh.v ? R.lh.type.n : R.rh.type.n;
+    title.innerHTML = `<span style="color:${p.color === 'black' ? '#fff' : p.hex}">${problemLabel(p)}</span>${p.double ? ' 🔥🔥' : p.dyno ? ' 🔥' : ''}<small>${R.done ? '완등! 곧 내려와요' : R.gauge ? '다이노 — 초록 칸에서 탭!' : R.qte ? '버튼을 눌러요!' : '초록 = 손 닿음 · 노랑 = 데드포인트 · 주황 = 다이노'}</small><small>✊ ${holdN} · 👟 ${gear().shoe.n}${R.hipIn ? ' · 🍑' : ''}${me.tech === 'flag' ? ' · 🦵 플래깅' : me.tech === 'heel' ? ' · 👟 힐훅' : ''}</small>`;
+    if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고</small>`;
+    const v = Math.round(pl.pump);
+    $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
+    prompt.textContent = R.anim || R.done ? '' : touch ? '반짝이는 링을 탭! · 🤍 초크 · ✋ 내려오기' : '반짝이는 링을 클릭! · C 초크 · E 내려오기';
+    $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
+    $('#jump-label').innerHTML = touch ? '다이노' : '다이노 <kbd>Space</kbd>';
+    drawMinimap();
+    return;
+  }
   status.classList.toggle('climbing', climbing);
   if (climbing) {
     const p = pl.problem;
@@ -2905,7 +2958,7 @@ function buyOrEquip(it, kind) {
 function openShop() { renderShop(); const d = $('#shop'); if (!d.open) d.showModal(); }
 let adIdx = 0, adTimer;
 function showAd(i = adIdx++ % ADS.length, prefix = '') {
-  if (pl.mode === 'inst' || document.querySelector('dialog[open]')) return;
+  if (pl.mode === 'inst' || pl.mode === 'route' || document.querySelector('dialog[open]')) return;
   const ad = ADS[i % ADS.length];
   $('#ad-title').textContent = prefix + ad.title;
   $('#ad-copy').textContent = ad.copy;
@@ -3521,13 +3574,372 @@ function updateInstHud() {
     (st.barn ? '<li class="no warn">🚪 바니도어 위험! 반대 발로 플래깅</li>' : st.flag ? '<li class="ok">🦵 플래깅 중</li>' : '');
 }
 
+// =================================================================
+// 🧗 등반 모드 (3D 고정 카메라) — 다음 홀드를 탭하면 캐릭터가 무브
+// 자세는 필요할 때 뜨는 버튼(플래깅 / 엉덩이 / 힐훅)으로
+// =================================================================
+const ARM_R = 0.44;          // 어깨에서 손까지 (벽 평면 기준) 닿는 거리
+const DEAD_R = ARM_R + 0.3;  // 데드포인트(살짝 튀어서 잡기)
+const LEG_R = 0.47;
+const R = { on: false };
+const ringMat = {
+  reach: new THREE.MeshBasicMaterial({ color: '#2fd26b', transparent: true, opacity: 0.95, depthTest: false }),
+  dead: new THREE.MeshBasicMaterial({ color: '#ffcf4a', transparent: true, opacity: 0.95, depthTest: false }),
+  dyno: new THREE.MeshBasicMaterial({ color: '#ff8a1f', transparent: true, opacity: 0.95, depthTest: false }),
+};
+const ringGeo = new THREE.TorusGeometry(0.17, 0.022, 8, 28);
+const routeRings = [];
+const ruv = (h) => ({ u: h.u, v: h.v });
+function rDu(a, b) { return signedDu(R.st, a, b); } // a - b
+function shoulderOf(side, body) { return { u: body.u + side * BODY.shW, v: body.v + BODY.shY }; }
+function hipOf(side, body) { return { u: body.u + side * BODY.hipW, v: body.v + BODY.hipY }; }
+function pd(a, b) { return Math.hypot(rDu(a.u, b.u), a.v - b.v); }
+
+// 두 손 홀드로 몸 위치 정하기 (팔이 쭉 펴지는 쪽으로). 안 되면 null
+function solveBody(lh, rh, reach = ARM_R) {
+  const hi = lh.v >= rh.v ? lh : rh, lo = hi === lh ? rh : lh;
+  const mu = R.st.closed ? lh.u + rDu(rh.u, lh.u) / 2 : (lh.u + rh.u) / 2;
+  const vMax = lo.v + reach * 0.98 - BODY.shY, vMin = hi.v - reach * 0.98 - BODY.shY;
+  const pref = hi.v - reach * 0.86 - BODY.shY;
+  for (const du of [0, -0.1, 0.1, -0.2, 0.2]) {
+    for (const v of [clamp(pref, vMin, vMax), vMin + 0.02, (vMin + vMax) / 2]) {
+      const body = { u: mu + du, v: Math.max(MAT_H - 0.02, v) };
+      if (pd(lh, shoulderOf(-1, body)) <= reach + 0.001 && pd(rh, shoulderOf(1, body)) <= reach + 0.001) return body;
+    }
+  }
+  return null;
+}
+// 발 디딤: 엉덩이 아래 무릎 굽힐 만한 곳 (발은 아무 홀드나)
+function pickFeet(body) {
+  const used = new Set();
+  return [-1, 1].map((side) => {
+    const hp = hipOf(side, body);
+    let best = null, bs = Infinity;
+    for (const h of R.st.holds) {
+      if (h.tap || used.has(h)) continue;
+      const d = pd(h, hp);
+      if (d > LEG_R || h.v > hp.v - 0.12) continue;
+      const sc = Math.abs(rDu(h.u, hp.u + side * 0.1)) * 1.3 + Math.abs(h.v - (hp.v - 0.32));
+      if (sc < bs) { bs = sc; best = h; }
+    }
+    if (best) used.add(best);
+    return best;
+  });
+}
+// 이 홀드로 어떤 손이, 어떤 방식으로 갈 수 있나
+function classify(h) {
+  const { lh, rh } = R;
+  if (h === lh || h === rh) return null;
+  const tries = [];
+  const lowHand = lh.v <= rh.v ? 'lh' : 'rh';
+  const sideHand = rDu(h.u, R.body.u) < 0 ? 'lh' : 'rh';
+  [lowHand, sideHand, lowHand === 'lh' ? 'rh' : 'lh'].forEach((k) => { if (!tries.includes(k)) tries.push(k); });
+  if (!h.tap) {
+    for (const k of tries) { const b = solveBody(k === 'lh' ? h : lh, k === 'rh' ? h : rh); if (b) return { kind: 'reach', k, body: b }; }
+    for (const k of tries) { const b = solveBody(k === 'lh' ? h : lh, k === 'rh' ? h : rh, DEAD_R); if (b) return { kind: 'dead', k, body: b }; }
+  }
+  // 다이노: 지금 손 위로 멀리
+  const top = Math.max(lh.v, rh.v);
+  const dv = h.v - top, du = Math.abs(rDu(h.u, R.body.u));
+  if (dv > 0.3 && dv < 2.6 && du < 1.2) return { kind: 'dyno', k: tries[0] };
+  return null;
+}
+
+function enterRoute(p, st) {
+  R.on = true; R.p = p; R.st = st; R.done = false; R.doneT = 0; R.anim = null; R.qte = null; R.gauge = null; R.hipIn = false; R.slipT = 0; R.swing = 0;
+  R.lh = p.start; R.rh = p.start;
+  R.body = solveBody(R.lh, R.rh) || { u: p.start.u, v: Math.max(MAT_H, p.start.v - BODY.shY - 0.4) };
+  [R.lf, R.rf] = pickFeet(R.body);
+  R.cur = routeSnapshot();
+  pl.mode = 'route'; pl.strip = st; pl.problem = p; pl.topped = false; pl.pump = 0;
+  me.setClimbing(true); me.sitting = false; me.tech = null; me.footless = false;
+  me.setHeadAlpha(0.45);
+  document.body.classList.add('route');
+  refreshRings();
+  routeSync(1);
+  toast(`${problemLabel(p)} 시작! 반짝이는 홀드를 탭해서 올라가요`, 2600);
+}
+function endRoute() {
+  if (!R.on) return;
+  R.on = false; R.qte = null; R.gauge = null;
+  document.body.classList.remove('route');
+  routeRings.forEach((r) => (r.visible = false));
+  $('#qte').hidden = true; $('#gauge').hidden = true;
+  me.tech = null; me.footless = false; me.swing = 0;
+  me.setHeadAlpha(1);
+}
+// 현재 자세 (u,v)를 한 덩어리로
+function routeSnapshot() {
+  const f = (h, fallback) => (h ? { u: h.u, v: h.v, on: true } : fallback);
+  const b = R.body;
+  return {
+    body: { ...b },
+    lh: { u: R.lh.u, v: R.lh.v, on: true }, rh: { u: R.rh.u, v: R.rh.v, on: true },
+    lf: f(R.lf, { u: b.u - 0.12, v: b.v + 0.05, on: false }), rf: f(R.rf, { u: b.u + 0.12, v: b.v + 0.05, on: false }),
+  };
+}
+function refreshRings() {
+  routeRings.forEach((r) => (r.visible = false));
+  if (!R.on || R.anim || R.done || R.gauge) return;
+  let i = 0;
+  R.cands = [];
+  for (const h of R.st.holds) {
+    if (h.problem !== R.p) continue;
+    const c = classify(h);
+    if (!c) continue;
+    R.cands.push({ h, ...c });
+    let ring = routeRings[i];
+    if (!ring) { ring = new THREE.Mesh(ringGeo, ringMat.reach); ring.renderOrder = 20; scene.add(ring); routeRings.push(ring); }
+    ring.material = ringMat[c.kind];
+    const [s] = segAt(R.st, h.u);
+    ring.position.copy(h.pos).addScaledVector(s.n3, 0.06);
+    ring.lookAt(ring.position.clone().add(s.n3));
+    ring.visible = true; ring.userData.h = h;
+    i++;
+  }
+}
+// 화면 탭 → 가까운 후보 홀드
+function routeTap(cx, cy) {
+  if (!R.on || R.anim || R.done) return false;
+  if (R.qte) qteResult(false);
+  if (R.gauge) { routeFireGauge(); return true; }
+  const r = renderer.domElement.getBoundingClientRect();
+  let best = null, bd = 70;
+  (R.cands || []).forEach((c) => {
+    const v = c.h.pos.clone().project(camera);
+    const sx = (v.x * 0.5 + 0.5) * r.width + r.left, sy = (-v.y * 0.5 + 0.5) * r.height + r.top;
+    const d = Math.hypot(sx - cx, sy - cy);
+    if (d < bd) { bd = d; best = c; }
+  });
+  if (!best) { toast('반짝이는 홀드(초록·노랑·주황 링)를 눌러요', 1400); return true; }
+  routeMove(best);
+  return true;
+}
+function routeMove(c) {
+  if (c.kind === 'dyno') { routeStartGauge(c); return; }
+  const prev = routeSnapshot();
+  if (c.k === 'lh') R.lh = c.h; else R.rh = c.h;
+  R.body = c.body;
+  [R.lf, R.rf] = pickFeet(R.body);
+  R.anim = { t: 0, dur: c.kind === 'dead' ? 0.85 : 1.0, from: prev, to: routeSnapshot(), k: c.k, kind: c.kind };
+  me.tech = null; me.footless = false; R.hipIn = false;
+  const g = gear();
+  const add = (1.2 + R.p.level * 0.5) / Math.pow(c.h.q, 0.7) * (c.kind === 'dead' ? 1.6 : 1) * (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
+  pl.pump += add;
+  routeRings.forEach((r) => (r.visible = false));
+  if (c.kind === 'dead') { popText('데드포인트!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.26); Sound.tone(420, 0.12, 'triangle', 0.08, 0, 200); }
+}
+// 애니메이션 진행 → 끝나면 버튼 이벤트/완등 판정
+function routeStep(dt) {
+  if (R.anim) {
+    const a = R.anim;
+    a.t += dt / a.dur;
+    if (a.t >= 1) {
+      R.anim = null; R.cur = a.to;
+      Sound.grab();
+      popText(pick(['영차!', '으쌰!', '착!', '잡았다!']), me.group.position.clone().add(new V3(0, 2.0, 0)), 0.24);
+      me.squash();
+      afterMove(a);
+    } else R.cur = lerpPose(a.from, a.to, a.t, a.k, a.kind);
+  }
+  // 시간에 따른 펌핑
+  if (!R.done) {
+    const ang = R.st.sec.angle || 0, g = gear();
+    const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0) - (R.slipT > 0 ? 2 : 0);
+    let rate = (0.35 + R.p.level * 0.12) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
+    rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
+    if (me.tech === 'flag') rate *= 0.7;
+    const restful = R.lh.q >= 1 && R.rh.q >= 1 && feet >= 2 && !R.anim;
+    pl.pump = clamp(pl.pump + (restful ? -0.8 : rate) * dt, 0, 100);
+    if (R.slipT > 0) { R.slipT -= dt; if (R.slipT <= 0) { me.footless = false; [R.lf, R.rf] = pickFeet(R.body); R.cur = routeSnapshot(); } }
+  }
+  if (pl.pump >= 100 && !R.done) { toast('펌핑 100%… 초크 바르고 매트에서 쉬었다가 다시!', 2400); letGo('pump'); return; }
+  // 버튼 이벤트 시간
+  if (R.qte) {
+    R.qte.t -= dt;
+    $('#qte').style.setProperty('--t', clamp(R.qte.t / R.qte.max, 0, 1).toFixed(3));
+    if (R.qte.t <= 0) qteResult(false);
+  }
+  // 다이노 게이지
+  if (R.gauge) {
+    R.gauge.t += dt * R.gauge.speed;
+    const ph = R.gauge.t % 2, pos = ph < 1 ? ph : 2 - ph;
+    const g = $('#gauge'); g.hidden = false; g.classList.remove('double');
+    $('#g-zone').style.display = $('#g-perfect').style.display = 'block';
+    $('#g-zone').style.left = ((R.gauge.center - R.gauge.width / 2) * 100) + '%'; $('#g-zone').style.width = (R.gauge.width * 100) + '%';
+    $('#g-perfect').style.left = ((R.gauge.center - R.gauge.width * 0.22) * 100) + '%'; $('#g-perfect').style.width = (R.gauge.width * 44) + '%';
+    $('#g-mark').style.left = (pos * 100) + '%';
+    $('#g-label').textContent = `다이노 — 초록 칸에서 탭! (${R.gauge.h.tap ? '터치 홀드 TAP' : R.gauge.h.type.n})`;
+  }
+  if (R.done) { R.doneT += dt; if (R.doneT > (pl.topHoldMax || 3) + 0.4) { letGo('down'); return; } }
+  routeSync(dt);
+}
+function lerpPose(A, Bp, t, k, kind) {
+  const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const L = (a, b, w) => ({ u: a.u + rDu(b.u, a.u) * w, v: a.v + (b.v - a.v) * w, on: b.on, lift: 0 });
+  // 순서: 손 뻗기(0~0.45) → 몸 끌어올리기(0.25~0.8) → 발 올리기(0.6~1)
+  const handW = clamp(t / 0.45, 0, 1), bodyW = clamp((t - 0.25) / 0.55, 0, 1), footW = clamp((t - 0.6) / 0.4, 0, 1);
+  const ez = (w) => (w < 0.5 ? 2 * w * w : 1 - Math.pow(-2 * w + 2, 2) / 2);
+  const out = { body: L(A.body, Bp.body, ez(bodyW) + (kind === 'dead' ? Math.sin(Math.min(1, t / 0.5) * Math.PI) * 0.12 : 0)) };
+  ['lh', 'rh'].forEach((kk) => {
+    if (kk === k) { const p = L(A[kk], Bp[kk], ez(handW)); p.lift = Math.sin(handW * Math.PI) * 0.18; out[kk] = p; }
+    else out[kk] = { ...Bp[kk] };
+  });
+  ['lf', 'rf'].forEach((kk, i) => { const w = clamp((footW - i * 0.3) / 0.7, 0, 1); const p = L(A[kk], Bp[kk], ez(w)); p.lift = Math.sin(w * Math.PI) * 0.12; out[kk] = p; });
+  void e;
+  return out;
+}
+// 3D 캐릭터를 현재 자세로
+function routeSync(dt) {
+  const st = R.st, c = R.cur;
+  if (!c) return;
+  const bodyOff = R.hipIn ? 0.13 : 0.21;
+  const [s] = segAt(st, c.body.u);
+  const bp = surf(st, wrapU(st, c.body.u), Math.max(0.02, c.body.v)).addScaledVector(s.n3, bodyOff);
+  me.group.position.copy(bp);
+  me.group.rotation.y = Math.atan2(-s.n3.x, -s.n3.z);
+  me.grips = me.grips || [new V3(), new V3(), new V3(), new V3()];
+  ['lh', 'rh', 'lf', 'rf'].forEach((k, i) => {
+    const q = c[k];
+    let u = q.u, v = q.v;
+    if (k === 'lf' || k === 'rf') { if (!q.on) { const hp = hipOf(k === 'lf' ? -1 : 1, c.body); u = hp.u; v = hp.v - 0.4; } }
+    if (me.tech === 'heel' && k === R.heelK && R.heelH) { u = R.heelH.u; v = R.heelH.v; }
+    const uu = wrapU(st, u);
+    surf(st, uu, Math.max(0.05, v), me.grips[i]).addScaledVector(segAt(st, uu)[0].n3, 0.07 + (q.lift || 0) + (q.on ? 0 : 0.15));
+  });
+  me.footless = !R.lf && !R.rf || R.slipT > 0;
+  me.flagSide = R.flagSide;
+  R.swing = lerp(R.swing, R.swingT || 0, 0.15); R.swingT = (R.swingT || 0) * 0.92; me.swing = R.swing;
+  pl.u = wrapU(st, c.body.u); pl.v = c.body.v + BODY_DROP;
+  pl.pos.copy(bp);
+}
+// 무브가 끝나면: 완등? 아니면 상황에 따라 버튼 이벤트
+function afterMove(a) {
+  const p = R.p;
+  if (R.lh === p.top || R.rh === p.top) {
+    if (R.lh !== R.rh) {
+      // 다른 손도 TOP으로 매칭
+      const k = R.lh === p.top ? 'rh' : 'lh';
+      const prev = routeSnapshot();
+      if (k === 'lh') R.lh = p.top; else R.rh = p.top;
+      R.body = solveBody(R.lh, R.rh) || R.body;
+      [R.lf, R.rf] = pickFeet(R.body);
+      R.anim = { t: 0, dur: 0.6, from: prev, to: routeSnapshot(), k, kind: 'reach' };
+      return;
+    }
+    R.done = true; R.doneT = 0;
+    popText('TOP 매칭!', me.group.position.clone().add(new V3(0, 2.1, 0)), 0.34);
+    sendProblem(p);
+    return;
+  }
+  const lv = p.level, ang = R.st.sec.angle || 0, g = gear();
+  const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0);
+  const spread = Math.abs(rDu(R.lh.u, R.rh.u));
+  const handsSide = Math.sign(rDu(R.lh.u, R.body.u) + rDu(R.rh.u, R.body.u));
+  if (lv >= 2 && (feet <= 1 || spread > 0.55) && Math.random() < 0.35 + lv * 0.08) {
+    R.flagSide = -(handsSide || 1);
+    startQte('flag', '🦵 플래깅!', 'F', 1.9 - lv * 0.12 + g.f * 0.4);
+  } else if (lv >= 2 && ang >= 20 && Math.random() < 0.3 + lv * 0.05) {
+    startQte('hip', '🍑 엉덩이 붙여!', 'H', 1.8 - lv * 0.1 + g.h * 0.3);
+  } else if (lv >= 4 && ang >= 30 && Math.random() < 0.4) {
+    startQte('heel', '👟 힐훅!', 'G', 1.5 - lv * 0.08 + g.h * 0.5);
+  }
+  refreshRings();
+}
+function startQte(kind, label, key, max) {
+  R.qte = { kind, t: Math.max(0.8, max), max: Math.max(0.8, max) };
+  $('#qte-label').textContent = label; $('#qte-key').textContent = key;
+  const b = $('#qte'); b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  Sound.tone(880, 0.08, 'square', 0.05);
+}
+function qteResult(ok) {
+  const q = R.qte; if (!q) return;
+  R.qte = null; $('#qte').hidden = true;
+  const head = me.group.position.clone().add(new V3(0, 2.1, 0));
+  if (ok) {
+    Sound.tone(660, 0.08, 'triangle', 0.08); Sound.tone(990, 0.1, 'triangle', 0.08, 0.06);
+    if (q.kind === 'flag') { me.tech = 'flag'; popText('플래깅!', head, 0.3); }
+    if (q.kind === 'hip') { R.hipIn = true; popText('엉덩이 착!', head, 0.28); }
+    if (q.kind === 'heel') {
+      // 손 옆 높은 곳에 발을 걸기
+      const hiHand = R.lh.v >= R.rh.v ? R.lh : R.rh;
+      R.heelK = rDu(hiHand.u, R.body.u) < 0 ? 'lf' : 'rf'; R.heelH = hiHand; me.tech = 'heel';
+      popText('힐훅!', head, 0.3);
+    }
+    if (Math.random() < 0.35) westPraise('tech', 600);
+  } else {
+    if (q.kind === 'flag') { popText('바니도어!', head, 0.32); R.swingT = (R.flagSide || 1) * 0.5; pl.pump += 22; }
+    if (q.kind === 'hip') { popText('팔 터진다…', head, 0.26); pl.pump += 15; }
+    if (q.kind === 'heel') { popText('발 미끄러짐!', head, 0.28); R.slipT = 1.6; pl.pump += 15; }
+    Sound.tone(160, 0.2, 'square', 0.06);
+  }
+}
+function routeKey(code) {
+  if (code === 'Space') { if (R.gauge) routeFireGauge(); return true; }
+  if (code === 'KeyE') { grabToggle(); return true; }
+  const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
+  if (map[code]) { if (R.qte) qteResult(R.qte.kind === map[code]); return true; }
+  return false;
+}
+// ---------- 다이노 ----------
+function routeStartGauge(c) {
+  const from = R.lh.v >= R.rh.v ? R.lh : R.rh;
+  const q = Math.min(from.q, c.h.q);
+  const dv = c.h.v - Math.max(R.lh.v, R.rh.v);
+  R.gauge = { h: c.h, k: c.k, t: 0, speed: 0.95 + (1 - q) * 0.6 + R.p.level * 0.04, center: clamp(0.2 + dv / 2.6 * 0.65, 0.15, 0.88), width: 0.12 + 0.26 * q };
+  routeRings.forEach((r) => (r.visible = false));
+  toast('다이노! 초록 칸에서 탭 / Space', 1500);
+}
+function routeFireGauge() {
+  const gg = R.gauge; if (!gg) return;
+  const ph = gg.t % 2, pos = ph < 1 ? ph : 2 - ph;
+  const diff = Math.abs(pos - gg.center), ok = diff <= gg.width / 2, perfect = diff <= gg.width * 0.22;
+  R.gauge = null; $('#gauge').hidden = true;
+  const head = me.group.position.clone().add(new V3(0, 2.0, 0));
+  if (!ok) { popText(pos < gg.center ? '힘 부족…' : '너무 셌다!', head, 0.28); setTimeout(() => { if (R.on) letGo('fall'); }, 250); return; }
+  popText(perfect ? 'PERFECT!' : 'GOOD!', head, perfect ? 0.36 : 0.3);
+  const prev = routeSnapshot();
+  // 날아서 잡기: 그 손으로 목표, 다른 손도 같은 홀드에 매칭
+  R.lh = gg.h; R.rh = gg.h;
+  R.body = solveBody(R.lh, R.rh) || { u: gg.h.u, v: gg.h.v - BODY.shY - 0.5 };
+  [R.lf, R.rf] = pickFeet(R.body);
+  R.anim = { t: 0, dur: 0.7, from: prev, to: routeSnapshot(), k: gg.k, kind: 'dead' };
+  pl.pump += perfect ? 3 : 7;
+  Sound.tone(220, 0.25, 'triangle', 0.1, 0, 400);
+  if (gg.h.tap) {
+    // 더블다이노: 터치 홀드는 못 잡으니 바로 다음 게이지
+    const next = R.st.holds.filter((h) => h.problem === R.p && !h.tap && h.v > gg.h.v + 0.3).sort((a, b) => a.v - b.v)[0];
+    setTimeout(() => {
+      if (!R.on) return;
+      popText('더블!!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.36);
+      if (next) { R.anim = null; R.cur = routeSnapshot(); routeStartGauge({ h: next, k: gg.k }); pl.didDouble = true; }
+    }, 650);
+    return;
+  }
+  if (pl.didDouble) { toast('🔥🔥 더블다이노 성공!!', 2200); Store.data.doubles = (Store.data.doubles || 0) + 1; Store.save(); pl.didDouble = false; }
+  else toast('🔥 다이노 성공!', 1500);
+  westPraise('dyno', 500);
+}
+function routeCamera(dt) {
+  const st = R.st, c = R.cur;
+  const [s] = segAt(st, c.body.u);
+  const center = surf(st, wrapU(st, c.body.u), c.body.v + 1.2);
+  const pos = center.clone().addScaledVector(s.n3, 4.0).add(new V3(0, 0.25, 0));
+  if (!camCtl.routePos) camCtl.routePos = camera.position.clone();
+  camCtl.routePos.lerp(pos, damp(4, dt));
+  camera.position.copy(camCtl.routePos);
+  camera.lookAt(center.clone().add(new V3(0, 0.2, 0)));
+  camCtl.yaw = Math.atan2(s.n3.x, s.n3.z);
+  routeRings.forEach((r) => { if (r.visible) r.scale.setScalar(1 + Math.sin(performance.now() / 180) * 0.12); });
+}
+
 // 다이노 게이지 (농구 3점슛 게이지 느낌)
 function updateGauge() {
   const g = $('#gauge');
   const climbingNow = pl.mode === 'climb' || pl.mode === 'air';
   document.body.classList.toggle('climbing', climbingNow);
   document.querySelectorAll('[data-tech]').forEach((b) => b.setAttribute('aria-pressed', pl.tech === b.dataset.tech ? 'true' : 'false'));
-  if (pl.mode === 'inst') return;
+  if (pl.mode === 'inst' || pl.mode === 'route') return;
   if (pl.charging) {
     g.hidden = false; g.classList.remove('double');
     const plan = pl.plan;
@@ -3680,7 +4092,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { R, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, westPhoto, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }

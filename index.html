@@ -41,9 +41,8 @@
         <li><b>WASD</b> 이동 · <b>드래그</b> 시점 · <b>휠</b> 줌</li>
         <li><b>E</b> 벽 잡기/내려오기 · <b>Space</b> 점프 · <b>Shift</b> 달리기</li>
         <li><b>C</b> 초크묻히기 · <b>R</b> 앉아서 쉬기</li>
-        <li>문제(S 홀드)에 붙으면 <b>2D 등반 화면</b>: 손·발·엉덩이를 <b>끌어서</b> 올라가요</li>
-        <li>벽에서: <b>Space 꾹 → 초록 칸에서 떼기</b> 다이노 · 공중에서 한 번 더 = 더블다이노</li>
-        <li><b>1</b> 플래깅 · <b>2</b> 인사이드 스텝 · <b>3</b> 아웃사이드 스텝 · <b>H</b> 매달리기 · <b>Shift</b> 캠퍼싱</li>
+        <li>문제 시작 홀드(S) 앞에서 <b>E</b> → 등반 모드: 반짝이는 <b>링을 탭</b>하면 올라가요</li>
+        <li>버튼이 뜨면 바로! <b>F</b> 플래깅 · <b>H</b> 엉덩이 · <b>G</b> 힐훅 · 다이노는 <b>초록 칸에서 탭</b></li>
       </ul>
     </div>
   </main>
@@ -107,6 +106,7 @@
 
     <div id="joystick" class="joystick only-touch" aria-hidden="true"><div class="knob"></div></div>
 
+    <button class="qte" id="qte" type="button" hidden><span id="qte-label"></span><kbd id="qte-key"></kbd></button>
     <div class="gauge" id="gauge" hidden>
       <div class="g-label" id="g-label"></div>
       <div class="g-bar"><div class="g-zone" id="g-zone"></div><div class="g-perfect" id="g-perfect"></div><div class="g-mark" id="g-mark"></div></div>
