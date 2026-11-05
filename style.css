@@ -211,7 +211,24 @@ body.inst .chat { bottom: 34px; }
 }
 
 /* 등반 모드 */
-body.route .hud-sub, body.route .hud-tech, body.route #joystick, body.route #btn-grab.ready { display: none !important; }
+.up-btn { display: none !important; }
+body.route .up-btn { display: grid !important; }
+body.route #btn-jump { display: none; }
+body.route .gauge ~ .hud-buttons #btn-jump { display: none; }
+body.route .adcard { display: none !important; }
+body.route.touch .minimap { display: none; }
+body.route.touch #status { top: auto; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px); left: 10px; width: calc(100% - 250px); min-width: 0; padding: 6px 10px; text-align: left; transform: none; }
+body.route.touch #status .status-title small:not(:first-of-type) { display: none; }
+body.route.touch #status .status-title { font-size: .9rem; }
+body.route.touch .prompt { bottom: auto; top: 64px; font-size: .78rem; padding: 6px 12px; }
+body.route.touch .toast { top: auto; bottom: 128px; font-size: .78rem; padding: 7px 12px; max-width: 60%; }
+body.route.touch #status .status-title small { display: none; }
+body.route.touch .chatlog { display: none; }
+body.route.touch #btn-chat { opacity: .6; }
+body.route.touch #online, body.route.touch #btn-music, body.route.touch #btn-sound, body.route.touch #btn-visit, body.route.touch #btn-records, body.route.touch .brand { display: none; }
+body.route.touch .hud-top { justify-content: flex-end; }
+body.route .hud-sub, body.route .hud-tech, body.route #joystick { display: none !important; }
+body.route #btn-grab { display: grid !important; }
 body.route .hud-tech { display: none !important; }
 .qte {
   position: absolute; left: 50%; bottom: 220px; transform: translateX(-50%); border: 0; cursor: pointer;
@@ -334,7 +351,7 @@ body.touch .prompt { bottom: 175px; }
 @media (max-width: 640px) { .polaroid { width: 150px; top: 190px; left: 10px; } }
 
 /* 지갑 / 상점 / 광고 */
-.wallet-btn { font-variant-numeric: tabular-nums; }
+.wallet-btn { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .wallet-btn .neg, #wallet.neg { color: #ff8a8a; }
 .shop .shop-wallet { margin: 8px 0 0; font-size: .95rem; }
 .shop .shop-wallet b { color: #ffcf4a; font-size: 1.1rem; }

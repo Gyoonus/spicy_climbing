@@ -1569,6 +1569,7 @@ function setupInput() {
   icv.addEventListener('pointercancel', instPointerUp);
   $('#inst-hip').addEventListener('click', instToggleHip);
   $('#qte').addEventListener('click', () => { if (R.qte) qteResult(true); });
+  $('#btn-up').addEventListener('click', routeAuto);
   $('#inst-flag').addEventListener('click', instFlag);
   $('#inst-auto').addEventListener('click', instToggleAuto);
   $('#inst-down').addEventListener('click', () => { if (pl.mode === 'inst') letGo('down'); });
@@ -3013,7 +3014,7 @@ function updateHud(dt) {
     if (ety.near) title.innerHTML += `<small style="color:#ffcf4a">⚠️ 옆에 ${ety.near.name}님! 부딪히면 교통사고</small>`;
     const v = Math.round(pl.pump);
     $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
-    prompt.textContent = R.anim || R.done ? '' : touch ? '반짝이는 링을 탭! · 🤍 초크 · ✋ 내려오기' : '반짝이는 링을 클릭! · C 초크 · E 내려오기';
+    prompt.textContent = R.anim || R.done ? '' : touch ? '링을 탭하거나 ⬆️ 버튼!' : '링 클릭 또는 W(⬆️)로 올라가기 · C 초크 · E 내려오기';
     $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
     $('#jump-label').innerHTML = touch ? '다이노' : '다이노 <kbd>Space</kbd>';
     drawMinimap();
@@ -3875,7 +3876,7 @@ function routeTap(cx, cy) {
   if (R.qte) qteResult(false);
   if (R.gauge) { routeFireGauge(); return true; }
   const r = renderer.domElement.getBoundingClientRect();
-  let best = null, bd = 70;
+  let best = null, bd = document.body.classList.contains('touch') ? 90 : 70;
   (R.cands || []).forEach((c) => {
     const v = c.h.pos.clone().project(camera);
     const sx = (v.x * 0.5 + 0.5) * r.width + r.left, sy = (-v.y * 0.5 + 0.5) * r.height + r.top;
@@ -3885,6 +3886,16 @@ function routeTap(cx, cy) {
   if (!best) { toast('반짝이는 홀드(초록·노랑·주황 링)를 눌러요', 1400); return true; }
   routeMove(best);
   return true;
+}
+// ⬆️ 버튼: 제일 높이 갈 수 있는 홀드로 (닿는 것 우선, 없으면 데드포인트, 그다음 다이노)
+function routeAuto() {
+  if (!R.on || R.anim || R.done) return;
+  if (R.gauge) { routeFireGauge(); return; }
+  if (R.qte) return;
+  const c = R.cands || [];
+  const pickBest = (kind) => c.filter((x) => x.kind === kind).sort((a, b) => b.h.v - a.h.v)[0];
+  const best = pickBest('reach') || pickBest('dead') || pickBest('dyno');
+  if (best) routeMove(best); else toast('갈 수 있는 홀드가 없어요', 1400);
 }
 function routeMove(c) {
   if (c.kind === 'dyno') { routeStartGauge(c); return; }
@@ -4048,6 +4059,7 @@ function qteResult(ok) {
 function routeKey(code) {
   if (code === 'Space') { if (R.gauge) routeFireGauge(); return true; }
   if (code === 'KeyE') { grabToggle(); return true; }
+  if (code === 'KeyW' || code === 'ArrowUp') { routeAuto(); return true; }
   const map = { KeyF: 'flag', KeyH: 'hip', KeyG: 'heel' };
   if (map[code]) { if (R.qte) qteResult(R.qte.kind === map[code]); return true; }
   return false;
@@ -4094,12 +4106,14 @@ function routeFireGauge() {
 function routeCamera(dt) {
   const st = R.st, c = R.cur;
   const [s] = segAt(st, c.body.u);
-  const center = surf(st, wrapU(st, c.body.u), c.body.v + 1.2);
-  const pos = center.clone().addScaledVector(s.n3, 4.0).add(new V3(0, 0.25, 0));
+  // 세로 화면이면 더 멀리서, 다음 홀드(위쪽)가 화면 가운데 오도록 시선을 올림
+  const portrait = camera.aspect < 0.9;
+  const center = surf(st, wrapU(st, c.body.u), c.body.v + (portrait ? 1.75 : 1.45));
+  const pos = center.clone().addScaledVector(s.n3, portrait ? 5.6 : 4.3).add(new V3(0, portrait ? -0.1 : 0.1, 0));
   if (!camCtl.routePos) camCtl.routePos = camera.position.clone();
   camCtl.routePos.lerp(pos, damp(4, dt));
   camera.position.copy(camCtl.routePos);
-  camera.lookAt(center.clone().add(new V3(0, 0.2, 0)));
+  camera.lookAt(center);
   camCtl.yaw = Math.atan2(s.n3.x, s.n3.z);
   routeRings.forEach((r) => { if (r.visible) r.scale.setScalar(1 + Math.sin(performance.now() / 180) * 0.12); });
 }
