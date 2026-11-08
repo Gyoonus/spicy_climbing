@@ -695,7 +695,8 @@ function buildWorld() {
   flatPoly([[290, 905], [580, 905], [580, 1110], [290, 1110]].map(m), 0.01, new THREE.MeshStandardMaterial({ map: wood, roughness: 0.8 }));
 
   // 외벽
-  const wallMat = new THREE.MeshStandardMaterial({ color: '#2b2b30', roughness: 0.9, side: THREE.DoubleSide });
+  // 바깥벽은 안쪽 면만 그림 → 카메라가 벽 밖으로 나가도 벽이 투명 (사람은 못 나감)
+  const wallMat = new THREE.MeshStandardMaterial({ color: '#2b2b30', roughness: 0.9, side: THREE.FrontSide });
   const wq = [];
   FLOOR.forEach((a, i) => {
     const b = FLOOR[(i + 1) % FLOOR.length];
@@ -2617,8 +2618,7 @@ function updatePlayer(dt) {
 // 카메라
 // =================================================================
 function camBlocked(x, y, z) {
-  // 건물 밖은 높이와 상관없이 막힘 (외벽 위로 넘어가서 벽 꼭대기가 화면을 가리는 문제)
-  if (!inPoly(x, z, FLOOR) || y > WALL_H - 0.3) return true;
+  // 바깥벽은 카메라를 막지 않음 — 밖에서 보면 투명하게 그려짐 (안쪽 면만 렌더)
   for (const o of OBSTACLES) if (inPoly(x, z, o.footM) && y < o.H + 0.2) return true;
   // 오버행 벽: 높이에 따라 바깥으로 기울어진 판넬 안쪽이면 막힘 (용광로 같은 센 오버행)
   for (const st of strips) {
