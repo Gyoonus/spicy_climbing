@@ -2617,7 +2617,8 @@ function updatePlayer(dt) {
 // 카메라
 // =================================================================
 function camBlocked(x, y, z) {
-  if (!inPoly(x, z, FLOOR)) return y < WALL_H;
+  // 건물 밖은 높이와 상관없이 막힘 (외벽 위로 넘어가서 벽 꼭대기가 화면을 가리는 문제)
+  if (!inPoly(x, z, FLOOR) || y > WALL_H - 0.3) return true;
   for (const o of OBSTACLES) if (inPoly(x, z, o.footM) && y < o.H + 0.2) return true;
   // 오버행 벽: 높이에 따라 바깥으로 기울어진 판넬 안쪽이면 막힘 (용광로 같은 센 오버행)
   for (const st of strips) {
