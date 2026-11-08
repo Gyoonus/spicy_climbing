@@ -99,7 +99,7 @@ const SECTOR_PROBLEMS = {
   s2: [['green'], ['red'], ['navy', 'dyno'], ['sky'], ['orange', 'side'], ['lime', null, 'over'], ['black', 'double'], ['white']],
   s3: [['pink'], ['yellow'], ['green'], ['red'], ['white', null, 'pants'], ['sky'], ['navy', 'side'], ['brown'], ['orange', 'dyno'], ['black', null, 'him']],
   s4: [['pink'], ['green'], ['yellow'], ['red'], ['navy'], ['white'], ['sky', 'dyno'], ['orange'], ['brown', 'side']],
-  spray: [['yellow'], ['red'], ['navy', 'side'], ['lime', 'dyno', 'over']],
+  spray: [], // 🔥 용광로는 문제 없이 버티기만
   trial: [['pink'], ['green'], ['yellow']],
 };
 const PROBLEM_DEFS = [];
@@ -995,6 +995,7 @@ function buildForgeJunk(rand) {
     if (spots.some(([uu, vv]) => Math.hypot(uu - u, vv - v) < 0.22)) continue;
     spots.push([u, v]);
   }
+  forge.junk = spots;
   const geos = [makeHoldGeo(11), makeHoldGeo(12), makeHoldGeo(13)];
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.75, flatShading: true });
   const mtx = new THREE.Matrix4(), col = new THREE.Color();
@@ -1702,6 +1703,7 @@ function setupInput() {
     if (document.querySelector('dialog[open]')) return;
     if (pl.mode === 'inst' && !e.repeat && instKey(e.code)) { e.preventDefault(); return; }
     if (pl.mode === 'route' && !e.repeat && routeKey(e.code)) { e.preventDefault(); return; }
+    if (pl.mode === 'forge') { if (!e.repeat && forgeKey(e.code)) e.preventDefault(); return; }
     if (e.code === 'Enter') { e.preventDefault(); openChat(); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -2080,6 +2082,7 @@ function findMount() {
 }
 
 function mount(c) {
+  if (c.st.sec.id === 'spray') { enterForge(c.st, c.u); return; }
   const st = c.st, u = c.u, v = 1.55;
   let prob = null, bd = Infinity;
   st.problems.forEach((p) => { const d = uvDist(st, p.start.u, p.start.v, u, v); if (d <= REACH && d < bd) { bd = d; prob = p; } });
@@ -2113,6 +2116,7 @@ function mount(c) {
   Net.sync(true);
 }
 function letGo(reason) {
+  if (pl.mode === 'forge') forgeFinish(reason);
   exitInstanceUI();
   endRoute();
   const st = pl.strip;
@@ -2145,7 +2149,7 @@ function grabToggle() {
   if (pl.mode === 'walk') {
     const c = findMount();
     if (c) mount(c); else toast('벽 가까이 가서 눌러주세요');
-  } else if (pl.mode === 'climb' || pl.mode === 'route') {
+  } else if (pl.mode === 'climb' || pl.mode === 'route' || pl.mode === 'forge') {
     const nb = ety.near;
     if (nb && nb.start < pl.climbStart && !pl.topped) {
       nb.av.say(pick(['감사합니다~ 🙏', '양보 천사다…', '다음엔 먼저 하세요!']), 2400);
@@ -2156,6 +2160,7 @@ function grabToggle() {
   }
 }
 function jumpPress() {
+  if (pl.mode === 'forge') { forgeTap(); return; }
   if (pl.mode === 'walk' && pl.sitting) { standUp(); return; }
   if (pl.mode === 'climb' && pl.hanging) stopHang();
   if (pl.mode === 'walk') { if (pl.pos.y - groundY(pl.pos.x, pl.pos.z) <= 0.001) { pl.vy = 5.2; Sound.tone(300, 0.08, 'sine', 0.06, 0, 200); } return; }
@@ -2315,9 +2320,124 @@ function updateForge(dt, now) {
   if (!forge.welcomed && near < 4.5 && pl.mode === 'walk') {
     forge.welcomed = true;
     shoutText('인간개조의 용광로', me.group.position.clone().add(new V3(0, 2.2, 0)), 0.38);
-    toast('🔥 인간개조의 용광로 — 여기서 완등할 때마다 개조 단계 +1 (펌핑 −2%씩, 최대 −10%). 대신 뜨거워서 펌핑 +10%!', 4200);
+    toast(`🔥 인간개조의 용광로 — 문제 없이 버티는 벽! 벽 잡고(E) 박자 맞춰 버티기. ${FORGE_GOAL}초 넘길 때마다 개조 +1 (모든 벽 펌핑 −2%씩, 최대 −10%)`, 4600);
     if (staff.av && staffMayNag(0.8)) setTimeout(() => staffSay('여기 들어가면 사람 바뀌어서 나와요. 물 꼭 마시고요 🐯', 3000), 1500);
   }
+}
+// ----- 🔥 용광로 버티기 (문제 없음, 오래 버티기) -----
+const FORGE_GOAL = 30; // 이만큼 버티면 개조 +1 & 스탬프
+const forgeRate = (t) => 5 + t * 0.22; // 초당 펌핑: 점점 뜨거워짐
+function forgeGrabNear(u, v, used) {
+  const st = forge.st; let best = null, bd = Infinity;
+  (forge.junk || []).forEach((sp) => { if (used && used.includes(sp)) return; const d = Math.hypot(sp[0] - u, sp[1] - v); if (d < bd) { bd = d; best = sp; } });
+  const [sg] = segAt(st, best ? best[0] : u);
+  return { sp: best, pos: surf(st, best ? best[0] : u, best ? best[1] : v).addScaledVector(sg.n3, 0.03) };
+}
+function forgeGrips() {
+  const F = forge.run, u = pl.u, vh = F.vh, used = [];
+  const want = [[u - 0.26, vh], [u + 0.26, vh], [u - 0.18, vh - 1.02], [u + 0.18, vh - 1.04]];
+  F.grip = want.map(([uu, vv]) => { const g = forgeGrabNear(uu, vv, used); if (g.sp) used.push(g.sp); return g; });
+  me.grips = F.grip.map((g) => g.pos);
+}
+function enterForge(st, u) {
+  standUp();
+  pl.mode = 'forge'; pl.strip = st; pl.u = u; pl.v = 1.9; pl.problem = null; pl.topped = false; pl.climbStart = Date.now();
+  pl.pump = Math.min(pl.pump, 15);
+  forge.run = { t: 0, lastTap: -9, mark: 0, shuffleT: 2.2, cheerT: 5, vh: 1.9, taps: 0 };
+  me.setClimbing(true); me.sitting = false; me.tech = null; me.footless = false; me.ceremony = false;
+  forgeGrips();
+  const [sg] = segAt(st, u);
+  forge.run.base = bodyPos(st, u, forge.run.vh);
+  me.group.position.copy(forge.run.base); pl.pos.copy(forge.run.base);
+  me.group.rotation.y = Math.atan2(-sg.n3.x, -sg.n3.z);
+  me.setHeadAlpha(0.45);
+  document.body.classList.add('route', 'forge');
+  $('#btn-up').innerHTML = '🔥<span>버티기 <kbd>Space</kbd></span>';
+  Sound.grab();
+  shoutText('버텨라!!', me.group.position.clone().add(new V3(0, 2.3, 0)), 0.42);
+  toast(`🔥 용광로 버티기! 🔥 버튼(Space)을 박자 맞춰 눌러 펌핑을 내려요 — ${FORGE_GOAL}초 넘기면 개조 +1`, 3600);
+  Net.sync(true);
+}
+function forgeTap() {
+  const F = forge.run; if (!F) return;
+  const now = performance.now() / 1000, gap = now - F.lastTap;
+  F.lastTap = now;
+  if (gap < 0.28) { pl.pump = Math.min(100, pl.pump + 1.5); popText('너무 빨라!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.18); Sound.tone(220, 0.05, 'square', 0.04); return; }
+  F.taps++;
+  pl.pump = Math.max(0, pl.pump - 7);
+  me.squash();
+  const hand = me.grips[F.taps % 2];
+  if (hand) shockRing(hand.clone(), 0.5);
+  Sound.tone(520 + Math.min(10, F.taps % 10) * 30, 0.06, 'triangle', 0.08);
+}
+function forgeKey(code) {
+  if (code === 'Space' || code === 'KeyW' || code === 'ArrowUp') { forgeTap(); return true; }
+  if (code === 'KeyE') { grabToggle(); return true; }
+  if (code === 'KeyC') { useChalk(); return true; }
+  return false;
+}
+function updateForgeRun(dt) {
+  const F = forge.run; if (!F) return;
+  F.t += dt;
+  pl.pump += forgeRate(F.t) * dt * gear().pumpMul;
+  const st = pl.strip, [sg] = segAt(st, pl.u);
+  // 대롱대롱 흔들림 + 가끔 손 바꿔 잡기
+  me.group.position.copy(F.base).addScaledVector(sg.along3, Math.sin(F.t * 1.3) * 0.035).add(new V3(0, Math.sin(F.t * 2.1) * 0.015, 0));
+  pl.pos.copy(me.group.position);
+  if ((F.shuffleT -= dt) <= 0) {
+    F.shuffleT = 2 + Math.random() * 1.5;
+    const k = Math.random() < 0.5 ? 0 : 1, cur = F.grip[k];
+    const others = F.grip.filter((g, i) => i !== k).map((g) => g.sp);
+    const g = forgeGrabNear((cur.sp ? cur.sp[0] : pl.u) + (Math.random() - 0.5) * 0.5, F.vh + (Math.random() - 0.5) * 0.3, others.concat([cur.sp]));
+    if (g.sp && Math.hypot(g.sp[0] - pl.u, g.sp[1] - F.vh) < 0.6) { F.grip[k] = g; me.grips[k] = g.pos; Sound.grab(); }
+  }
+  // 10초마다 보상
+  const mk = Math.floor(F.t / 10);
+  if (mk > F.mark) {
+    F.mark = mk;
+    const money = 1500 * EARN_EVENT;
+    shoutText(`${mk * 10}초!!`, me.group.position.clone().add(new V3(0, 2.4, 0)), 0.42);
+    addMoney(money, `용광로 ${mk * 10}초 버팀`);
+    if (mk * 10 === FORGE_GOAL) { fireConfetti(me.group.position.clone().add(new V3(0, 1.8, 0)), 18); Sound.top(); }
+  }
+  // 응원
+  if ((F.cheerT -= dt) <= 0) {
+    F.cheerT = 6 + Math.random() * 4;
+    const n = npcs.find((x) => x.state === 'idle' && x.av.group.position.distanceTo(me.group.position) < 14);
+    const line = F.t > 25 ? pick(['개조 중… 🔥', '사람 바뀐다 바뀐다', '버텨!!! 거의 다 왔어']) : pick(['버텨!!', '조금만 더!', '용광로 맛 어때 ㅋㅋ', '팔 털지 마 버텨']);
+    if (n) n.av.say(line, 1800); else if (west.av && Math.random() < 0.5) westSay('버텨요!! 멋있어요 🤠', 1800);
+  }
+  if (pl.pump >= 100) { pl.pump = 100; toast('🔥 펌핑 100%… 용광로에서 녹았어요', 1800); letGo('pump'); }
+}
+function forgeCamera(dt) {
+  const st = pl.strip, [sg] = segAt(st, pl.u), F = forge.run;
+  const portrait = camera.aspect < 0.9;
+  const center = surf(st, pl.u, F.vh - 0.35);
+  const pos = center.clone().addScaledVector(sg.n3, portrait ? 4.6 : 3.6).add(new V3(0, 0.25, 0));
+  if (!camCtl.routePos) camCtl.routePos = camera.position.clone();
+  camCtl.routePos.lerp(pos, damp(4, dt));
+  camera.position.copy(camCtl.routePos);
+  if (camCtl.shake > 0) { camCtl.shake = Math.max(0, camCtl.shake - dt * 0.5); camera.position.x += (Math.random() - 0.5) * camCtl.shake; }
+  camera.lookAt(center);
+  camCtl.yaw = Math.atan2(sg.n3.x, sg.n3.z);
+}
+function forgeFinish(reason) {
+  const F = forge.run; if (!F) return;
+  forge.run = null;
+  document.body.classList.remove('route', 'forge');
+  $('#btn-up').innerHTML = '⬆️<span>올라가기 <kbd>W</kbd></span>';
+  me.setHeadAlpha(1); camCtl.routePos = null;
+  const t = Math.round(F.t * 10) / 10, best = Store.data.forgeBest || 0;
+  const record = t > best;
+  if (record) { Store.data.forgeBest = t; Store.save(); }
+  setTimeout(() => {
+    shoutText(`${t.toFixed(1)}초 버팀!`, me.group.position.clone().add(new V3(0, 2.2, 0)), 0.4);
+    toast(`🔥 용광로 ${t.toFixed(1)}초 버팀${record ? ' — 🏆 최고 기록!' : ` (최고 ${best.toFixed(1)}초)`}${t >= FORGE_GOAL ? '' : ` · ${FORGE_GOAL}초 넘기면 개조 +1`}`, 3200);
+    logChat('', '', `🔥 ${Store.data.name}님 용광로 ${t.toFixed(1)}초 버팀${record ? ' (최고 기록!)' : ''}`, 'sys');
+    Net.event('vsay', { text: `🔥 용광로 ${t.toFixed(1)}초 버팀!` });
+  }, 500);
+  if (t >= FORGE_GOAL) forgeSend();
+  if (record && best < FORGE_GOAL && t >= FORGE_GOAL) setTimeout(() => toast('🎫 용광로 스탬프 획득!', 2400), 3800);
 }
 function forgeSend() {
   const before = forgeTitle();
@@ -2362,6 +2482,7 @@ function sendProblem(p) {
 }
 
 function updatePlayer(dt) {
+  if (pl.mode === 'forge') { updateForgeRun(dt); return; }
   if (pl.mode === 'route') { if (R.on) routeStep(dt); return; }
   if (pl.mode === 'inst') {
     if (inst.on) { updateInstance(dt); if (inst.on && ['lf', 'rf'].some((k) => inst.limbs[k].hold)) pl.usedFeet = true; }
@@ -2516,6 +2637,7 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   if (pl.mode === 'route' && R.on) { routeCamera(dt); return; }
+  if (pl.mode === 'forge' && forge.run) { forgeCamera(dt); return; }
   camCtl.routePos = null;
   const target = me.group.position.clone();
   const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst';
@@ -3186,7 +3308,7 @@ function crash(c) {
 }
 function updateEtiquette(dt) {
   if (ety.cooldown > 0) ety.cooldown -= dt;
-  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route';
+  const climbing = pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' || pl.mode === 'forge';
   ety.near = null;
   if (!climbing) return;
   let nearest = null, nd = Infinity;
@@ -3211,7 +3333,10 @@ function addFeed(name, p, mine) {
   if (feed.length > 30) feed.length = 30;
   if ($('#records').open) renderRecords();
 }
-function sectorDone(secId) { return PROBLEMS.some((p) => p.sector.id === secId && Store.data.sends[p.id]); }
+function sectorDone(secId) {
+  if (secId === 'spray') return (Store.data.forgeBest || 0) >= FORGE_GOAL; // 용광로 스탬프 = 30초 버티기
+  return PROBLEMS.some((p) => p.sector.id === secId && Store.data.sends[p.id]);
+}
 function checkFestival() {
   if (Store.data.festival || !FEST_SECTORS.every(sectorDone)) return;
   Store.data.festival = Date.now(); Store.save();
@@ -3406,7 +3531,7 @@ const Net = {
     const p = me.group.position;
     this.publish('p/' + this.id, {
       n: this.name, c: this.color, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), r: +me.group.rotation.y.toFixed(2),
-      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, k: lookToStr({ ...DEFAULT_LOOK, ...(Store.data.look || {}) }), st: pl.climbStart || 0, a: pl.lying ? 'l' : pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
+      m: pl.mode === 'climb' || pl.mode === 'air' || pl.mode === 'inst' || pl.mode === 'route' || pl.mode === 'forge' ? 'c' : 'w', pid: pl.problem ? pl.problem.id : '', g: (pl.mode === 'climb' || pl.mode === 'inst' || pl.mode === 'route' || pl.mode === 'forge') && me.grips ? me.grips.flatMap((v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)]) : 0, o: `${Store.data.equip.shoe}|${Store.data.equip.pants || ''}`, k: lookToStr({ ...DEFAULT_LOOK, ...(Store.data.look || {}) }), st: pl.climbStart || 0, a: pl.lying ? 'l' : pl.sitting ? 's' : pl.hanging ? 'h' : me.campus ? 'k' : pl.tech ? 't' + pl.tech[0] : '',
     });
   },
   event(type, extra = {}) { this.publish('e/' + this.id, { type, ...extra }); },
@@ -3515,6 +3640,18 @@ function updateHud(dt) {
   const status = $('#status'), title = $('#status-title'), prompt = $('#prompt');
   const climbing = pl.mode === 'climb' || pl.mode === 'air';
   const touch = document.body.classList.contains('touch');
+  if (pl.mode === 'forge' && forge.run) {
+    const F = forge.run;
+    status.classList.add('climbing');
+    title.innerHTML = `<span style="color:#ff8a3a">🔥 용광로 버티기</span><small>⏱️ ${F.t.toFixed(1)}초 · 최고 ${(Store.data.forgeBest || 0).toFixed(1)}초 · 목표 ${FORGE_GOAL}초</small><small>🌡️ 열기 ${forgeRate(F.t).toFixed(1)}%/초 — 점점 뜨거워져요</small>`;
+    const v = Math.round(pl.pump);
+    $('#pump-val').textContent = v + '%'; $('#pump-fill').style.width = v + '%'; $('#pump').classList.toggle('danger', v >= 75);
+    prompt.textContent = touch ? '🔥 버티기 버튼을 박자 맞춰 톡톡! (너무 빠르면 손해) · 🤍 초크' : 'Space / W 박자 맞춰 톡톡 버티기 (연타는 손해) · C 초크 · E 내려오기';
+    $('#grab-label').innerHTML = touch ? '내려오기' : '내려오기 <kbd>E</kbd>';
+    $('#jump-label').innerHTML = touch ? '버티기' : '버티기 <kbd>Space</kbd>';
+    drawMinimap();
+    return;
+  }
   if (pl.mode === 'route' && R.on) {
     status.classList.add('climbing');
     const p = pl.problem;
@@ -3564,7 +3701,7 @@ function updateHud(dt) {
       if (busy.length) {
         prompt.textContent = `⚠️ ${busy[0].name}님 등반 중 — 선출발자 우선! 잠깐 기다려요`;
         ety.waitedFor = busy[0]; ety.waitedAt = Date.now();
-      } else prompt.textContent = `${touch ? '✋' : 'E'} 벽 잡기 — ${near ? `${near.name} ${near.grade} 시작 홀드!` : c.st.sec.name + ' 자유 등반'}`;
+      } else prompt.textContent = c.st.sec.id === 'spray' ? `🔥 ${touch ? '✋' : 'E'} 용광로 버티기 시작 — 문제 없음, 오래 버티면 개조!` : `${touch ? '✋' : 'E'} 벽 잡기 — ${near ? `${near.name} ${near.grade} 시작 홀드!` : c.st.sec.name + ' 자유 등반'}`;
     } else prompt.textContent = '';
     $('#btn-grab').classList.toggle('ready', !!c);
     $('#grab-label').innerHTML = touch ? '잡기' : '잡기 <kbd>E</kbd>';
@@ -5078,6 +5215,7 @@ function finishRhythm() {
 
 // ⬆️ 버튼: 제일 높이 갈 수 있는 홀드로 (닿는 것 우선, 없으면 데드포인트, 그다음 다이노)
 function routeAuto() {
+  if (pl.mode === 'forge') { forgeTap(); return; }
   if (!R.on || R.anim || R.done || R.atTop) return;
   if (R.rhythm) return;
   if (R.mash) { mashTap(); return; }
