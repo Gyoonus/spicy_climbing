@@ -84,7 +84,7 @@ const SECTORS = [
     front: [[835, 378], [790, 405], [725, 495], [812, 580], [805, 665], [820, 760], [815, 835], [835, 852]] },
   { id: 's4', label: '4', name: '4번 섹터', color: '#2563b8', H: 4.2, lean: 0.45, angle: 25, closed: true,
     foot: [[490, 568], [578, 556], [615, 585], [628, 715], [598, 740], [483, 718]] },
-  { id: 'spray', label: '스프레이월', name: '스프레이월', color: '#3a3540', H: 4.4, lean: 1.3, angle: 40, dark: true,
+  { id: 'spray', label: '용광로', name: '인간개조의 용광로', color: '#ff4d1a', H: 4.4, lean: 1.3, angle: 40, dark: true,
     foot: [[235, 118], [270, 118], [270, 375], [235, 375]], front: [[235, 375], [235, 118]] },
   { id: 'trial', label: '체험벽', name: '체험벽', color: '#f2f2f2', H: 3.4, lean: 0, angle: -6,
     foot: null, front: [[118, 535], [215, 570], [285, 568]] },
@@ -197,7 +197,7 @@ const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}원`;
 function gear() {
   const sh = SHOES.find((x) => x.id === Store.data.equip.shoe) || SHOES[0];
   const pa = PANTS.find((x) => x.id === Store.data.equip.pants);
-  return { shoe: sh, pants: pa, f: sh.f, e: sh.e, h: sh.h, leg: pa ? 0.08 : 0, pumpMul: (pa ? 0.95 : 1) };
+  return { shoe: sh, pants: pa, f: sh.f, e: sh.e, h: sh.h, leg: pa ? 0.08 : 0, pumpMul: (pa ? 0.95 : 1) * (1 - 0.02 * Math.min(5, Store.data.forge || 0)) };
 }
 function addMoney(n, why) {
   Store.data.wallet = (Store.data.wallet || 0) + n; Store.save();
@@ -224,7 +224,7 @@ const NPCS = [
 const HUBS = [[450, 460], [690, 470], [420, 820], [690, 800], [180, 440]].map(m);
 const LINES = {
   idle: ['오늘 손가락 컨디션 좋다', '이 문제 발 어디 써요?', '초크 좀 빌려줘~', '2번 섹터 빡세다', '스트레칭 먼저 해요',
-    '조금만 쉬고 갈게', '매트 푹신하다', '퇴근하고 오길 잘했다', '세팅 새로 됐네?', '내일 팔 못 들 듯', '보라 다이노 한 번만 더…', '스프레이월 미쳤음'],
+    '조금만 쉬고 갈게', '매트 푹신하다', '퇴근하고 오길 잘했다', '세팅 새로 됐네?', '내일 팔 못 들 듯', '보라 다이노 한 번만 더…', '용광로 갔다 오면 사람 바뀜', '용광로 뜨겁다 🔥'],
   cheer: ['나이스!!', '가자~!!', '미쳤다 🔥', '완등 축하해요!', '오 깔끔하다', '박수 👏'],
   comfort: ['아까비~', '거의 다 왔는데!', '괜찮아요 다시 가요', '쉬었다 한 번 더!', '펌핑 왔구나 ㅠ'],
   npcStart: ['가볼까', '한 번 붙어본다', '오늘은 된다', '집중…'],
@@ -735,6 +735,26 @@ function buildWorld() {
   const woodTex = panelTexture('#ecc994', 'rgba(110,80,50,.55)', 'rgba(150,110,70,.55)');
   const darkTex = panelTexture('#46414d', 'rgba(0,0,0,.6)', 'rgba(0,0,0,.4)');
   const whiteTex = panelTexture('#f1efe9', 'rgba(90,90,90,.45)', 'rgba(120,120,120,.4)');
+  // 🔥 인간개조의 용광로: 그을린 철판 + 갈라진 틈으로 쇳물이 빛남
+  const forgeTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#1d1416'; g.fillRect(0, 0, w, h);
+    const r = mulberry(7700);
+    for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '60,30,25' : '0,0,0'},${0.25 * r()})`; g.fillRect(r() * w, r() * h, 3 + r() * 6, 3 + r() * 6); }
+    g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 6; g.strokeRect(0, 0, w, h);
+    g.fillStyle = '#3a2b2b'; for (let x = 24; x < w; x += 80) for (const y of [16, h - 16]) { g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); }
+    g.lineCap = 'round';
+    for (let k = 0; k < 7; k++) {
+      let x = r() * w, y = h - r() * 60;
+      const pts = [[x, y]];
+      for (let j = 0; j < 9; j++) { x += (r() - 0.5) * 70; y -= 30 + r() * 40; pts.push([x, y]); }
+      [[14, 'rgba(255,90,20,.25)'], [7, 'rgba(255,120,30,.7)'], [2.5, 'rgba(255,230,140,.95)']].forEach(([lw, c]) => {
+        g.strokeStyle = c; g.lineWidth = lw * (1 - k * 0.06); g.beginPath(); pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.stroke();
+      });
+    }
+    const gr = g.createLinearGradient(0, h, 0, h * 0.55); gr.addColorStop(0, 'rgba(255,90,20,.55)'); gr.addColorStop(1, 'rgba(255,90,20,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  forgeTex.wrapS = forgeTex.wrapT = THREE.RepeatWrapping; forgeTex.repeat.set(0.4, 0.4); // 균열이 크게 보이게
   const rand = mulberry(20251104);
 
   SECTORS.forEach((sec) => {
@@ -746,8 +766,10 @@ function buildWorld() {
       [s.a[0], 0, s.a[1]], [s.b[0], 0, s.b[1]], [s.tb[0], H, s.tb[1]], [s.ta[0], H, s.ta[1]],
       [s.u0 / 1.2, 0], [(s.u0 + s.len) / 1.2, 0], [(s.u0 + s.len) / 1.2, H / 1.2], [s.u0 / 1.2, H / 1.2],
     ]);
-    const tex = sec.dark ? darkTex : sec.id === 'trial' ? whiteTex : woodTex;
-    scene.add(new THREE.Mesh(quadsGeometry(q), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide })));
+    const tex = sec.id === 'spray' ? forgeTex : sec.dark ? darkTex : sec.id === 'trial' ? whiteTex : woodTex;
+    const wallMat2 = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, side: THREE.DoubleSide });
+    if (sec.id === 'spray') { wallMat2.emissive = new THREE.Color('#ff6a22'); wallMat2.emissiveMap = forgeTex; wallMat2.emissiveIntensity = 0.9; forge.wallMat = wallMat2; }
+    scene.add(new THREE.Mesh(quadsGeometry(q), wallMat2));
     // 섹터 색 띠 (판넬 상단)
     const bandMat = new THREE.MeshStandardMaterial({ color: sec.color, roughness: 0.7, side: THREE.DoubleSide });
     const bq = st.segs.map((s) => {
@@ -772,7 +794,7 @@ function buildWorld() {
     const label = sec.label.length === 1
       ? textSprite(sec.label, { h: 0.62, circle: true, bg: '#fff', fg: '#111', border: '#111', font: '900 46px "Noto Sans KR", sans-serif', depthTest: true })
       : textSprite(sec.label, { h: 0.36, bg: '#fff', fg: '#111', border: '#111', depthTest: true });
-    label.position.copy(lp); scene.add(label);
+    if (sec.id === 'spray') buildForgeDecor(st); else { label.position.copy(lp); scene.add(label); }
 
     // 볼륨
     if (!sec.dark && sec.id !== 'trial') {
@@ -2190,6 +2212,78 @@ function climbSign() {
   return right.dot(s.along3) >= 0 ? 1 : -1;
 }
 
+// =================================================================
+// 🔥 인간개조의 용광로 (스프레이월)
+// =================================================================
+const forge = { st: null, wallMat: null, lights: [], emberT: 0, center: null, welcomed: false };
+const FORGE_TITLES = [[1, '불순물 제거 중'], [2, '담금질 완료'], [3, '강철 전완근'], [5, '개조 인간'], [8, '용광로 그 자체']];
+function forgeTitle(n = Store.data.forge || 0) { let t = ''; FORGE_TITLES.forEach(([k, name]) => { if (n >= k) t = name; }); return t; }
+const forgeHeat = (p) => (p && p.sector && p.sector.id === 'spray' ? 1.1 : 1); // 뜨거워서 펌핑 +10%
+function buildForgeDecor(st) {
+  forge.st = st;
+  const mid = surf(st, st.L / 2, 0); const [s] = segAt(st, st.L / 2);
+  forge.center = mid.clone().addScaledVector(s.n3, 1.2);
+  // 간판
+  const signTex = canvasTex(1024, 220, (g) => {
+    g.fillStyle = '#120b0b'; roundRect(g, 0, 0, 1024, 220, 26); g.fill();
+    g.strokeStyle = '#ff5a1f'; g.lineWidth = 8; roundRect(g, 6, 6, 1012, 208, 22); g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = '#ff6a00'; g.shadowBlur = 28;
+    g.fillStyle = '#ffd36a'; g.font = '92px "Black Han Sans", sans-serif'; g.fillText('🔥 인간개조의 용광로 🔥', 512, 96);
+    g.shadowBlur = 0; g.fillStyle = '#ff9a5a'; g.font = '700 34px "Noto Sans KR", sans-serif'; g.fillText('들어갈 땐 사람, 나올 땐 강철 — 스프레이월', 512, 176);
+  });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.0), new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide }));
+  const top = surf(st, st.L / 2, st.H).addScaledVector(s.n3, 0.35); top.y += 0.75;
+  sign.position.copy(top); sign.rotation.y = Math.atan2(s.n3.x, s.n3.z); scene.add(sign);
+  // 바닥 불빛
+  const glowTex = canvasTex(256, 256, (g) => { const r = g.createRadialGradient(128, 128, 4, 128, 128, 128); r.addColorStop(0, 'rgba(255,110,30,.45)'); r.addColorStop(1, 'rgba(255,60,10,0)'); g.fillStyle = r; g.fillRect(0, 0, 256, 256); });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, st.L + 1.5), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.rotation.x = -Math.PI / 2; glow.rotation.z = -Math.atan2(s.n3.x, s.n3.z);
+  glow.position.set(forge.center.x, MAT_H + 0.03, forge.center.z); scene.add(glow);
+  // 깜빡이는 주황 조명
+  [0.25, 0.75].forEach((k) => {
+    const pp = surf(st, st.L * k, 0.6).addScaledVector(s.n3, 0.9);
+    const L = new THREE.PointLight(0xff6a22, 3, 6, 1.6); L.position.copy(pp); scene.add(L); forge.lights.push(L);
+  });
+}
+function updateForge(dt, now) {
+  if (!forge.st || !me) return;
+  const t = now / 1000;
+  forge.lights.forEach((L, i) => { L.intensity = 2.6 + Math.sin(t * 7 + i * 2) * 0.7 + Math.sin(t * 17 + i) * 0.4 + Math.random() * 0.4; });
+  if (forge.wallMat) forge.wallMat.emissiveIntensity = 0.85 + Math.sin(t * 2.2) * 0.18 + Math.random() * 0.05;
+  const near = me.group.position.distanceTo(forge.center);
+  // 불티: 가까울 때만
+  if (near < 22) {
+    forge.emberT += dt * 14;
+    const st = forge.st;
+    while (forge.emberT >= 1) {
+      forge.emberT -= 1;
+      const u = Math.random() * st.L, [s] = segAt(st, u);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: Math.random() < 0.7 ? '#ff7a22' : '#ffd36a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      sp.position.copy(surf(st, u, 0.35 + Math.random() * 0.5)).addScaledVector(s.n3, 0.2 + Math.random() * 1.4);
+      sp.scale.setScalar(0.05 + Math.random() * 0.07);
+      scene.add(sp);
+      particles.push({ sp, vel: new V3((Math.random() - 0.5) * 0.3, 0.6 + Math.random() * 0.9, (Math.random() - 0.5) * 0.3), g: 0.15, drag: 0.3, life: 0, max: 2 + Math.random() * 2, alpha: 0.95 });
+    }
+  }
+  if (!forge.welcomed && near < 4.5 && pl.mode === 'walk') {
+    forge.welcomed = true;
+    shoutText('인간개조의 용광로', me.group.position.clone().add(new V3(0, 2.2, 0)), 0.38);
+    toast('🔥 인간개조의 용광로 — 여기서 완등할 때마다 개조 단계 +1 (펌핑 −2%씩, 최대 −10%). 대신 뜨거워서 펌핑 +10%!', 4200);
+    if (staff.av && staffMayNag(0.8)) setTimeout(() => staffSay('여기 들어가면 사람 바뀌어서 나와요. 물 꼭 마시고요 🐯', 3000), 1500);
+  }
+}
+function forgeSend() {
+  const before = forgeTitle();
+  Store.data.forge = (Store.data.forge || 0) + 1; Store.save();
+  const n = Store.data.forge, title = forgeTitle();
+  setTimeout(() => {
+    shoutText('🔥 인간개조 +1', me.group.position.clone().add(new V3(0, 2.5, 0)), 0.4);
+    fireConfetti(me.group.position.clone().add(new V3(0, 1.6, 0)), 12);
+    toast(`🔥 개조 ${n}단계${title ? ` · ${title}` : ''}${n <= 5 ? ` — 펌핑 −${Math.min(5, n) * 2}%` : ''}`, 3000);
+    if (title !== before) logChat('', '', `🔥 ${Store.data.name}님 칭호 획득: ${title}`, 'sys');
+  }, 1800);
+}
 function sendProblem(p) {
   pl.topped = true; pl.topT = 0;
   Sound.top();
@@ -2198,6 +2292,7 @@ function sendProblem(p) {
   fireConfetti(surf(p.strip, p.top.u, p.top.v), 36);
   Store.addSend(p);
   if (pl.mode === 'route') tripodShot(p);
+  if (p.sector.id === 'spray') forgeSend();
   const first = Store.data.sends[p.id] === 1;
   const reward = (REWARD[p.rank] || 3000) * (first ? 2 : 1) * EARN_EVENT;
   const tag = EARN_EVENT > 1 ? ` · 🎉 행사 ×${EARN_EVENT}` : '';
@@ -3089,7 +3184,7 @@ function renderRecords() {
     const on = sectorDone(sec.id);
     const el = document.createElement('div');
     el.className = 'stamp' + (on ? ' on' : '');
-    el.style.setProperty('--c', sec.id === 'spray' ? '#9a9aa2' : sec.color);
+    el.style.setProperty('--c', sec.color);
     el.textContent = sec.label.length === 1 ? `${sec.label}번` : sec.label;
     st.appendChild(el);
   });
@@ -3137,7 +3232,7 @@ function renderRecords() {
   });
   const total = Object.values(d.sends).reduce((a, b) => a + b, 0);
   const done = PROBLEMS.filter((p) => d.sends[p.id]).length;
-  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회 · 더블다이노 ${d.doubles || 0}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''} · 지갑 ${won(d.wallet || 0)} · 신발 ${gear().shoe.n} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
+  $('#records-summary').textContent = `${d.name || '불꽃이'}님 · 총 ${total}번 완등 · ${done}/${PROBLEMS.length} 문제 클리어 · 매너 온도 ${Manner.v}℃ ${Manner.emoji()} · 매달리기 최고 ${(d.bestHang || 0).toFixed(1)}초 · 캠퍼싱 완등 ${Object.values(d.campus || {}).reduce((a, b) => a + b, 0)}회 · 더블다이노 ${d.doubles || 0}회${(d.titles || {}).mat ? ' · 칭호: 매트 지박령 👻' : ''}${d.forge ? ` · 🔥 개조 ${d.forge}단계 (${forgeTitle(d.forge)})` : ''} · 지갑 ${won(d.wallet || 0)} · 신발 ${gear().shoe.n} · 오늘 일일이용권 ${paidToday() ? '✔' : '✘'} · 누적 이용료 ${(d.spent || 0).toLocaleString('ko-KR')}원`;
 }
 
 // =================================================================
@@ -4932,7 +5027,7 @@ function routeMove(c) {
   R.anim = { t: 0, dur: c.kind === 'dead' ? 0.85 : 1.0, from: prev, to: routeSnapshot(), k: c.k, kind: c.kind };
   me.tech = null; me.footless = false; R.hipIn = false;
   const g = gear();
-  const add = (1.2 + R.p.level * 0.5) / Math.pow(c.h.q, 0.7) * (c.kind === 'dead' ? 1.6 : 1) * (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul * (6 / Math.max(6, R.p.holds.length)) * 0.75; // 홀드가 많을수록 무브당 펌핑은 작게
+  const add = (1.2 + R.p.level * 0.5) / Math.pow(c.h.q, 0.7) * (c.kind === 'dead' ? 1.6 : 1) * (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul * (6 / Math.max(6, R.p.holds.length)) * 0.75 * forgeHeat(R.p); // 홀드가 많을수록 무브당 펌핑은 작게
   pl.pump += add;
   routeRings.forEach((r) => (r.visible = false));
   if (c.kind === 'dead') { popText('데드포인트!', me.group.position.clone().add(new V3(0, 2.0, 0)), 0.26); Sound.tone(420, 0.12, 'triangle', 0.08, 0, 200); }
@@ -4955,7 +5050,7 @@ function routeStep(dt) {
     const ang = R.st.sec.angle || 0, g = gear();
     const feet = (R.lf ? 1 : 0) + (R.rf ? 1 : 0) - (R.slipT > 0 ? 2 : 0);
     let rate = 0.35 * (0.35 + R.p.level * 0.12) * (1 + R.p.rank * 0.05) * (1 + Math.max(0, ang - 10) / 40) * (R.hipIn ? 0.6 : 1) * (feet <= 0 ? 2.2 : feet === 1 ? 1.3 : 1);
-    rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul;
+    rate *= (1.15 - 0.3 * (g.f + g.e + g.h) / 3) * g.pumpMul * forgeHeat(R.p);
     if (me.tech === 'flag') rate *= 0.7;
     const restful = R.lh.q >= 1 && R.rh.q >= 1 && feet >= 2 && !R.anim;
     pl.pump = clamp(pl.pump + (restful ? -0.8 : rate) * dt, 0, 100);
@@ -5294,6 +5389,7 @@ function loop() {
   updateVillain(now);
   updateKnocks(dt);
   updateTripods(dt);
+  updateForge(dt, now);
   updateCtxButtons();
   updateWest(dt, now);
   if (now > chatNext) {
@@ -5470,7 +5566,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { isMat, billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { three: () => ({ renderer, scene, camera }), forge, isMat, billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
