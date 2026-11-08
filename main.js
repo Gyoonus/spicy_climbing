@@ -927,7 +927,11 @@ function buildHolds(rand) {
     st.problems.push(p);
     PROBLEMS.push(p);
   });
-  // 장식 홀드 없음 — 벽에는 문제(루트) 홀드만
+  // 장식 홀드 없음 — 벽에는 문제(루트) 홀드만 (단, 🔥 용광로는 예외)
+  // 🔥 인간개조의 용광로: 문제 홀드도 생긴 건 크림프·슬로퍼·핀치처럼 (난이도·판정은 그대로)
+  const BAD = [HT.crimp.sc, HT.sloper.sc, HT.pinch.sc, HT.edge.sc];
+  allHolds.forEach((h) => { if (h.problem && h.problem.sector.id === 'spray' && !h.top && !h.start) h.visSc = BAD[Math.floor(rand() * BAD.length)]; });
+  buildForgeJunk(rand);
   // 인스턴싱
   const geos = [makeHoldGeo(1), makeHoldGeo(2), makeHoldGeo(3)];
   const buckets = geos.map(() => []);
@@ -942,7 +946,7 @@ function buildHolds(rand) {
       const th = rand() * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
       const x = s.along3.clone().multiplyScalar(c).addScaledVector(s.up3, sn);
       const y = s.along3.clone().multiplyScalar(-sn).addScaledVector(s.up3, c);
-      const hs = h.size * 1.6, sc = h.type.sc;
+      const hs = h.size * 1.6, sc = h.visSc || h.type.sc;
       mtx.makeBasis(x.multiplyScalar(hs * 1.15 * sc[0]), y.multiplyScalar(hs * sc[1]), s.n3.clone().multiplyScalar(hs * 0.9 * sc[2]));
       h.pos = surf(st, h.u, h.v);
       mtx.setPosition(h.pos);
@@ -976,6 +980,40 @@ function buildHolds(rand) {
       scene.add(tp);
       tapes.push(tp);
     });
+  });
+}
+
+// 🔥 용광로 벽 전체에 안 좋은 홀드를 마구 박음 (장식 — 잡을 수 없음, 문제와 무관)
+function buildForgeJunk(rand) {
+  const st = strips.find((x) => x.sec.id === 'spray'); if (!st) return;
+  const COLS = ['#6b6b6b', '#8a7a62', '#5a4a3a', '#7b7f86', '#4d5a4a', '#8c5a3c', '#9a8f80', '#3f3f46', '#a0522d', '#5f6b73'];
+  const BAD = [HT.crimp.sc, HT.sloper.sc, HT.pinch.sc, HT.edge.sc, [0.7, 0.3, 0.35]];
+  const spots = [];
+  for (let tries = 0; spots.length < 95 && tries < 1200; tries++) {
+    const u = 0.15 + rand() * (st.L - 0.3), v = 0.55 + rand() * (st.H - 0.9);
+    if (allHolds.some((h) => h.strip === st && Math.hypot(h.u - u, h.v - v) < 0.32)) continue;
+    if (spots.some(([uu, vv]) => Math.hypot(uu - u, vv - v) < 0.22)) continue;
+    spots.push([u, v]);
+  }
+  const geos = [makeHoldGeo(11), makeHoldGeo(12), makeHoldGeo(13)];
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.75, flatShading: true });
+  const mtx = new THREE.Matrix4(), col = new THREE.Color();
+  geos.forEach((geo, gi) => {
+    const list = spots.filter((_, i) => i % 3 === gi);
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach(([u, v], i) => {
+      const [sg] = segAt(st, u);
+      const th = rand() * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
+      const x = sg.along3.clone().multiplyScalar(c).addScaledVector(sg.up3, sn);
+      const y = sg.along3.clone().multiplyScalar(-sn).addScaledVector(sg.up3, c);
+      const sc = BAD[Math.floor(rand() * BAD.length)], hs = (0.07 + rand() * 0.07) * 1.6;
+      mtx.makeBasis(x.multiplyScalar(hs * 1.15 * sc[0]), y.multiplyScalar(hs * sc[1]), sg.n3.clone().multiplyScalar(hs * 0.9 * sc[2]));
+      mtx.setPosition(surf(st, u, v));
+      mesh.setMatrixAt(i, mtx);
+      mesh.setColorAt(i, col.set(COLS[Math.floor(rand() * COLS.length)]).multiplyScalar(0.75 + rand() * 0.35));
+    });
+    mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
+    scene.add(mesh);
   });
 }
 
@@ -1286,6 +1324,14 @@ class Avatar {
     this.prev = new V3(); this.speed = 0;
   }
   setClimbing(v) { this.climbing = v; if (!v) this.grips = null; }
+  // 카메라가 바짝 붙을 때 몸 전체 반투명 (말풍선·이름표 제외)
+  setBodyAlpha(a) {
+    this.group.traverse((o) => {
+      if (!o.isMesh || !o.material || o === this.shadow) return;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      ms.forEach((m) => { if (m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.opacity; m.transparent = a < 1 || m.userData.baseOpacity < 1; m.opacity = m.userData.baseOpacity * a; m.depthWrite = a >= 1; m.needsUpdate = true; });
+    });
+  }
   setHeadAlpha(a) { if (!this.headMat) return; this.headMat.transparent = a < 1; this.headMat.opacity = a; this.headMat.depthWrite = a >= 1; this.headMat.needsUpdate = true; }
   setOutfit(shoeId, pantsId) {
     const sh = SHOES.find((x) => x.id === shoeId), pa = PANTS.find((x) => x.id === pantsId);
@@ -2452,6 +2498,20 @@ function updatePlayer(dt) {
 function camBlocked(x, y, z) {
   if (!inPoly(x, z, FLOOR)) return y < WALL_H;
   for (const o of OBSTACLES) if (inPoly(x, z, o.footM) && y < o.H + 0.2) return true;
+  // 오버행 벽: 높이에 따라 바깥으로 기울어진 판넬 안쪽이면 막힘 (용광로 같은 센 오버행)
+  for (const st of strips) {
+    if (!st.sec.lean || y > st.H + 0.25 || y < 0) continue;
+    const k = Math.min(1, y / st.H);
+    for (const sg of st.segs) {
+      const ax = sg.a[0] + (sg.ta[0] - sg.a[0]) * k, az = sg.a[1] + (sg.ta[1] - sg.a[1]) * k;
+      const bx = sg.b[0] + (sg.tb[0] - sg.b[0]) * k, bz = sg.b[1] + (sg.tb[1] - sg.b[1]) * k;
+      const vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz || 1;
+      const t = ((x - ax) * vx + (z - az) * vz) / l2;
+      if (t < -0.03 || t > 1.03) continue;
+      const d = (x - ax) * sg.nrm[0] + (z - az) * sg.nrm[1];
+      if (d < 0.15 && d > -1.6) return true;
+    }
+  }
   return false;
 }
 function updateCamera(dt) {
@@ -2468,23 +2528,42 @@ function updateCamera(dt) {
     }
   } else target.y += 1.0;
   const d = camCtl.dist;
-  const dirOf = (pitch, out = new V3()) => out.set(Math.sin(camCtl.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(camCtl.yaw) * Math.cos(pitch));
-  const rayHit = (pitch) => {
-    const dr = dirOf(pitch);
-    for (let k = 0.6; k <= d; k += 0.25) { const p = tmpV.copy(target).addScaledVector(dr, k); if (camBlocked(p.x, p.y, p.z)) return k; }
+  const dirOf = (pitch, yawOff = 0, out = new V3()) => out.set(Math.sin(camCtl.yaw + yawOff) * Math.cos(pitch), Math.sin(pitch), Math.cos(camCtl.yaw + yawOff) * Math.cos(pitch));
+  const rayHit = (pitch, yawOff = 0) => {
+    const dr = dirOf(pitch, yawOff);
+    for (let k = 0.8; k <= d; k += 0.25) { const p = tmpV.copy(target).addScaledVector(dr, k); if (camBlocked(p.x, p.y, p.z)) return k; }
     return null;
   };
-  // 벽에 가리면 카메라를 위로 올려서 벽 너머로 내려다보기 → 그래도 안 되면 가까이
-  let usePitch = camCtl.pitch, use = d;
+  // 벽에 가리면: ① 위로 올려보기 ② 옆으로 살짝 돌기(모퉁이) ③ 그래도 안 되면 가까이 + 내 머리 반투명
+  let usePitch = camCtl.pitch, use = d, yawOff = 0;
   const hit = rayHit(camCtl.pitch);
   if (hit !== null) {
-    let found = false;
-    for (let pp = camCtl.pitch + 0.1; pp <= Math.min(1.35, camCtl.pitch + 0.45); pp += 0.1) { if (rayHit(pp) === null) { usePitch = pp; found = true; break; } }
-    if (!found) use = Math.max(1.2, hit - 0.3);
+    const P = camCtl.pitch, cands = [];
+    for (let pp = 0.1; pp <= 0.45; pp += 0.1) cands.push([0, pp]);
+    [0.35, 0.7, 1.05, 1.4].forEach((dy) => [0, 0.2, 0.4].forEach((dp) => { cands.push([dy, dp]); cands.push([-dy, dp]); }));
+    // 마지막 수단: 위에서 내려다보기
+    [0, 0.7, -0.7, 1.4, -1.4].forEach((dy) => [0.95 - P, 1.2 - P].forEach((dp) => { if (dp > 0) cands.push([dy, dp]); }));
+    // 지난번에 돈 쪽을 먼저 (왔다갔다 방지)
+    const prev = Math.sign(camCtl.yawOffT || 0);
+    if (prev) cands.sort((a, b) => (Math.sign(a[0]) === -prev) - (Math.sign(b[0]) === -prev));
+    let best = null;
+    for (const [dy, dp] of cands) { const pp = Math.min(1.3, P + dp); if (rayHit(pp, dy) === null) { best = [dy, pp]; break; } }
+    if (best) { yawOff = best[0]; usePitch = best[1]; }
+    else {
+      // 가장 멀리 보이는 방향으로 가까이
+      let far = [0, P, hit];
+      for (const [dy, dp] of cands) { const pp = Math.min(1.3, P + dp), h = rayHit(pp, dy); if (h > far[2]) far = [dy, pp, h]; }
+      yawOff = far[0]; usePitch = far[1]; use = Math.max(1.5, far[2] - 0.3);
+    }
   }
+  camCtl.yawOffT = yawOff;
+  camCtl.yawOff = lerpAngle(camCtl.yawOff || 0, yawOff, damp(yawOff ? 6 : 2.5, dt));
   camCtl.usePitch = lerp(camCtl.usePitch ?? usePitch, usePitch, damp(usePitch > (camCtl.usePitch ?? 0) ? 10 : 3, dt));
   camCtl.useDist = lerp(camCtl.useDist || use, use, damp(use < (camCtl.useDist || use) ? 20 : 4, dt));
-  const dir = dirOf(camCtl.usePitch);
+  // 카메라가 너무 가까우면 내 큰 머리가 화면을 가리니까 반투명
+  const fade = camCtl.useDist < 2.3 ? (camCtl.useDist < 1.8 ? 2 : 1) : 0;
+  if (fade !== (camCtl.headFaded || 0)) { camCtl.headFaded = fade; me.setBodyAlpha(fade === 2 ? 0.3 : 1); me.setHeadAlpha(fade ? 0.3 : 1); }
+  const dir = dirOf(camCtl.usePitch, camCtl.yawOff);
   const pos = tmpV2.copy(target).addScaledVector(dir, camCtl.useDist);
   pos.y = Math.max(0.3, pos.y);
   camera.position.copy(pos);
@@ -4806,6 +4885,7 @@ function enterRoute(p, st) {
   R.cur = routeSnapshot();
   pl.mode = 'route'; pl.strip = st; pl.problem = p; pl.topped = false; pl.pump = 0;
   me.setClimbing(true); me.sitting = false; me.tech = null; me.footless = false;
+  me.setBodyAlpha(1); camCtl.headFaded = 0;
   me.setHeadAlpha(0.45);
   document.body.classList.add('route');
   refreshRings();
@@ -4819,7 +4899,7 @@ function endRoute() {
   routeRings.forEach((r) => (r.visible = false));
   $('#qte').hidden = true; $('#gauge').hidden = true;
   me.tech = null; me.footless = false; me.swing = 0; me.ceremony = false;
-  me.setHeadAlpha(1);
+  me.setHeadAlpha(1); me.setBodyAlpha(1); camCtl.headFaded = 0;
 }
 // 현재 자세 (u,v)를 한 덩어리로
 function routeSnapshot() {
@@ -5566,7 +5646,7 @@ async function enterGym(name, color) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) Net.sync(true); });
 
   // 디버그/테스트용 훅
-  window.__spicy = { three: () => ({ renderer, scene, camera }), forge, isMat, billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
+  window.__spicy = { camBlocked, three: () => ({ renderer, scene, camera }), forge, isMat, billboards, tripods, placeTripod, vil, R, rhythmTap, startCeremony, routeMove, routeFireGauge, qteResult, classify, refreshRings, inst, w2s, enterInstance, instAttach, instConstrainHip, get me() { return me; }, west, staff, watch, payDone, pl, strips, PROBLEMS, npcs, ety, Manner, crash, wallClimbers, mount, findMount, setGuide, camCtl, Net, surf, segAt, bodyPos };
   clock.getDelta();
   loop();
 }
